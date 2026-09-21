@@ -4,7 +4,7 @@
 клиентов. Даёт цепочки моделей с фолбэком, JSON по схеме, кэш ответов, учёт
 токенов и стоимости с разбивкой по меткам и мягкие бюджеты.
 
-Статус: фазы 0 и 1 (ядро). CLI `llm` — фаза 2, HTTP-прокси — фаза 4, их пока нет.
+Статус: фазы 0–2 (ядро и CLI `llm`). HTTP-прокси — фаза 4, его пока нет.
 Спецификация: [SPEC.md](SPEC.md).
 
 ## Что это даёт
@@ -36,6 +36,30 @@ llmkit = { git = "https://github.com/bolandeu/llmkit" }
 
 Требуется Python >= 3.11.
 
+
+## CLI `llm`
+
+Ставится вместе с пакетом; `uv tool install "git+https://github.com/bolandeu/llmkit"`
+даёт команду `llm` в системе. У всех команд есть `--json` (конверт в stdout),
+диагностика идёт в stderr. Коды выхода: **0** — успех, **1** — все модели упали
+или нет ключа, **2** — неверные аргументы.
+
+```bash
+llm                                  # справка: список команд, код выхода 0
+llm ask "Столица Франции?" --level cheap --tag tool=notes
+cat prompt.txt | llm ask --system "Отвечай кратко" --json
+llm json "Разбери запрос" --schema schema.json          # в stdout только JSON-объект
+llm models                           # провайдеры, уровни, есть ли ключ
+llm keys set openrouter              # ввод скрыт; `--stdin` для автоматизации
+llm keys status                      # источник ключа: config | env | keychain | none
+llm cost --by tool,niche --since 7d  # отчёт из журнала вызовов
+llm config init                      # шаблон конфига; path | show
+```
+
+Полный список команд и флагов — `llm --help` и `llm <команда> --help`; справка
+генерируется из кода и не расходится с ним. `llm serve` — фаза 4, пока отвечает
+ошибкой с кодом выхода 2.
+
 ## Ключи
 
 Ключи берутся в порядке: `api_key` в конфиге провайдера (не рекомендуется) →
@@ -45,8 +69,8 @@ llmkit = { git = "https://github.com/bolandeu/llmkit" }
 # вариант 1 — переменная окружения
 export OPENROUTER_API_KEY=sk-or-...
 
-# вариант 2 — связка ключей macOS (пока CLI нет — одной строкой)
-uv run python -c "import llmkit.keys as k; k.store('openrouter', 'sk-or-...')"
+# вариант 2 — связка ключей macOS
+llm keys set openrouter
 ```
 
 Стандартные имена переменных по виду провайдера: `OPENROUTER_API_KEY`,
@@ -176,7 +200,7 @@ print(kit.stats)   # итоги за время жизни экземпляра
 | Кэш ответов | своя таблица SQLite (~60 строк) | кэш LiteLLM (diskcache): не даёт учесть попадание с нашими метками, ключ непрозрачен, отдельный файл-формат |
 | Ключи | `keyring` (связка ОС) + env | `.env`-файлы — запрещены конвенцией cli-builder |
 | Конфиг | TOML через `platformdirs`, pydantic-модели | — |
-| CLI (фаза 2) | Typer + rich, конвенции cli-builder | — |
+| CLI | Typer + rich, конвенции cli-builder | — |
 | Прокси (фаза 4) | свой FastAPI поверх ядра (extra `[serve]`) | LiteLLM Proxy: тяжёлые зависимости, наш учёт по меткам мимо него не проходит |
 
 Версия LiteLLM пинится точно из-за инцидента с бэкдором в 1.82.7/1.82.8. На
@@ -189,6 +213,7 @@ BerriAI/litellm его не задевает (самый «поздний» уя
 uv sync
 uv run pytest -q                 # тесты без сети, на подменённом completion
 uv run ruff check src tests
+uv run llm --help                # CLI из исходников
 uv run python scripts/smoke.py   # реальные вызовы, требует ключей
 ```
 
