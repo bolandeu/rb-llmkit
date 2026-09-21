@@ -25,6 +25,7 @@ ERROR_TYPE_BY_EXCEPTION = {
     "KeyMissing": "auth",
     "BadRequestError": "bad_request",
     "NotFoundError": "bad_request",
+    "APIStatusError": "bad_request",
     "APIError": "bad_request",
 }
 
@@ -47,12 +48,30 @@ class ContentFiltered(Exception):
     """Провайдер отказал по контент-фильтру (finish_reason=content_filter)."""
 
 
-def classify(exc: BaseException) -> str:
+def classify(exc: BaseException) -> str | None:
+    """Тип ошибки по таблице раздела 6 или None, если исключение чужое.
+
+    None означает «это не сбой провайдера»: ядро такую ошибку не глушит
+    фолбэком, а пробрасывает — иначе наш собственный баг (TypeError и
+    подобные) выглядел бы как bad_request у модели.
+    """
+    found = None
     for klass in type(exc).__mro__:
         found = ERROR_TYPE_BY_EXCEPTION.get(klass.__name__)
         if found:
-            return found
-    return "bad_request"
+            break
+    if found == "invalid_output" and type(exc).__name__ == "InstructorRetryException":
+        # Instructor заворачивает ошибку провайдера в свою (`raise … from`),
+        # поэтому смотрим на причину: 429 сквозь Instructor остаётся 429.
+        cause = exc.__cause__
+        for _ in range(5):
+            if cause is None:
+                break
+            deeper = classify(cause)
+            if deeper is not None and deeper != "invalid_output":
+                return deeper
+            cause = cause.__cause__
+    return found
 
 
 def retries_for(error_type: str, retry: RetryConfig, exc: BaseException | None = None) -> int:
@@ -73,7 +92,7 @@ def retry_after(exc: BaseException) -> float | None:
         if not headers:
             continue
         value = None
-        for name in ("retry-after", "Retry-After", "x-ratelimit-reset"):
+        for name in ("retry-after", "Retry-After"):
             try:
                 value = headers.get(name)
             except AttributeError:

@@ -8,16 +8,21 @@ cwd) → env `LLMKIT_*` → аргументы `LlmKit(...)`. Если зада�
 
 from __future__ import annotations
 
+import copy
 import os
+import re
 import tomllib
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from .errors import ConfigError
 
 APP_NAME = "llmkit"
+
+# Имя метки: только то, что безопасно подставить в json_extract(tags, '$.имя').
+TAG_NAME_RE = re.compile(r"^[A-Za-z0-9_]+$")
 
 # Провайдер и уровни «из коробки»: без своего конфига kit всё равно работает.
 DEFAULTS: dict[str, Any] = {
@@ -25,11 +30,14 @@ DEFAULTS: dict[str, Any] = {
         "openrouter": {"kind": "openrouter"},
         "ollama": {"kind": "ollama", "base_url": "https://ollama.com"},
     },
+    # Цепочки — пример: модели каждый подбирает под себя, формат
+    # "провайдер/модель", где провайдер — ключ из [providers].
     "levels": {
         "cheap": ["ollama/gpt-oss:120b", "openrouter/openai/gpt-4o-mini"],
         "judge": ["openrouter/anthropic/claude-sonnet-4", "openrouter/openai/gpt-4o"],
         "strong": ["openrouter/anthropic/claude-opus-4"],
     },
+    "budget": {"daily_usd": 20.0},
 }
 
 
@@ -68,7 +76,7 @@ class CacheConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     enabled: bool = True
-    ttl_days: int = 30
+    ttl_days: int = Field(default=30, ge=1)  # 0 означал бы «кэш навсегда» — это делает enabled
     path: Path | None = None
 
 
@@ -83,6 +91,15 @@ class BudgetConfig(BaseModel):
 
     daily_usd: float | None = None
     tags: dict[str, float] = Field(default_factory=dict)
+
+    @field_validator("tags")
+    @classmethod
+    def _check_tag_keys(cls, value: dict[str, float]) -> dict[str, float]:
+        for key in value:
+            name, sep, _ = key.partition("=")
+            if not sep or not TAG_NAME_RE.match(name):
+                raise ValueError(f"ключ бюджета должен быть вида 'метка=значение' с именем [A-Za-z0-9_]: {key!r}")
+        return value
 
 
 class RetryConfig(BaseModel):
@@ -104,7 +121,7 @@ class Config(BaseModel):
     usage: UsageConfig = Field(default_factory=UsageConfig)
     budget: BudgetConfig = Field(default_factory=BudgetConfig)
     retry: RetryConfig = Field(default_factory=RetryConfig)
-    log_level: str | None = None
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] | None = None
 
     def provider(self, name: str) -> ProviderConfig:
         try:
@@ -119,6 +136,20 @@ class Config(BaseModel):
         except KeyError:
             known = ", ".join(sorted(self.levels)) or "нет ни одного"
             raise ConfigError(f"неизвестный уровень {level!r}; уровни: {known}") from None
+
+    def check_levels(self) -> None:
+        """Все цепочки ссылаются на описанных провайдеров."""
+        known = ", ".join(sorted(self.providers)) or "нет ни одного"
+        for level, chain in self.levels.items():
+            for ref in chain:
+                provider, _, model = ref.partition("/")
+                if not model:
+                    raise ConfigError(f"уровень {level!r}: модель {ref!r} должна быть вида 'провайдер/модель'")
+                if provider not in self.providers:
+                    raise ConfigError(
+                        f"уровень {level!r} ссылается на провайдера {provider!r} ({ref}), "
+                        f"которого нет в [providers]; описанные провайдеры: {known}"
+                    )
 
     def cache_path(self) -> Path:
         return _expand(self.cache.path) if self.cache.path else _user_dir("cache") / "cache.sqlite"
@@ -180,8 +211,9 @@ def env_layer(env: dict[str, str] | None = None) -> dict[str, Any]:
     """Скалярные переопределения из env (раздел 3 спецификации)."""
     env = os.environ if env is None else env
     layer: dict[str, Any] = {}
-    if "LLMKIT_CACHE" in env:
-        layer["cache"] = {"enabled": env["LLMKIT_CACHE"].strip().lower() not in ("0", "false", "no", "")}
+    raw_cache = env.get("LLMKIT_CACHE", "").strip()
+    if raw_cache:  # пустое значение — как будто переменной нет
+        layer["cache"] = {"enabled": raw_cache.lower() not in ("0", "false", "no")}
     if env.get("LLMKIT_LOG_LEVEL"):
         layer["log_level"] = env["LLMKIT_LOG_LEVEL"].upper()
     return layer
@@ -190,7 +222,7 @@ def env_layer(env: dict[str, str] | None = None) -> dict[str, Any]:
 def layers(env: dict[str, str] | None = None) -> list[dict[str, Any]]:
     """Слои конфига по порядку применения."""
     env = os.environ if env is None else env
-    result = [DEFAULTS]
+    result = [copy.deepcopy(DEFAULTS)]
     explicit = env.get("LLMKIT_CONFIG")
     if explicit:
         path = _expand(Path(explicit))

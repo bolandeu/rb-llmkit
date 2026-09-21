@@ -12,6 +12,8 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
+from pydantic import BaseModel
+
 from . import cache as cache_mod
 from . import chain as chain_mod
 from . import config as config_mod
@@ -23,8 +25,10 @@ from .usage import Usage
 
 log = logging.getLogger("llmkit.core")
 
-# Предупреждения, которые печатаются один раз за процесс.
+# Модели, для которых цена неизвестна: предупреждаем один раз за процесс,
+# иначе пачка из тысячи задач напишет тысячу одинаковых строк.
 _warned_prices: set[str] = set()
+# Бюджеты, о превышении которых уже написали в лог — тоже раз на процесс.
 _warned_budgets: set[str] = set()
 
 
@@ -35,7 +39,7 @@ class Task:
     user: str | None = None
     system: str | None = None
     messages: list[dict] | None = None
-    schema: Any = None  # pydantic-класс | JSON Schema (dict) | None = текст
+    schema: type[BaseModel] | dict | None = None  # None = обычный текст
     level: str | None = None
     chain: list[str] | None = None
     tags: dict[str, str] = field(default_factory=dict)
@@ -125,6 +129,59 @@ def _litellm():
     return litellm
 
 
+def _instructor():
+    """Ленивый импорт Instructor; его логгер тоже приглушаем."""
+    import instructor
+
+    logging.getLogger("instructor").setLevel(logging.WARNING)
+    return instructor
+
+
+def _default_instructor_factory(completion: Callable[..., Any], mode: str) -> Any:
+    """Клиент Instructor поверх функции вызова модели."""
+    instructor = _instructor()
+    try:
+        enum_mode = instructor.Mode[mode]
+    except KeyError:
+        raise ConfigError(f"неизвестный режим Instructor {mode!r}") from None
+    return instructor.from_litellm(completion, mode=enum_mode)
+
+
+def _mask(text: str, secret: str | None) -> str:
+    """Убрать ключ провайдера из текста ошибки перед записью куда бы то ни было."""
+    return text.replace(secret, "***") if secret else text
+
+
+class _BudgetTracker:
+    """Бюджеты задачи: журнал читается один раз, дальше считаем в памяти.
+
+    Одно и то же предупреждение за задачу выдаётся один раз, даже если
+    цепочка длинная и сетевых попыток было несколько.
+    """
+
+    def __init__(self, items: list[tuple[str, str, float, float]]) -> None:
+        # (ключ бюджета, человеческое описание, лимит, потрачено сегодня)
+        self._items = items
+        self._reported: set[str] = set()
+
+    def add(self, cost_usd: float) -> None:
+        self._items = [(key, what, limit, spent + cost_usd) for key, what, limit, spent in self._items]
+
+    def check(self) -> list[str]:
+        """Новые предупреждения о превышении — по одному на бюджет за задачу."""
+        fresh = []
+        for key, what, limit, spent in self._items:
+            if spent <= limit or key in self._reported:
+                continue
+            self._reported.add(key)
+            text = f"{what} превышен: потрачено ${spent:.4f} за сегодня"
+            if key not in _warned_budgets:
+                _warned_budgets.add(key)
+                log.warning("%s", text)
+            fresh.append(text)
+        return fresh
+
+
 class LlmKit:
     """Точка входа: конфиг, кэш, журнал, цепочки моделей."""
 
@@ -134,6 +191,7 @@ class LlmKit:
         config: Config | None = None,
         tags: dict[str, str] | None = None,
         completion: Callable[..., Any] | None = None,
+        instructor_factory: Callable[[Callable[..., Any], str], Any] | None = None,
         level: str | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
@@ -170,6 +228,8 @@ class LlmKit:
         )
         self.usage = Usage(self.config.usage_path())
         self._completion = completion
+        self._instructor_factory = instructor_factory or _default_instructor_factory
+        self._instructor_clients: dict[str, Any] = {}
         self._stats = Stats()
 
     # --- публичный API ---
@@ -179,7 +239,12 @@ class LlmKit:
         return self._stats
 
     async def ask(self, task: Task) -> Answer:
-        """Пройти цепочку моделей и вернуть ответ; всё упало — `default` или `AllModelsFailed`."""
+        """Пройти цепочку моделей и вернуть ответ.
+
+        Сначала по кэшу проверяется вся цепочка: попадание отдаётся сразу,
+        без сетевых вызовов и без ключей провайдеров. Потом идут сетевые
+        попытки по порядку. Всё упало — `default` или `AllModelsFailed`.
+        """
         started = time.perf_counter()
         messages = self._messages(task)
         chain = chain_mod.resolve(self.config, chain=task.chain, level=task.level)
@@ -187,47 +252,51 @@ class LlmKit:
         tags = {**self.tags, **task.tags}
         settings = self._settings(task)
         cache_enabled = task.cache if task.cache is not None else self.config.cache.enabled
+        cache_keys = self._cache_keys(chain, messages, task, settings)
 
         attempts: list[Attempt] = []
         warnings: list[str] = []
+
+        if cache_enabled:
+            for position, ref in enumerate(chain):
+                key = cache_keys.get(ref)
+                cached = await self.cache.aget(key) if key else None
+                if cached is None:
+                    continue
+                provider = ref.partition("/")[0]
+                await self.usage.arecord(
+                    model=ref, provider=provider, status="cache", task_id=task.id,
+                    tags=tags, level=level, attempt=0,
+                )
+                answer = Answer(
+                    data=self._decode(cached, task.schema), source="cache", model=ref,
+                    provider=provider, attempts=attempts, warnings=warnings, task_id=task.id,
+                )
+                return self._done(answer, started, position, tags)
+
+        budget = await self._budget_tracker(tags)
         for position, ref in enumerate(chain):
             try:
                 call = providers_mod.build(ref, self.config)
-            except (KeyMissing, ConfigError) as exc:
-                await self._fail(task, tags, level, ref, ref.partition("/")[0], exc, attempts, 0)
+            except KeyMissing as exc:
+                await self._fail(task, tags, level, ref, ref.partition("/")[0], exc, "auth", attempts, 0)
                 continue
+            secret = call.params.get("api_key")
 
-            key = cache_mod.make_key(
-                model=call.litellm_model,
-                messages=messages,
-                schema=task.schema,
-                temperature=settings["temperature"],
-                max_tokens=settings["max_tokens"],
-            )
-            if cache_enabled:
-                cached = await self.cache.aget(key)
-                if cached is not None:
-                    await self.usage.arecord(
-                        model=call.ref, provider=call.provider, status="cache", task_id=task.id,
-                        tags=tags, level=level, attempt=len(attempts),
-                    )
-                    answer = Answer(
-                        data=self._decode(cached, task.schema), source="cache", model=call.ref,
-                        provider=call.provider, attempts=attempts, warnings=warnings, task_id=task.id,
-                    )
-                    self._finish(answer, started, position)
-                    return answer
-
-            warnings.extend(await self._budget_warnings(tags))
             retry_index = 0
             while True:
+                warnings.extend(budget.check())
                 begin = time.perf_counter()
                 try:
                     outcome = await self._call_model(call, messages, task, settings)
-                except Exception as exc:  # классифицируем любую ошибку провайдера
+                except Exception as exc:
+                    error_type = chain_mod.classify(exc)
+                    if error_type is None:
+                        raise  # не ошибка провайдера, а наш баг — не маскируем
                     latency = int((time.perf_counter() - begin) * 1000)
-                    error_type = await self._fail(
-                        task, tags, level, call.ref, call.provider, exc, attempts, retry_index, latency
+                    await self._fail(
+                        task, tags, level, call.ref, call.provider, exc, error_type,
+                        attempts, retry_index, latency, secret,
                     )
                     allowed = chain_mod.retries_for(error_type, self.config.retry, exc)
                     if retry_index < allowed:
@@ -239,6 +308,7 @@ class LlmKit:
                     break
 
                 latency = int((time.perf_counter() - begin) * 1000)
+                budget.add(outcome.cost_usd)
                 attempts.append(
                     Attempt(
                         model=call.ref, provider=call.provider, latency_ms=latency,
@@ -252,38 +322,34 @@ class LlmKit:
                     completion_tokens=outcome.completion_tokens, cost_usd=outcome.cost_usd,
                     cost_known=outcome.cost_known, latency_ms=latency,
                 )
-                log.info(
-                    "%s ok tokens=%d/%d cost=$%.6f %dms tags=%s",
-                    call.ref, outcome.prompt_tokens, outcome.completion_tokens,
-                    outcome.cost_usd, latency, tags,
-                )
-                if cache_enabled:
-                    await self.cache.aset(key, call.litellm_model, outcome.cache_value)
+                key = cache_keys.get(call.ref)
+                if cache_enabled and key:
+                    await self.cache.aset(key, call.ref, outcome.cache_value)
                 answer = Answer(
                     data=outcome.data, source="llm", model=call.ref, provider=call.provider,
                     attempts=attempts, prompt_tokens=outcome.prompt_tokens,
                     completion_tokens=outcome.completion_tokens, cost_usd=outcome.cost_usd,
                     cost_known=outcome.cost_known, warnings=warnings, task_id=task.id,
                 )
-                self._finish(answer, started, position)
-                return answer
+                return self._done(answer, started, position, tags)
 
-        if task.default is None:
-            self._stats.failed += 1
-            self._stats.seconds += time.perf_counter() - started
-            raise AllModelsFailed(attempts)
-        error = attempts[-1].error if attempts else "цепочка моделей пуста"
         answer = Answer(
             data=task.default, source="default", attempts=attempts, warnings=warnings,
-            error=error, task_id=task.id,
+            error=attempts[-1].error if attempts else "цепочка моделей пуста", task_id=task.id,
         )
-        self._finish(answer, started, len(chain) - 1)
+        self._done(answer, started, max(len(chain) - 1, 0), tags)
+        if task.default is None:
+            raise AllModelsFailed(attempts, answer=answer)
         return answer
 
     async def generate(
         self, prompt: str, *, system: str | None = None, level: str | None = None, **task_kw: Any
     ) -> str | None:
-        """Строковый путь: ошибок не бросает, при полном провале возвращает None."""
+        """Строковый путь: ошибок не бросает.
+
+        Возвращает None, если ответа нет; если у задачи задан `default`,
+        возвращается он (приведённый к строке).
+        """
         task = Task(user=prompt, system=system, level=level, **task_kw)
         try:
             answer = await self.ask(task)
@@ -292,6 +358,7 @@ class LlmKit:
             return None
         if not answer.ok:
             log.warning("generate: ответа нет (%s)", answer.error)
+        if answer.data is None:
             return None
         return answer.data if isinstance(answer.data, str) else str(answer.data)
 
@@ -303,7 +370,11 @@ class LlmKit:
         on_progress: Callable[[int, int, Answer], None] | None = None,
         raise_on_error: bool = False,
     ) -> list[Answer]:
-        """Пачка задач: порядок результатов совпадает с порядком задач."""
+        """Пачка задач: порядок результатов совпадает с порядком задач.
+
+        Упавшая задача не рвёт пачку — она отдаётся как `source="default"`.
+        С `raise_on_error=True` первая ошибка отменяет оставшиеся задачи.
+        """
         total = len(tasks)
         limit = concurrency or self.config.defaults.concurrency
         semaphore = asyncio.Semaphore(max(limit, 1))
@@ -317,17 +388,35 @@ class LlmKit:
                 except AllModelsFailed as exc:
                     if raise_on_error:
                         raise
-                    # Пачка не рвётся: упавшая задача отдаётся как default.
-                    answer = Answer(
+                    answer = exc.answer or Answer(
                         data=task.default, source="default", attempts=exc.attempts,
                         error=str(exc), task_id=task.id,
                     )
             done += 1
-            if on_progress is not None:
-                on_progress(done, total, answer)
+            self._notify(on_progress, done, total, answer)
             return answer
 
-        return list(await asyncio.gather(*(one(task) for task in tasks)))
+        if not raise_on_error:
+            return list(await asyncio.gather(*(one(task) for task in tasks)))
+        try:
+            async with asyncio.TaskGroup() as group:
+                running = [group.create_task(one(task)) for task in tasks]
+        except* AllModelsFailed as errors:
+            # TaskGroup уже отменил остальные задачи — наружу отдаём первую ошибку.
+            raise errors.exceptions[0] from None
+        return [item.result() for item in running]
+
+    @staticmethod
+    def _notify(
+        on_progress: Callable[[int, int, Answer], None] | None, done: int, total: int, answer: Answer
+    ) -> None:
+        """Колбэк прогресса не должен рвать пачку своей ошибкой."""
+        if on_progress is None:
+            return
+        try:
+            on_progress(done, total, answer)
+        except Exception:
+            log.exception("on_progress упал на задаче %s", answer.task_id)
 
     # --- sync-обёртки ---
 
@@ -350,7 +439,7 @@ class LlmKit:
         """Ресурсов, живущих между вызовами, нет; метод есть для симметрии API."""
 
     def close(self) -> None:
-        pass
+        """Ресурсов, живущих между вызовами, нет; метод есть для симметрии API."""
 
     # --- внутреннее ---
 
@@ -372,6 +461,36 @@ class LlmKit:
             messages.append({"role": "system", "content": task.system})
         messages.append({"role": "user", "content": task.user})
         return messages
+
+    def _done(self, answer: Answer, started: float, position: int, tags: dict[str, str]) -> Answer:
+        """Досчитать статистику, записать строку INFO и отдать ответ."""
+        self._finish(answer, started, position)
+        log.info(
+            "%s %s tokens=%d/%d cost=$%.6f %dms tags=%s",
+            answer.model or "—", answer.source, answer.prompt_tokens, answer.completion_tokens,
+            answer.cost_usd, answer.latency_ms, tags,
+        )
+        return answer
+
+    def _cache_keys(
+        self, chain: list[str], messages: list[dict], task: Task, settings: dict
+    ) -> dict[str, str]:
+        """Ключ кэша для каждой модели цепочки — до резолва ключей провайдеров."""
+        keys: dict[str, str] = {}
+        for ref in chain:
+            try:
+                base = providers_mod.api_base(ref, self.config)
+            except ConfigError:
+                continue  # ошибка конфига всплывёт на сетевом шаге
+            keys[ref] = cache_mod.make_key(
+                model=ref,
+                api_base=base,
+                messages=messages,
+                schema=task.schema,
+                temperature=settings["temperature"],
+                max_tokens=settings["max_tokens"],
+            )
+        return keys
 
     def _finish(self, answer: Answer, started: float, position: int) -> None:
         answer.latency_ms = int((time.perf_counter() - started) * 1000)
@@ -396,13 +515,14 @@ class LlmKit:
         ref: str,
         provider: str,
         exc: BaseException,
+        error_type: str,
         attempts: list[Attempt],
         retry_index: int,
         latency_ms: int = 0,
+        secret: str | None = None,
     ) -> str:
         """Записать провалившуюся попытку в `attempts`, usage и лог."""
-        error_type = chain_mod.classify(exc)
-        message = f"{type(exc).__name__}: {exc}"[:500]
+        message = _mask(f"{type(exc).__name__}: {exc}", secret)[:500]
         attempts.append(
             Attempt(model=ref, provider=provider, error_type=error_type, error=message, latency_ms=latency_ms)
         )
@@ -414,30 +534,19 @@ class LlmKit:
         logger("%s: %s (%s)", ref, error_type, message)
         return error_type
 
-    async def _budget_warnings(self, tags: dict[str, str]) -> list[str]:
-        """Проверить дневной и по-меточные бюджеты; работу не прерываем."""
+    async def _budget_tracker(self, tags: dict[str, str]) -> _BudgetTracker:
+        """Прочитать потраченное за сегодня — один раз на задачу."""
         budget = self.config.budget
-        warnings = []
+        items: list[tuple[str, str, float, float]] = []
         if budget.daily_usd is not None:
-            spent = await self.usage.aspent_today()
-            if spent > budget.daily_usd:
-                warnings.append(self._budget_warning("daily", f"дневной бюджет ${budget.daily_usd}", spent))
+            items.append(
+                ("daily", f"дневной бюджет ${budget.daily_usd}", budget.daily_usd, await self.usage.aspent_today())
+            )
         for tag, limit in budget.tags.items():
             name, _, value = tag.partition("=")
-            if tags.get(name) != value:
-                continue
-            spent = await self.usage.aspent_today(tag=tag)
-            if spent > limit:
-                warnings.append(self._budget_warning(tag, f"бюджет метки {tag} ${limit}", spent))
-        return warnings
-
-    @staticmethod
-    def _budget_warning(key: str, what: str, spent: float) -> str:
-        text = f"{what} превышен: потрачено ${spent:.4f} за сегодня"
-        if key not in _warned_budgets:
-            _warned_budgets.add(key)
-            log.warning("%s", text)
-        return text
+            if tags.get(name) == value:
+                items.append((tag, f"бюджет метки {tag} ${limit}", limit, await self.usage.aspent_today(tag=tag)))
+        return _BudgetTracker(items)
 
     @staticmethod
     def _decode(cached: Any, schema: Any) -> Any:
@@ -488,13 +597,10 @@ class LlmKit:
         completion: Callable[..., Any],
     ) -> _Outcome:
         """JSON по pydantic-схеме через Instructor: ретраи внутри вызова."""
-        import instructor
-
-        try:
-            mode = instructor.Mode[call.mode]
-        except KeyError:
-            raise ConfigError(f"неизвестный режим Instructor {call.mode!r} у провайдера {call.provider}") from None
-        client = instructor.from_litellm(completion, mode=mode)
+        client = self._instructor_clients.get(call.mode)
+        if client is None:
+            client = self._instructor_factory(completion, call.mode)
+            self._instructor_clients[call.mode] = client
         data, response = await client.chat.completions.create_with_completion(
             response_model=task.schema,
             max_retries=self.config.retry.invalid_output,

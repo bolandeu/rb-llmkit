@@ -93,3 +93,43 @@ def test_default_paths_use_platformdirs(files):
     assert config.cache_path().name == "cache.sqlite"
     assert config.usage_path().name == "usage.sqlite"
     assert "llmkit" in str(config.cache_path()).lower()
+
+
+def test_ttl_days_must_be_at_least_one(tmp_path):
+    path = tmp_path / "ttl.toml"
+    path.write_text("[cache]\nttl_days = 0\n", encoding="utf-8")
+    with pytest.raises(ConfigError):
+        config_mod.load(env={"LLMKIT_CONFIG": str(path)})
+
+
+def test_empty_llmkit_cache_is_ignored(files):
+    assert config_mod.load(env={"LLMKIT_CACHE": ""}).cache.enabled is True
+    assert config_mod.load(env={"LLMKIT_CACHE": "0"}).cache.enabled is False
+
+
+def test_defaults_are_not_mutated_between_loads(files):
+    first = config_mod.load(overrides={"levels": {"strong": ["a/m1"]}}, env={})
+    second = config_mod.load(env={})
+    assert first.levels["strong"] == ["a/m1"]
+    assert second.levels["strong"] == config_mod.DEFAULTS["levels"]["strong"]
+
+
+def test_default_daily_budget(files):
+    assert config_mod.load(env={}).budget.daily_usd == 20.0
+
+
+def test_bad_budget_tag_and_log_level(tmp_path):
+    bad_tag = tmp_path / "tag.toml"
+    bad_tag.write_text('[budget.tags]\n"плохая метка" = 1.0\n', encoding="utf-8")
+    with pytest.raises(ConfigError):
+        config_mod.load(env={"LLMKIT_CONFIG": str(bad_tag)})
+    with pytest.raises(ConfigError):
+        config_mod.load(env={"LLMKIT_LOG_LEVEL": "ОЧЕНЬ_ПОДРОБНО"})
+
+
+def test_check_levels_points_at_unknown_provider(tmp_path):
+    path = tmp_path / "levels.toml"
+    path.write_text('[levels]\ncheap = ["нет-такого/m1"]\n', encoding="utf-8")
+    config = config_mod.load(env={"LLMKIT_CONFIG": str(path)})
+    with pytest.raises(ConfigError, match="нет-такого"):
+        config.check_levels()

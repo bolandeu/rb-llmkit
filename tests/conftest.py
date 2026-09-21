@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 from types import SimpleNamespace
 
 import pytest
@@ -122,6 +123,8 @@ class FakeCompletion:
             step = self._next(kwargs["model"])
             if callable(step) and not isinstance(step, BaseException):
                 step = step(**kwargs)
+                if inspect.isawaitable(step):
+                    step = await step
             if isinstance(step, BaseException):
                 raise step
             return step

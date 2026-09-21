@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 
 import conftest as fakes
 import pytest
 from conftest import FakeCompletion, response
+from pydantic import BaseModel
 
 from llmkit import AllModelsFailed, LlmKit, Task
 from llmkit import keys as keys_mod
@@ -263,3 +265,178 @@ def test_sync_wrappers_without_loop():
     assert instance.generate_sync("другой вопрос") == "синхронно"
     assert [a.data for a in instance.ask_many_sync([Task(user="третий")])] == ["синхронно"]
     instance.close()
+
+
+# --- правки по итогам ревью ---
+
+
+class Shape(BaseModel):
+    name: str
+
+
+class FakeInstructorClient:
+    """Клиент Instructor для тестов: отдаёт заготовленный шаг."""
+
+    def __init__(self, steps) -> None:
+        self.steps = list(steps)
+        self.calls: list[dict] = []
+        self.chat = type("chat", (), {"completions": self})()
+
+    async def create_with_completion(self, **kwargs):
+        self.calls.append(kwargs)
+        step = self.steps[min(len(self.calls) - 1, len(self.steps) - 1)]
+        if isinstance(step, BaseException):
+            raise step
+        return step
+
+
+def structured_kit(steps):
+    client = FakeInstructorClient(steps)
+    instance = LlmKit(completion=FakeCompletion(), instructor_factory=lambda completion, mode: client)
+    return instance, client
+
+
+async def test_structured_path_returns_pydantic_object():
+    instance, client = structured_kit([(Shape(name="куб"), response())])
+    answer = await instance.ask(Task(user="вопрос", schema=Shape))
+    assert answer.data == Shape(name="куб") and answer.source == "llm"
+    assert client.calls[0]["response_model"] is Shape
+    # Тот же ответ из кэша восстанавливается как pydantic-объект.
+    again = await instance.ask(Task(user="вопрос", schema=Shape))
+    assert again.source == "cache" and again.data == Shape(name="куб")
+
+
+async def test_instructor_error_keeps_provider_error_type(slept):
+    wrapped = fakes.InstructorRetryException("схема не собралась")
+    wrapped.__cause__ = fakes.RateLimitError("429")
+    instance, client = structured_kit([wrapped, (Shape(name="куб"), response())])
+    answer = await instance.ask(Task(user="вопрос", schema=Shape, chain=["a/m1"]))
+    # rate_limit, а не invalid_output: значит был повтор с паузой.
+    assert answer.attempts[0].error_type == "rate_limit"
+    assert slept == [2.0] and len(client.calls) == 2
+
+
+async def test_cache_key_separates_same_model_on_different_providers():
+    instance, fake = kit([response("от a"), response("от b")])
+    first = await instance.ask(Task(user="вопрос", chain=["a/одна-модель"]))
+    second = await instance.ask(Task(user="вопрос", chain=["b/одна-модель"]))
+    # Одинаковое имя модели у разных провайдеров — разные ключи кэша.
+    assert first.data == "от a" and second.data == "от b"
+    assert len(fake.calls) == 2
+
+
+async def test_cache_hit_anywhere_in_chain_skips_the_network():
+    instance, fake = kit({"openai/m1": [fakes.BadRequestError("нет")], "openai/m2": [response("от второй")]})
+    first = await instance.ask(Task(user="вопрос"))
+    assert first.model == "b/m2" and len(fake.calls) == 2
+    # Повтор: ответ второй модели лежит в кэше — первая модель не вызывается.
+    second = await instance.ask(Task(user="вопрос"))
+    assert second.source == "cache" and second.model == "b/m2"
+    assert len(fake.calls) == 2
+
+
+async def test_cache_hit_works_without_provider_key(monkeypatch):
+    instance, fake = kit([response("закэшировано")])
+    await instance.ask(Task(user="вопрос"))
+    monkeypatch.delenv("TEST_A_KEY")
+    monkeypatch.setattr(keys_mod, "from_keychain", lambda provider: None)
+    answer = await instance.ask(Task(user="вопрос"))
+    assert answer.source == "cache" and len(fake.calls) == 1
+
+
+async def test_cache_row_is_recorded_as_first_attempt():
+    instance, _ = kit([response()])
+    await instance.ask(Task(user="вопрос"))
+    await instance.ask(Task(user="вопрос"))
+    with instance.usage._connect() as connection:
+        rows = connection.execute("SELECT status, attempt FROM calls ORDER BY id").fetchall()
+    assert rows == [("ok", 0), ("cache", 0)]
+
+
+async def test_unknown_exception_is_not_masked_as_provider_error():
+    instance, _ = kit([TypeError("баг в нашем коде")])
+    with pytest.raises(TypeError):
+        await instance.ask(Task(user="вопрос"))
+
+
+async def test_failed_task_counts_in_stats_and_keeps_latency():
+    instance, _ = kit([fakes.BadRequestError("нет")])
+    with pytest.raises(AllModelsFailed) as info:
+        await instance.ask(Task(user="вопрос"))
+    assert instance.stats.calls == 1 and instance.stats.failed == 1
+    answer = info.value.answer
+    assert answer is not None and answer.source == "default" and answer.latency_ms >= 0
+    assert info.value.error_type == "bad_request"
+
+
+async def test_all_models_failed_error_type_is_none_when_mixed(slept):
+    instance, _ = kit({"openai/m1": [fakes.Timeout("долго")], "openai/m2": [fakes.BadRequestError("нет")]})
+    with pytest.raises(AllModelsFailed) as info:
+        await instance.ask(Task(user="вопрос"))
+    assert info.value.error_type is None
+
+
+async def test_ask_many_failure_answer_has_metadata():
+    instance, _ = kit([fakes.BadRequestError("нет")])
+    answers = await instance.ask_many([Task(user="плохой", id="задача-1")])
+    assert answers[0].source == "default" and answers[0].task_id == "задача-1"
+    assert answers[0].attempts and answers[0].latency_ms >= 0
+    assert instance.stats.calls == 1 and instance.stats.failed == 1
+
+
+async def test_raise_on_error_cancels_remaining_tasks():
+    calls: list[str] = []
+    finished: list[str] = []
+
+    async def completion(**kwargs):
+        content = kwargs["messages"][-1]["content"]
+        calls.append(content)
+        if "плохой" in content:
+            raise fakes.BadRequestError("нет")
+        await asyncio.sleep(0.2)
+        finished.append(content)
+        return response("ок")
+
+    instance = LlmKit(completion=completion, concurrency=4)
+    tasks = [Task(user="плохой"), *[Task(user=f"хороший-{i}") for i in range(3)]]
+    started = time.perf_counter()
+    with pytest.raises(AllModelsFailed):
+        await instance.ask_many(tasks, raise_on_error=True)
+    assert time.perf_counter() - started < 0.2  # спящих задач не дожидались
+    await asyncio.sleep(0.25)
+    assert finished == []  # отменённые задачи в сеть больше не сходили
+    # Упавшая задача прошла оба звена цепочки, остальные отменены на первом же await.
+    assert calls.count("плохой") == 2 and len(calls) < 8
+
+
+async def test_on_progress_error_does_not_break_the_batch(caplog):
+    instance, _ = kit([response()])
+
+    def broken(done, total, answer):
+        raise RuntimeError("колбэк сломался")
+
+    with caplog.at_level(logging.ERROR, logger="llmkit.core"):
+        answers = await instance.ask_many([Task(user="раз"), Task(user="два")], on_progress=broken)
+    assert len(answers) == 2 and all(a.ok for a in answers)
+    assert any("on_progress" in record.getMessage() for record in caplog.records)
+
+
+async def test_budget_warning_is_not_repeated_per_model_in_chain(slept):
+    instance, _ = kit({"openai/m1": [fakes.Timeout("долго")], "openai/m2": [response()]})
+    instance.config.budget.daily_usd = 0.0
+    instance.usage.record(model="a/m1", provider="a", status="ok", cost_usd=1.0)
+    answer = await instance.ask(Task(user="вопрос"))
+    assert len(answer.warnings) == 1  # одно предупреждение на задачу, не на модель
+
+
+async def test_api_key_is_masked_in_errors():
+    instance, _ = kit([fakes.BadRequestError("ключ ключ-a протух")])
+    answer = await instance.ask(Task(user="вопрос", default="нет"))
+    assert "ключ-a" not in (answer.attempts[0].error or "")
+    assert "***" in (answer.attempts[0].error or "")
+
+
+async def test_generate_returns_default_when_given():
+    instance, _ = kit([fakes.BadRequestError("нет")])
+    assert await instance.generate("вопрос", default="запасной ответ") == "запасной ответ"
+    assert await instance.generate("вопрос") is None

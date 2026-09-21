@@ -34,7 +34,7 @@ advisory на PyPI/GitHub.
 
 ```
 src/llmkit/
-  __init__.py      # экспорт: LlmKit, Task, Answer, Chain, errors
+  __init__.py      # экспорт: LlmKit, Task, Answer, Attempt, Stats, Config, load_config, errors
   config.py        # модели конфига, загрузка, слияние
   keys.py          # резолв ключей: аргумент → env → keychain
   providers.py     # описание провайдера → аргументы litellm
@@ -54,6 +54,7 @@ src/llmkit/
 (`platformdirs.user_config_dir("llmkit")`) → `.llmkit/config.toml` в проекте (поиск вверх
 от cwd) → env `LLMKIT_*` (только для скалярных полей: `LLMKIT_CONFIG` путь к файлу,
 `LLMKIT_CACHE=0`, `LLMKIT_LOG_LEVEL`) → аргументы `LlmKit(...)`.
+Заданный `LLMKIT_CONFIG` **заменяет** поиск файлов: читается только он.
 
 ```toml
 [providers.openrouter]
@@ -71,7 +72,8 @@ kind = "openai_compatible"
 base_url = "https://api.deepseek.com/v1"
 api_key_env = "DEEPSEEK_API_KEY"
 
-[levels]                            # уровень = цепочка "provider/model" по порядку
+[levels]                            # уровень = цепочка "provider/model" по порядку;
+                                    # модели ниже — пример, набор выбирает пользователь
 cheap  = ["ollama/gpt-oss:120b", "openrouter/openai/gpt-4o-mini"]
 judge  = ["openrouter/anthropic/claude-sonnet-4", "openrouter/openai/gpt-4o"]
 strong = ["openrouter/anthropic/claude-opus-4"]
@@ -92,7 +94,7 @@ path = "~/.cache/llmkit/cache.sqlite"        # platformdirs user_cache_dir по 
 path = "~/.local/share/llmkit/usage.sqlite"  # platformdirs user_data_dir по умолчанию
 
 [budget]                            # только предупреждения, ничего не прерывает
-daily_usd = 5.0
+daily_usd = 20.0                    # дефолт в коде
 [budget.tags]                       # лимит на значение метки, ключ "метка=значение"
 "tool=intentree" = 2.0
 "niche=ved" = 1.0
@@ -244,9 +246,12 @@ Instructor не используется: вызов идёт с `response_forma
 ## 7. Кэш (`cache.py`)
 
 SQLite, таблица `cache(key TEXT PRIMARY KEY, model TEXT, created_at REAL, response TEXT)`.
-`key = sha256(canonical_json({model, messages, schema, temperature, max_tokens}))`, где
-`model` — конкретная модель попытки (не уровень): ответ дешёвой модели не выдаётся за
-ответ сильной. Проверка кэша идёт по каждой модели цепочки перед сетевым вызовом.
+`key = sha256(canonical_json({model, api_base, messages, schema, temperature, max_tokens}))`,
+где `model` — ссылка `provider/model` конкретной попытки (не уровень и не имя модели для
+LiteLLM): ответ дешёвой модели не выдаётся за ответ сильной, а одна и та же модель у
+ollama.com и у localhost не делит запись. Ключ провайдера в подпись не входит.
+Кэш проверяется по **всей цепочке** до первого сетевого вызова и до резолва ключей:
+попадание на любой модели цепочки отдаётся сразу, без обращения к провайдерам.
 TTL из конфига; протухшие записи удаляются при старте (`DELETE WHERE created_at < …`).
 `journal_mode=WAL`, `busy_timeout=5000` — несколько процессов одновременно.
 Попадание пишется в usage как `status="cache"`, стоимость 0.
@@ -287,7 +292,10 @@ usage.total(since) -> Row
 
 ## 10. CLI `llm` (фаза 2)
 
-По конвенциям cli-builder: `--json` у всех команд, диагностика в stderr, exit 0/1/2.
+По конвенциям cli-builder: `--json` у всех команд, диагностика в stderr, коды выхода
+как в `reference/conventions.md`: 0 — успех, 1 — непредвиденная ошибка, 2 — неверные
+аргументы (и `llm serve` до фазы 4), 3 — нет ключа (`AUTH_REQUIRED`), 5 — все модели
+цепочки упали (`PROVIDER_ERROR`).
 
 | Команда | Что делает |
 |---|---|

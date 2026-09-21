@@ -41,12 +41,20 @@ def make_key(
     *,
     model: str,
     messages: list[dict],
+    api_base: str | None = None,
     schema: Any = None,
     temperature: float | None = None,
     max_tokens: int | None = None,
 ) -> str:
+    """Ключ по ссылке `провайдер/модель` и адресу провайдера.
+
+    Именно `provider/model`, а не имя модели для LiteLLM: одна и та же
+    модель у ollama.com и у localhost — разные ответы и разные ключи.
+    Ключ провайдера в подпись не входит.
+    """
     payload = {
         "model": model,
+        "api_base": api_base,
         "messages": messages,
         "schema": schema_fingerprint(schema),
         "temperature": temperature,
@@ -94,14 +102,15 @@ class Cache:
         """Создать таблицу и выкинуть протухшее — один раз на экземпляр."""
         if self._ready:
             return
-        with self._lock, self._connect() as connection:
-            if self._ready:
+        with self._lock:
+            if self._ready:  # успели, пока ждали лок
                 return
-            _set_wal(connection)
-            connection.execute(SCHEMA)
-            if self.ttl_seconds:
-                connection.execute("DELETE FROM cache WHERE created_at < ?", (time.time() - self.ttl_seconds,))
-        self._ready = True
+            with self._connect() as connection:
+                _set_wal(connection)
+                connection.execute(SCHEMA)
+                if self.ttl_seconds:
+                    connection.execute("DELETE FROM cache WHERE created_at < ?", (time.time() - self.ttl_seconds,))
+            self._ready = True
 
     def get(self, key: str) -> Any | None:
         if not self.enabled:

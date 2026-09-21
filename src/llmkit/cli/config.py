@@ -24,7 +24,10 @@ base_url = "https://ollama.com"     # локальный: http://localhost:11434
 [providers.ollama.prices]           # $ за 1M токенов, если LiteLLM цену не знает
 "gpt-oss:120b" = { input = 0.15, output = 0.60 }
 
-[levels]                            # уровень = цепочка "провайдер/модель" по порядку
+[levels]
+# Уровень = цепочка "провайдер/модель" по порядку: упала первая — отвечает следующая.
+# Ниже пример; модели выбирайте сами. "провайдер" — ключ из [providers] выше,
+# всё после первого "/" — имя модели у этого провайдера.
 cheap  = ["ollama/gpt-oss:120b", "openrouter/openai/gpt-4o-mini"]
 judge  = ["openrouter/anthropic/claude-sonnet-4", "openrouter/openai/gpt-4o"]
 strong = ["openrouter/anthropic/claude-opus-4"]
@@ -41,9 +44,10 @@ enabled = true
 ttl_days = 30
 
 [budget]                            # только предупреждения, ничего не прерывает
-daily_usd = 5.0
-[budget.tags]                       # лимит на значение метки
-"tool=intentree" = 2.0
+daily_usd = 20.0
+# Лимит на значение метки — раскомментируйте нужные:
+# [budget.tags]
+# "tool=intentree" = 2.0
 
 [retry]                             # повторы по типам ошибок
 timeout = 1

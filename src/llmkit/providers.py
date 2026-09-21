@@ -32,7 +32,8 @@ class ModelCall:
     model: str  # имя модели у провайдера
     litellm_model: str
     mode: str  # режим Instructor: TOOLS | JSON
-    params: dict[str, Any] = field(default_factory=dict)
+    # repr=False: в params лежит api_key, он не должен попасть в лог или traceback.
+    params: dict[str, Any] = field(default_factory=dict, repr=False)
 
 
 def split_ref(ref: str) -> tuple[str, str]:
@@ -47,6 +48,14 @@ def instructor_mode(cfg: ProviderConfig) -> str:
     if cfg.mode:
         return cfg.mode.upper()
     return "JSON" if cfg.kind in _JSON_MODE_KINDS else "TOOLS"
+
+
+def api_base(ref: str, config: Config) -> str | None:
+    """Адрес провайдера без резолва ключа — нужен для ключа кэша."""
+    provider, _ = split_ref(ref)
+    cfg = config.provider(provider)
+    _, needs_base = KINDS.get(cfg.kind, ("", False))
+    return cfg.base_url if needs_base else None
 
 
 def build(ref: str, config: Config, *, env: dict[str, str] | None = None) -> ModelCall:

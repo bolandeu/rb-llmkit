@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 
+import conftest as fakes_module
 import pytest
 from conftest import FakeCompletion, response
 from typer.testing import CliRunner
@@ -167,7 +168,7 @@ def test_ask_reports_missing_key(monkeypatch):
     monkeypatch.delenv("TEST_A_KEY")
     monkeypatch.delenv("TEST_B_KEY")
     result = run("ask", "вопрос", "--json")
-    assert result.exit_code == 1
+    assert result.exit_code == 3  # AUTH_REQUIRED по conventions.md
     error = payload(result)["error"]
     assert error["code"] == "AUTH_REQUIRED" and "llm keys set" in error["action"]
 
@@ -222,3 +223,30 @@ def test_serve_is_not_implemented_yet():
     result = run("serve", "--json")
     assert result.exit_code == 2
     assert payload(result)["error"]["code"] == "NOT_IMPLEMENTED"
+
+
+def test_models_explains_unknown_provider_in_level(tmp_path, monkeypatch):
+    broken = tmp_path / "broken-levels.toml"
+    broken.write_text('[levels]\ncheap = ["нет-такого/m1"]\n', encoding="utf-8")
+    monkeypatch.setenv("LLMKIT_CONFIG", str(broken))
+    result = run("models", "--json")
+    assert result.exit_code == 2
+    error = payload(result)["error"]
+    assert error["code"] == "INVALID_ARGUMENTS" and "нет-такого" in error["message"]
+
+
+def test_config_init_template_has_default_budget(tmp_path, monkeypatch):
+    target = tmp_path / "шаблон.toml"
+    monkeypatch.setenv("LLMKIT_CONFIG", str(target))
+    assert run("config", "init", "--json").exit_code == 0
+    body = target.read_text(encoding="utf-8")
+    assert "daily_usd = 20.0" in body and "# [budget.tags]" in body
+    # Шаблон должен читаться обратно без ошибок.
+    assert run("config", "show", "--json").exit_code == 0
+
+
+def test_provider_failure_exit_code(fake_kit):
+    fake_kit([fakes_module.BadRequestError("нет")])
+    result = run("ask", "вопрос", "--json")
+    assert result.exit_code == 5  # PROVIDER_ERROR по conventions.md
+    assert payload(result)["error"]["code"] == "PROVIDER_ERROR"

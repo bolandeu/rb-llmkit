@@ -12,11 +12,14 @@ def models(ctx: typer.Context, json_output: bool = JsonOption) -> None:
     """Показать провайдеров, уровни и их цепочки моделей.
 
     У каждого провайдера видно, откуда берётся ключ (значение не
-    печатается). Код выхода 0; 2 — если конфиг не разбирается.
+    печатается). Цепочки уровней задаются в формате "провайдер/модель".
+    Код выхода 0; 2 — если конфиг не разбирается или уровень ссылается на
+    неописанного провайдера.
     """
     enable_json(ctx, json_output)
     with guard(ctx):
         config = config_mod.load()
+        config.check_levels()
         providers = []
         for name, cfg in sorted(config.providers.items()):
             source, env_var = key_source(name, cfg)

@@ -24,7 +24,7 @@ CASES = [
     (fakes.AuthenticationError("x"), "auth"),
     (KeyMissing("a", "TEST_A_KEY"), "auth"),
     (fakes.BadRequestError("x"), "bad_request"),
-    (ValueError("что-то своё"), "bad_request"),
+    (ValueError("что-то своё"), None),  # чужое исключение ядро пробрасывает
 ]
 
 
@@ -34,23 +34,37 @@ def test_classify(exc, expected):
 
 
 def test_litellm_exception_names_are_covered():
-    """Имена реальных классов LiteLLM совпадают с картой классификации."""
+    """Каждое имя из карты классификации существует в библиотеках или у нас."""
     import litellm
+    import openai  # базовые классы исключений litellm живут здесь
+    from instructor.core import InstructorRetryException
 
-    expected = {
-        "Timeout": "timeout",
-        "RateLimitError": "rate_limit",
-        "ServiceUnavailableError": "server",
-        "InternalServerError": "server",
-        "APIConnectionError": "server",
-        "ContentPolicyViolationError": "refusal",
-        "ContextWindowExceededError": "context_length",
-        "AuthenticationError": "auth",
-        "BadRequestError": "bad_request",
-    }
-    for name, error_type in expected.items():
-        klass = getattr(litellm, name)
+    ours = {"EmptyResponse", "JsonParseFailed", "ContentFiltered", "KeyMissing"}
+    for name, error_type in chain.ERROR_TYPE_BY_EXCEPTION.items():
+        if name in ours:
+            continue
+        klass = (
+            InstructorRetryException
+            if name == "InstructorRetryException"
+            else getattr(litellm, name, None) or getattr(openai, name, None)
+        )
+        assert klass is not None, f"{name} больше не существует ни в litellm, ни в openai, ни в instructor"
         assert chain.classify(klass.__new__(klass)) == error_type
+
+
+def test_instructor_exception_keeps_the_provider_error_type():
+    """Instructor оборачивает 429 провайдера — тип ошибки должен уцелеть."""
+    inner = fakes.RateLimitError("429")
+    wrapper = fakes.InstructorRetryException("схема не собралась")
+    wrapper.__cause__ = inner
+    assert chain.classify(wrapper) == "rate_limit"
+
+
+def test_instructor_exception_without_provider_cause_is_invalid_output():
+    wrapper = fakes.InstructorRetryException("схема не собралась")
+    wrapper.__cause__ = ValueError("2 validation errors")
+    assert chain.classify(wrapper) == "invalid_output"
+    assert chain.classify(fakes.InstructorRetryException("без причины")) == "invalid_output"
 
 
 def test_retries_only_where_policy_allows():

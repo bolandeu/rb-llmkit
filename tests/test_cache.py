@@ -57,3 +57,11 @@ def test_decode_restores_pydantic_model():
     assert LlmKit._decode({"name": "куб", "sides": 6}, Shape) == Shape(name="куб", sides=6)
     assert LlmKit._decode({"name": "куб"}, {"type": "object"}) == {"name": "куб"}
     assert LlmKit._decode("текст", None) == "текст"
+
+
+def test_key_depends_on_api_base():
+    """Одна модель у разных адресов провайдера — разные записи кэша."""
+    cloud = make_key(model="ollama/gpt-oss:120b", api_base="https://ollama.com", **BASE)
+    local = make_key(model="ollama/gpt-oss:120b", api_base="http://localhost:11434", **BASE)
+    assert cloud != local
+    assert cloud == make_key(model="ollama/gpt-oss:120b", api_base="https://ollama.com", **BASE)

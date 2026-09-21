@@ -4,7 +4,8 @@
 stdout — только данные (в режиме `--json` там же лежит и конверт ошибки),
 stderr — диагностика: строки `Ошибка:`, предупреждения, логи.
 
-Коды выхода (раздел 10 SPEC): 0 — успех, 1 — ошибка, 2 — неверные аргументы.
+Коды выхода (conventions.md cli-builder): 0 — успех, 1 — непредвиденная
+ошибка, 2 — неверные аргументы, 3 — нет авторизации, 5 — ошибка провайдера.
 """
 
 import json
@@ -85,21 +86,27 @@ def _classify(exc: Exception) -> CliError:
             f"нет ключа для провайдера {exc.provider}",
             f"выполните `llm keys set {exc.provider}`"
             + (f" или `export {exc.env_var}=...`" if exc.env_var else ""),
+            exit_code=3,
         )
     if isinstance(exc, ConfigError):
         return CliError("INVALID_ARGUMENTS", str(exc), "проверьте конфиг: `llm config show`", exit_code=2)
     if isinstance(exc, AllModelsFailed):
-        # Ядро ловит KeyMissing внутри цепочки; если все модели отпали из-за
-        # ключей, это не сбой провайдера, а отсутствующая авторизация.
-        attempts = exc.attempts
-        if attempts and all(attempt.error_type == "auth" for attempt in attempts):
-            providers = sorted({attempt.provider for attempt in attempts})
+        # Ядро ловит KeyMissing внутри цепочки; если все попытки упали
+        # по ключам, это не сбой провайдера, а отсутствующая авторизация.
+        if exc.error_type == "auth":
+            providers = sorted({attempt.provider for attempt in exc.attempts})
             return CliError(
                 "AUTH_REQUIRED",
                 "нет ключей для моделей цепочки: " + ", ".join(providers),
                 "выполните `llm keys set " + providers[0] + "` или задайте переменную окружения",
+                exit_code=3,
             )
-        return CliError("PROVIDER_ERROR", str(exc), "попробуйте другой уровень: `llm ask ... --level judge`")
+        return CliError(
+            "PROVIDER_ERROR",
+            str(exc),
+            "попробуйте другой уровень: `llm ask ... --level judge`",
+            exit_code=5,
+        )
     return CliError("UNEXPECTED", f"{type(exc).__name__}: {exc}", "повторите с `--verbose`")
 
 

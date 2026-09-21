@@ -20,6 +20,8 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from .config import TAG_NAME_RE
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS calls (
     id INTEGER PRIMARY KEY,
@@ -108,12 +110,13 @@ class Usage:
     def _prepare(self) -> None:
         if self._ready:
             return
-        with self._lock, self._connect() as connection:
-            if self._ready:
+        with self._lock:
+            if self._ready:  # успели, пока ждали лок
                 return
-            _set_wal(connection)
-            connection.executescript(SCHEMA)
-        self._ready = True
+            with self._connect() as connection:
+                _set_wal(connection)
+                connection.executescript(SCHEMA)
+            self._ready = True
 
     def record(
         self,
@@ -177,6 +180,13 @@ class Usage:
         " COALESCE(SUM(prompt_tokens), 0), COALESCE(SUM(completion_tokens), 0), COALESCE(SUM(cost_usd), 0)"
     )
 
+    @staticmethod
+    def _json_extract(name: str) -> str:
+        """Фрагмент SQL для метки; имя проверяется, значения идут параметрами."""
+        if not TAG_NAME_RE.match(name):
+            raise ValueError(f"имя метки должно быть [A-Za-z0-9_], получено {name!r}")
+        return "json_extract(tags, '$." + name + "')"
+
     def report(
         self,
         group_by: tuple[str, ...] | list[str] = (),
@@ -186,11 +196,11 @@ class Usage:
         """Агрегаты по меткам за период; без `group_by` — одна общая строка."""
         self._prepare()
         group_by = tuple(group_by)
-        selects = [f"json_extract(tags, '$.{name}')" for name in group_by]
+        selects = [self._json_extract(name) for name in group_by]
         where, params = self._window(since, until)
         columns = ", ".join([*selects, self._AGGREGATES])
-        # Имена меток подставляются в json_extract, значения — только параметрами.
-        query = f"SELECT {columns} FROM calls{where}"  # noqa: S608
+        # Имена меток уже проверены в _json_extract, значения идут параметрами.
+        query = "SELECT " + columns + " FROM calls" + where  # noqa: S608
         if selects:
             query += " GROUP BY " + ", ".join(str(i + 1) for i in range(len(selects)))
             query += f" ORDER BY {len(selects) + 6} DESC"
@@ -224,7 +234,7 @@ class Usage:
         params: list[Any] = [start]
         if tag:
             name, _, value = tag.partition("=")
-            query += f" AND json_extract(tags, '$.{name}') = ?"
+            query += " AND " + self._json_extract(name) + " = ?"
             params.append(value)
         with self._connect() as connection:
             return float(connection.execute(query, params).fetchone()[0] or 0.0)

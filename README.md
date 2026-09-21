@@ -20,9 +20,20 @@
 
 ## Установка
 
+Как библиотека — в проект:
+
 ```bash
 uv add "git+https://github.com/bolandeu/llmkit"
 ```
+
+Как команда `llm` — в систему:
+
+```bash
+uv tool install "git+https://github.com/bolandeu/llmkit"
+```
+
+Репозиторий приватный, поэтому на машине нужен доступ к GitHub: `gh auth login`
+(или ssh-ключ и адрес `git+ssh://git@github.com/bolandeu/llmkit`).
 
 В `pyproject.toml` потребителя это выглядит так:
 
@@ -39,10 +50,10 @@ llmkit = { git = "https://github.com/bolandeu/llmkit" }
 
 ## CLI `llm`
 
-Ставится вместе с пакетом; `uv tool install "git+https://github.com/bolandeu/llmkit"`
-даёт команду `llm` в системе. У всех команд есть `--json` (конверт в stdout),
-диагностика идёт в stderr. Коды выхода: **0** — успех, **1** — все модели упали
-или нет ключа, **2** — неверные аргументы.
+Ставится вместе с пакетом (см. «Установка»). У всех команд есть `--json`
+(конверт в stdout), диагностика идёт в stderr. Коды выхода по конвенциям
+cli-builder: **0** — успех, **1** — непредвиденная ошибка, **2** — неверные
+аргументы, **3** — нет ключа, **5** — все модели цепочки упали.
 
 ```bash
 llm                                  # справка: список команд, код выхода 0
@@ -96,6 +107,9 @@ base_url = "https://ollama.com"     # локальный: http://localhost:11434
 "gpt-oss:120b" = { input = 0.15, output = 0.60 }
 
 [levels]                            # уровень = цепочка "провайдер/модель" по порядку
+# Модели ниже — пример: набор выбираете вы. Слева от первого "/" — ключ из
+# [providers], справа — имя модели у этого провайдера (у OpenRouter оно само
+# содержит "/"). Упала первая модель — отвечает следующая.
 cheap  = ["ollama/gpt-oss:120b", "openrouter/openai/gpt-4o-mini"]
 judge  = ["openrouter/anthropic/claude-sonnet-4"]
 
@@ -111,7 +125,7 @@ enabled = true
 ttl_days = 30
 
 [budget]                            # только предупреждения
-daily_usd = 5.0
+daily_usd = 20.0
 [budget.tags]
 "tool=intentree" = 2.0
 
@@ -206,6 +220,10 @@ print(kit.stats)   # итоги за время жизни экземпляра
 Версия LiteLLM пинится точно из-за инцидента с бэкдором в 1.82.7/1.82.8. На
 2026-09-21 `1.102.0` — актуальный релиз, и ни один из 14 advisory репозитория
 BerriAI/litellm его не задевает (самый «поздний» уязвимый диапазон — `<1.94.0`).
+
+## Что дальше
+
+Планы и отложенное за пределы v1 — в [ROADMAP.md](ROADMAP.md).
 
 ## Разработка
 
