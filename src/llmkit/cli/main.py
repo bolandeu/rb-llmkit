@@ -5,6 +5,7 @@ from importlib.metadata import PackageNotFoundError, version
 import typer
 
 from . import ask as ask_mod
+from . import auth as auth_mod
 from . import config as config_mod
 from . import cost as cost_mod
 from . import keys as keys_mod
@@ -32,6 +33,7 @@ app.command("models")(models_mod.models)
 app.command("cost")(cost_mod.cost)
 app.command("serve")(serve_mod.serve)
 app.add_typer(keys_mod.app, name="keys")
+app.add_typer(auth_mod.app, name="auth")
 app.add_typer(config_mod.app, name="config")
 
 

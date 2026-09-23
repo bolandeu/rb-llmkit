@@ -7,6 +7,7 @@ import typer
 
 from .. import config as config_mod
 from .. import keys as keys_mod
+from ..providers import SUBSCRIPTION_KINDS
 from .output import JsonOption, bad_arguments, emit, enable_json, group, guard, out
 
 app = group("keys", "Ключи провайдеров: связка ключей ОС и переменные окружения.")
@@ -23,6 +24,8 @@ def _known_provider(name: str):
 def key_source(name: str, cfg) -> tuple[str, str]:
     """Откуда берётся ключ: env, keychain, config или его нет."""
     env_var = keys_mod.env_var(name, cfg)
+    if cfg.kind in SUBSCRIPTION_KINDS:
+        return "subscription", ""
     if cfg.api_key:
         return "config", env_var
     if os.environ.get(env_var):
@@ -89,6 +92,8 @@ def status(ctx: typer.Context, json_output: bool = JsonOption) -> None:
                 table.add_column(column)
             for row in rows:
                 mark = row["source"] if row["source"] != "none" else ("нет" if row["requires_key"] else "не нужен")
+                if row["source"] == "subscription":
+                    mark = "подписка: `llm auth status`"
                 table.add_row(row["provider"], row["kind"], mark, row["env_var"])
             out.print(table)
 

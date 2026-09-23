@@ -5,6 +5,13 @@
 
 ## 2026-09-23
 
+- **Подписки вместо API-ключей**: `kind = "chatgpt"` (OAuth Codex CLI, Responses
+  API `chatgpt.com/backend-api/codex`) и `kind = "claude_cli"` (установленный
+  `claude -p`). Порт решений iva-agent на Python: файл токенов 0600, обновление
+  под замком с перечитыванием файла, повтор при 401, защита `account_id`;
+  чистое окружение и убийство группы процессов у CLI. JSON по схеме нативно,
+  стоимость 0. Команды `llm auth login|status|logout`, провайдеры `chatgpt` и
+  `claude` во встроенных дефолтах. Claude проверен живым вызовом.
 - **CLI**: `llm ask`/`llm json` получили флаг `--timeout` (переопределяет
   `defaults.timeout` на конкретный вызов, как уже работали `--temperature`
   и `--max-tokens`).

@@ -15,6 +15,13 @@ windmill-скрипты и одноразовые клиенты в `tasks/*`.
 `LlmRunner` поверх `ask_many_sync`, `LlmStats` из `kit.stats`; журнал решений
 остаётся в intentree. Удалить `providers/llm.py` и таблицу `llm_cache`.
 
+## Подписки ChatGPT и Claude — доделать
+
+- Живая проверка ChatGPT после `llm auth login chatgpt`: текст, JSON по схеме,
+  401 → обновление токена. Офлайн-тесты есть, живого вызова не было.
+- Список моделей подписки (`/models` бэкенда Codex, гейт по `CLIENT_VERSION`) в
+  `llm models`; уровень `reasoning.effort` из конфига.
+
 ## Фаза 4 — прокси `llm serve` + скилл Claude Code
 
 - Прокси: OpenAI-совместимый `/v1/chat/completions` на 127.0.0.1, метки через

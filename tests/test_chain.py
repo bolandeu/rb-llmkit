@@ -39,9 +39,16 @@ def test_litellm_exception_names_are_covered():
     import openai  # базовые классы исключений litellm живут здесь
     from instructor.core import InstructorRetryException
 
+    from llmkit.transports import _common
+
     ours = {"EmptyResponse", "JsonParseFailed", "ContentFiltered", "KeyMissing"}
     for name, error_type in chain.ERROR_TYPE_BY_EXCEPTION.items():
         if name in ours:
+            continue
+        if name.startswith("Subscription"):
+            klass = getattr(_common, name, None)
+            assert klass is not None, f"{name} нет в transports/_common.py"
+            assert chain.classify(klass("x")) == error_type
             continue
         klass = (
             InstructorRetryException

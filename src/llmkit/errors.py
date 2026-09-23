@@ -26,6 +26,16 @@ class KeyMissing(LlmKitError):
         super().__init__(f"нет ключа для провайдера {provider}: {hint}")
 
 
+class LoginMissing(KeyMissing):
+    """Провайдер по подписке: нет входа или не установлен CLI."""
+
+    def __init__(self, provider: str, action: str) -> None:
+        self.provider = provider
+        self.env_var = ""
+        self.action = action
+        LlmKitError.__init__(self, f"нет входа в подписку для провайдера {provider}: {action}")
+
+
 class AllModelsFailed(LlmKitError):
     """Вся цепочка моделей исчерпана, а `default` у задачи не задан.
 

@@ -53,7 +53,7 @@ llmkit = { git = "https://github.com/bolandeu/llmkit" }
 Ставится вместе с пакетом (см. «Установка»). У всех команд есть `--json`
 (конверт в stdout), диагностика идёт в stderr. Коды выхода по конвенциям
 cli-builder: **0** — успех, **1** — непредвиденная ошибка, **2** — неверные
-аргументы, **3** — нет ключа, **5** — все модели цепочки упали.
+аргументы, **3** — нет ключа или входа в подписку, **5** — все модели цепочки упали.
 
 ```bash
 llm                                  # справка: список команд, код выхода 0
@@ -62,7 +62,9 @@ cat prompt.txt | llm ask --system "Отвечай кратко" --json
 llm json "Разбери запрос" --schema schema.json          # в stdout только JSON-объект
 llm models                           # провайдеры, уровни, есть ли ключ
 llm keys set openrouter              # ввод скрыт; `--stdin` для автоматизации
-llm keys status                      # источник ключа: config | env | keychain | none
+llm keys status                      # источник ключа: config | env | keychain | subscription | none
+llm auth login chatgpt               # вход в подписку ChatGPT (код устройства; --browser — через браузер)
+llm auth status                      # вход в подписки ChatGPT и Claude
 llm cost --by tool,niche --since 7d  # отчёт из журнала вызовов
 llm config init                      # шаблон конфига; path | show
 ```
@@ -89,6 +91,33 @@ llm keys set openrouter
 `api_key_env` в конфиге перекрывает. В связке ключей значение лежит как
 JSON `{"api_key": "..."}` в службе `llmkit:<провайдер>`.
 
+## Подписки ChatGPT и Claude
+
+Модели можно вызывать по подписке ChatGPT Plus/Pro и Claude Pro/Max, без
+API-ключей. Провайдеры `chatgpt` и `claude` уже есть во встроенных дефолтах.
+
+```bash
+llm auth login chatgpt               # ссылка + одноразовый код; токены — в файле 0600
+llm ask "Привет" -m chatgpt/gpt-5.5
+claude auth login                    # вход держит сам Claude Code CLI
+llm ask "Привет" -m claude/sonnet
+```
+
+- **ChatGPT** (`kind = "chatgpt"`): вход OAuth, как у Codex CLI; запросы идут в
+  Responses API `chatgpt.com/backend-api/codex`. Файл токенов свой
+  (`platformdirs.user_data_dir("llmkit")/chatgpt-auth.json`), не `~/.codex/auth.json`:
+  refresh-токен одноразовый, два клиента на одном выбивали бы друг друга.
+  Температура и `max_tokens` не отправляются — бэкенд подписки их отвергает.
+- **Claude** (`kind = "claude_cli"`): вызов установленного `claude -p` без
+  инструментов и сессий, в пустом каталоге. Токен читает сам CLI (`claude auth login`
+  или `CLAUDE_CODE_OAUTH_TOKEN`); `ANTHROPIC_API_KEY` и прочие `ANTHROPIC_*` из
+  окружения CLI не передаются, иначе вызов ушёл бы на платный ключ. Другой бинарь —
+  `CLAUDE_COMMAND`. Температура игнорируется.
+- JSON по схеме у обоих — нативный (`text.format` / `--json-schema`). Стоимость в
+  журнале — 0 (оплачено подпиской), токены учитываются.
+- Условия Anthropic ограничивают использование подписки вне Claude Code —
+  проверьте их перед массовыми вызовами; риск блокировки аккаунта за пользователем.
+
 ## Конфиг
 
 Слои (позже перекрывает раньше): дефолты в коде → пользовательский конфиг
@@ -99,13 +128,13 @@ Support/llmkit/config.toml`, на Linux — `~/.config/llmkit/config.toml` ил�
 `LLMKIT_LOG_LEVEL` → аргументы `LlmKit(...)`. `LLMKIT_CONFIG=/путь/config.toml`
 заменяет поиск файлов целиком — удобно для переносимого конфига между машинами.
 
-Встроенные дефолты (`config.py: DEFAULTS`) уже включают провайдеров `openrouter`
-и `ollama` и уровни `cheap`/`judge`/`strong` с примерными моделями — свой
+Встроенные дефолты (`config.py: DEFAULTS`) уже включают провайдеров `openrouter`,
+`ollama`, `chatgpt` и `claude` (подписки) и уровни `cheap`/`judge`/`strong` с примерными моделями — свой
 `config.toml` не обязателен, если устраивает пример и ключи уже заведены.
 
 ```toml
 [providers.openrouter]
-kind = "openrouter"                 # openrouter | openai | anthropic | gemini | ollama | openai_compatible
+kind = "openrouter"                 # openrouter | openai | anthropic | gemini | ollama | openai_compatible | chatgpt | claude_cli
 
 [providers.ollama]
 kind = "ollama"

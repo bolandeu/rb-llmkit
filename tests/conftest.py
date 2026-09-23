@@ -147,6 +147,12 @@ def isolated(tmp_path, monkeypatch):
     monkeypatch.setenv("TEST_B_KEY", "ключ-b")
     monkeypatch.delenv("LLMKIT_CACHE", raising=False)
     monkeypatch.delenv("LLMKIT_LOG_LEVEL", raising=False)
+    # Подписки: ни настоящего файла токенов ChatGPT, ни настоящего CLI claude.
+    from llmkit.transports import chatgpt_auth
+
+    monkeypatch.setattr(chatgpt_auth, "default_path", lambda: tmp_path / "chatgpt-auth.json")
+    chatgpt_auth._stores.clear()
+    monkeypatch.setenv("CLAUDE_COMMAND", "llmkit-no-such-claude")
     core_mod._warned_budgets.clear()
     core_mod._warned_prices.clear()
     return path

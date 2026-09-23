@@ -29,6 +29,9 @@ DEFAULTS: dict[str, Any] = {
     "providers": {
         "openrouter": {"kind": "openrouter"},
         "ollama": {"kind": "ollama", "base_url": "https://ollama.com"},
+        # Подписки: вход через `llm auth login <провайдер>`, ключ не нужен.
+        "chatgpt": {"kind": "chatgpt", "requires_key": False},
+        "claude": {"kind": "claude_cli", "requires_key": False},
     },
     # Цепочки — пример: модели каждый подбирает под себя, формат
     # "провайдер/модель", где провайдер — ключ из [providers].

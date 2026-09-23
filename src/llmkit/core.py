@@ -230,7 +230,7 @@ class LlmKit:
         self.usage = Usage(self.config.usage_path())
         self._completion = completion
         self._instructor_factory = instructor_factory or _default_instructor_factory
-        self._instructor_clients: dict[str, Any] = {}
+        self._instructor_clients: dict[tuple[str, Any], Any] = {}
         self._stats = Stats()
 
     # --- публичный API ---
@@ -558,7 +558,8 @@ class LlmKit:
         return cached
 
     async def _call_model(self, call: providers_mod.ModelCall, messages: list[dict], task: Task, settings: dict) -> _Outcome:
-        completion = self._completion
+        # Подмена из тестов → свой транспорт провайдера по подписке → LiteLLM.
+        completion = self._completion or call.completion
         if completion is None:
             completion = _litellm().acompletion
         kwargs = {
@@ -598,10 +599,11 @@ class LlmKit:
         completion: Callable[..., Any],
     ) -> _Outcome:
         """JSON по pydantic-схеме через Instructor: ретраи внутри вызова."""
-        client = self._instructor_clients.get(call.mode)
+        key = (call.mode, completion)
+        client = self._instructor_clients.get(key)
         if client is None:
             client = self._instructor_factory(completion, call.mode)
-            self._instructor_clients[call.mode] = client
+            self._instructor_clients[key] = client
         data, response = await client.chat.completions.create_with_completion(
             response_model=task.schema,
             max_retries=self.config.retry.invalid_output if task.retry else 0,
@@ -635,7 +637,9 @@ class LlmKit:
         )
 
     def _cost(self, call: providers_mod.ModelCall, response: Any, prompt_tokens: int, completion_tokens: int) -> tuple[float, bool]:
-        """Стоимость: LiteLLM → цены из конфига → неизвестно (один варн на модель)."""
+        """Стоимость: подписка → LiteLLM → цены из конфига → неизвестно (один варн на модель)."""
+        if call.subscription:
+            return 0.0, True  # оплачено подпиской, отдельного счёта за вызов нет
         cost = 0.0
         # litellm импортируем только если он и так в игре: с подменённым
         # `completion` (тесты) модуль тянуть незачем.

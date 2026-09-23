@@ -27,6 +27,14 @@ ERROR_TYPE_BY_EXCEPTION = {
     "NotFoundError": "bad_request",
     "APIStatusError": "bad_request",
     "APIError": "bad_request",
+    # Провайдеры по подписке (transports/_common.py).
+    "SubscriptionAuthError": "auth",
+    "SubscriptionRateLimit": "rate_limit",
+    "SubscriptionServerError": "server",
+    "SubscriptionTimeout": "timeout",
+    "SubscriptionContextLength": "context_length",
+    "SubscriptionEmpty": "invalid_output",
+    "SubscriptionBadRequest": "bad_request",
 }
 
 # Ошибки, после которых повтор идёт на той же модели.

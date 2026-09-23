@@ -13,6 +13,11 @@ src/llmkit/
   core.py       LlmKit: ask / generate / ask_many и sync-обёртки
   errors.py     исключения
   _sync.py      запуск корутины из синхронного кода
+  transports/   провайдеры по подписке: свой acompletion вместо LiteLLM
+    _common.py      ошибки Subscription* и сборка litellm.ModelResponse
+    chatgpt_auth.py вход OAuth Codex, файл токенов, обновление под замком
+    chatgpt.py      Responses API chatgpt.com/backend-api/codex, SSE
+    claude_cli.py   вызов `claude -p`, чистое окружение, kill группы процессов
   cli/          команда `llm` — см. cli-conventions.md
 scripts/smoke.py  реальные вызовы провайдеров (фаза 0)
 ```
@@ -22,6 +27,13 @@ scripts/smoke.py  реальные вызовы провайдеров (фаза
 `litellm`, `instructor` и `keyring` импортируются лениво, внутри функций
 пути вызова: `import llmkit` обязан оставаться быстрым (порог — 300 мс,
 проверка — команда в корневом AGENTS.md).
+
+## Провайдеры по подписке
+
+`providers.build` для `kind` из `SUBSCRIPTION_KINDS` проверяет вход (файл
+токенов / наличие CLI) и кладёт в `ModelCall.completion` функцию транспорта;
+ядро зовёт её вместо `litellm.acompletion`. Подмена `LlmKit(completion=...)`
+по-прежнему перекрывает всё — тесты сети не касаются.
 
 ## Классификация ошибок
 

@@ -17,6 +17,8 @@
 | Конфиг | TOML через `platformdirs`, pydantic-модели | — |
 | CLI | Typer + rich, конвенции cli-builder (`--json`, exit-коды, stderr для диагностики) | — |
 | Прокси | свой FastAPI-сервер поверх ядра (extra `[serve]`) | LiteLLM Proxy: тяжёлые зависимости, наш учёт по меткам и уровни мимо него не проходят |
+| Подписка ChatGPT (без API-ключа) | свой транспорт `transports/chatgpt*.py` на `httpx` — порт iva-agent (github.com/smixs/iva-agent), сверен с Hermes | провайдер `chatgpt/` LiteLLM: подмешивает системный промпт «You are Codex…», при сбое обновления токена запускает интерактивный вход посреди вызова, нет повтора при 401 и защиты `account_id`; прокси openai-oauth — лишний процесс |
+| Подписка Claude (без API-ключа) | вызов установленного `claude -p` (`transports/claude_cli.py`), минимальный порт iva-agent | Claude Agent SDK — ещё зависимость ради того же CLI; прямой вызов Messages API с OAuth-токеном отвечает 429; реле и муляж MCP из iva-agent — нужны агенту, не одному ответу |
 
 Риски LiteLLM: медленный импорт (~1 с) — импортировать лениво, только в пути вызова;
 инцидент с бэкдором в 1.82.7/1.82.8 — версия пинится точно, перед пином проверить
@@ -28,7 +30,8 @@ advisory на PyPI/GitHub.
   установка в потребители через `[tool.uv.sources] llmkit = { git = ... }`.
 - Python >= 3.11, `uv`, `hatchling`, `src/llmkit/`. Тесты `pytest` + `pytest-asyncio`.
 - Зависимости: `litellm==1.102.0`, `instructor>=1.17`, `pydantic>=2`, `keyring>=25`,
-  `platformdirs>=4`, `typer>=0.12`, `rich>=13`, `tomli-w>=1`.
+  `platformdirs>=4`, `typer>=0.12`, `rich>=13`, `tomli-w>=1`, `httpx>=0.27` (транспорт
+  подписки ChatGPT; уже приходит с LiteLLM, указан явно).
   Extra `serve`: `fastapi`, `uvicorn`.
 - Структура:
 
@@ -44,6 +47,7 @@ src/llmkit/
   core.py          # LlmKit: ask / generate / ask_many + sync-обёртки
   errors.py
   _sync.py         # запуск корутины из синхронного кода
+  transports/      # провайдеры по подписке: chatgpt_auth, chatgpt, claude_cli
   cli/             # фаза 2
   serve/           # фаза 4
 ```
@@ -119,6 +123,12 @@ invalid_output = 2
 | gemini | `gemini/<model>` | `api_key` |
 | ollama | `ollama_chat/<model>` | `api_base`, `api_key` (Ollama Cloud требует Bearer). **Фаза 0 проверяет**; если `ollama_chat/` с ollama.com не работает — использовать `openai/<model>` + `api_base=<base_url>/v1` |
 | openai_compatible | `openai/<model>` | `api_base`, `api_key` |
+| chatgpt | не LiteLLM: `transports/chatgpt.acompletion` | вход `llm auth login <провайдер>`, файл токенов 0600; ключ не нужен |
+| claude_cli | не LiteLLM: `transports/claude_cli.acompletion` | вход держит Claude Code CLI; `CLAUDE_COMMAND` — другой бинарь |
+
+Провайдеры по подписке: режим Instructor `JSON_SCHEMA` (схема уходит нативно),
+стоимость вызова 0 и `cost_known = true`, нет входа — `LoginMissing` (подкласс
+`KeyMissing`, тип ошибки `auth`, код выхода CLI 3).
 
 Стандартные env-имена ключей по kind: `OPENROUTER_API_KEY`, `OPENAI_API_KEY`,
 `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `OLLAMA_API_KEY`; `api_key_env` в конфиге перекрывает.

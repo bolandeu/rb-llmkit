@@ -17,7 +17,7 @@ from contextlib import contextmanager
 import typer
 from rich.console import Console
 
-from ..errors import AllModelsFailed, ConfigError, KeyMissing
+from ..errors import AllModelsFailed, ConfigError, KeyMissing, LoginMissing
 
 # Консоли: данные — в stdout, всё остальное — в stderr.
 out = Console()
@@ -80,6 +80,8 @@ def emit(ctx: typer.Context, payload: dict, render: Callable[[], None] | None = 
 
 def _classify(exc: Exception) -> CliError:
     """Ошибки ядра → коды конверта (см. conventions.md)."""
+    if isinstance(exc, LoginMissing):
+        return CliError("AUTH_REQUIRED", f"нет входа в подписку для провайдера {exc.provider}", exc.action, 3)
     if isinstance(exc, KeyMissing):
         return CliError(
             "AUTH_REQUIRED",
@@ -98,7 +100,8 @@ def _classify(exc: Exception) -> CliError:
             return CliError(
                 "AUTH_REQUIRED",
                 "нет ключей для моделей цепочки: " + ", ".join(providers),
-                "выполните `llm keys set " + providers[0] + "` или задайте переменную окружения",
+                "выполните `llm keys set " + providers[0] + "` или задайте переменную окружения"
+                "; для провайдера по подписке — `llm auth login " + providers[0] + "`",
                 exit_code=3,
             )
         return CliError(
