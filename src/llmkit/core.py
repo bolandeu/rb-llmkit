@@ -48,6 +48,7 @@ class Task:
     max_tokens: int | None = None
     timeout: float | None = None
     cache: bool | None = None
+    retry: bool = True
     id: str | None = None
 
 
@@ -298,7 +299,7 @@ class LlmKit:
                         task, tags, level, call.ref, call.provider, exc, error_type,
                         attempts, retry_index, latency, secret,
                     )
-                    allowed = chain_mod.retries_for(error_type, self.config.retry, exc)
+                    allowed = chain_mod.retries_for(error_type, self.config.retry, exc) if task.retry else 0
                     if retry_index < allowed:
                         pause = chain_mod.backoff_seconds(error_type, retry_index, exc)
                         if pause:
@@ -603,7 +604,7 @@ class LlmKit:
             self._instructor_clients[call.mode] = client
         data, response = await client.chat.completions.create_with_completion(
             response_model=task.schema,
-            max_retries=self.config.retry.invalid_output,
+            max_retries=self.config.retry.invalid_output if task.retry else 0,
             **kwargs,
         )
         dump = getattr(data, "model_dump", None)

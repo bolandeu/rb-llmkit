@@ -48,6 +48,15 @@ async def test_timeout_retries_then_next_model(slept):
     assert instance.stats.fallbacks == 1
 
 
+async def test_no_retry_skips_retries_and_goes_to_next_model(slept):
+    instance, fake = kit({"openai/m1": [fakes.RateLimitError("429")], "openai/m2": [response("со второй")]})
+    answer = await instance.ask(Task(user="вопрос", retry=False))
+    assert answer.data == "со второй"
+    # Без retry сразу следующая модель, без повторов и без паузы backoff.
+    assert fake.models() == ["openai/m1", "openai/m2"]
+    assert slept == []
+
+
 async def test_rate_limit_backoff(slept):
     instance, fake = kit({"openai/m1": [fakes.RateLimitError("429")], "openai/m2": [response()]})
     await instance.ask(Task(user="вопрос"))

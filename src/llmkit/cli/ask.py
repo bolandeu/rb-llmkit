@@ -25,7 +25,7 @@ def _answer_payload(answer) -> dict:
     }
 
 
-def _run(text, system, level, model, tags, no_cache, temperature, max_tokens, schema):
+def _run(text, system, level, model, tags, no_cache, temperature, max_tokens, timeout, no_retry, schema):
     kit = runtime.build_kit()
     task = Task(
         user=runtime.read_text(text),
@@ -36,7 +36,9 @@ def _run(text, system, level, model, tags, no_cache, temperature, max_tokens, sc
         tags=runtime.parse_tags(tags),
         temperature=temperature,
         max_tokens=max_tokens,
+        timeout=timeout,
         cache=False if no_cache else None,
+        retry=not no_retry,
     )
     answer = kit.ask_sync(task)
     for warning in answer.warnings:
@@ -54,6 +56,8 @@ def ask(
     no_cache: bool = typer.Option(False, "--no-cache", help="Не читать и не писать кэш ответов."),
     temperature: float = typer.Option(None, "--temperature", help="Температура; по умолчанию из конфига."),
     max_tokens: int = typer.Option(None, "--max-tokens", help="Лимит токенов ответа."),
+    timeout: float = typer.Option(None, "--timeout", help="Таймаут вызова в секундах; по умолчанию из конфига."),
+    no_retry: bool = typer.Option(False, "--no-retry", help="Не повторять на сбойной модели, сразу к следующей."),
     json_output: bool = JsonOption,
 ) -> None:
     """Задать вопрос модели и напечатать текстовый ответ.
@@ -64,7 +68,7 @@ def ask(
     """
     enable_json(ctx, json_output)
     with guard(ctx):
-        answer = _run(text, system, level, model, tag, no_cache, temperature, max_tokens, None)
+        answer = _run(text, system, level, model, tag, no_cache, temperature, max_tokens, timeout, no_retry, None)
         emit(ctx, _answer_payload(answer), lambda: out.print(answer.data, highlight=False, markup=False))
 
 
@@ -79,6 +83,8 @@ def json_command(
     no_cache: bool = typer.Option(False, "--no-cache", help="Не читать и не писать кэш ответов."),
     temperature: float = typer.Option(None, "--temperature", help="Температура; по умолчанию из конфига."),
     max_tokens: int = typer.Option(None, "--max-tokens", help="Лимит токенов ответа."),
+    timeout: float = typer.Option(None, "--timeout", help="Таймаут вызова в секундах; по умолчанию из конфига."),
+    no_retry: bool = typer.Option(False, "--no-retry", help="Не повторять на сбойной модели, сразу к следующей."),
     json_output: bool = JsonOption,
 ) -> None:
     """Получить ответ модели как JSON по схеме.
@@ -99,7 +105,7 @@ def json_command(
             raise bad_arguments(f"схема не разбирается как JSON: {exc}") from exc
         if not isinstance(loaded, dict):
             raise bad_arguments("схема должна быть JSON-объектом")
-        answer = _run(text, system, level, model, tag, no_cache, temperature, max_tokens, loaded)
+        answer = _run(text, system, level, model, tag, no_cache, temperature, max_tokens, timeout, no_retry, loaded)
         emit(
             ctx,
             _answer_payload(answer),

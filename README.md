@@ -4,8 +4,8 @@
 клиентов. Даёт цепочки моделей с фолбэком, JSON по схеме, кэш ответов, учёт
 токенов и стоимости с разбивкой по меткам и мягкие бюджеты.
 
-Статус: фазы 0–2 (ядро и CLI `llm`). HTTP-прокси — фаза 4, его пока нет.
-Спецификация: [SPEC.md](SPEC.md).
+Статус — см. [docs/CHANGELOG.md](docs/CHANGELOG.md) (сделано) и
+[docs/BACKLOG.md](docs/BACKLOG.md) (план). Спецификация: [docs/PRD.md](docs/PRD.md).
 
 ## Что это даёт
 
@@ -91,10 +91,17 @@ JSON `{"api_key": "..."}` в службе `llmkit:<провайдер>`.
 
 ## Конфиг
 
-Слои (позже перекрывает раньше): дефолты в коде → `~/.config/llmkit/config.toml`
-→ `.llmkit/config.toml` проекта (ищется вверх от текущего каталога) →
-переменные `LLMKIT_CACHE`, `LLMKIT_LOG_LEVEL` → аргументы `LlmKit(...)`.
-`LLMKIT_CONFIG=/путь/config.toml` заменяет поиск файлов.
+Слои (позже перекрывает раньше): дефолты в коде → пользовательский конфиг
+(`platformdirs.user_config_dir("llmkit")`: на macOS — `~/Library/Application
+Support/llmkit/config.toml`, на Linux — `~/.config/llmkit/config.toml` или
+`$XDG_CONFIG_HOME/llmkit/config.toml`) → `.llmkit/config.toml` проекта
+(ищется вверх от текущего каталога) → переменные `LLMKIT_CACHE`,
+`LLMKIT_LOG_LEVEL` → аргументы `LlmKit(...)`. `LLMKIT_CONFIG=/путь/config.toml`
+заменяет поиск файлов целиком — удобно для переносимого конфига между машинами.
+
+Встроенные дефолты (`config.py: DEFAULTS`) уже включают провайдеров `openrouter`
+и `ollama` и уровни `cheap`/`judge`/`strong` с примерными моделями — свой
+`config.toml` не обязателен, если устраивает пример и ключи уже заведены.
 
 ```toml
 [providers.openrouter]
@@ -207,32 +214,20 @@ print(kit.stats)   # итоги за время жизни экземпляра
 
 ## Решения и отвергнутые альтернативы
 
-| Задача | Решение | Отвергнуто и почему |
-|---|---|---|
-| Провайдеры, вызов моделей, стоимость | **LiteLLM** (MIT, pin `==1.102.0`) | aisuite — заброшен с 12.2024; any-llm — нет фолбэков и учёта; pydantic-ai — агентный фреймворк, тяжелее задачи |
-| JSON по pydantic-схеме, ретрай при невалидном ответе | **Instructor** (`instructor.from_litellm`) | своя валидация — уже написана трижды, не нужна |
-| Кэш ответов | своя таблица SQLite (~60 строк) | кэш LiteLLM (diskcache): не даёт учесть попадание с нашими метками, ключ непрозрачен, отдельный файл-формат |
-| Ключи | `keyring` (связка ОС) + env | `.env`-файлы — запрещены конвенцией cli-builder |
-| Конфиг | TOML через `platformdirs`, pydantic-модели | — |
-| CLI | Typer + rich, конвенции cli-builder | — |
-| Прокси (фаза 4) | свой FastAPI поверх ядра (extra `[serve]`) | LiteLLM Proxy: тяжёлые зависимости, наш учёт по меткам мимо него не проходит |
-
-Версия LiteLLM пинится точно из-за инцидента с бэкдором в 1.82.7/1.82.8. На
-2026-09-21 `1.102.0` — актуальный релиз, и ни один из 14 advisory репозитория
-BerriAI/litellm его не задевает (самый «поздний» уязвимый диапазон — `<1.94.0`).
+Полная таблица (LiteLLM, Instructor, кэш, ключи, конфиг, CLI, прокси) и
+обоснование пина версии LiteLLM — в [docs/PRD.md](docs/PRD.md) §1.
 
 ## Что дальше
 
-Планы и отложенное за пределы v1 — в [ROADMAP.md](ROADMAP.md).
+Планы и отложенное за пределы v1 — в [docs/BACKLOG.md](docs/BACKLOG.md).
+Сделанное — в [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
 ## Разработка
 
+Базовые команды (`uv sync`, `uv run pytest -q`, `uv run ruff check`) — в
+[AGENTS.md](AGENTS.md). Дополнительно:
+
 ```bash
-uv sync
-uv run pytest -q                 # тесты без сети, на подменённом completion
-uv run ruff check src tests
 uv run llm --help                # CLI из исходников
 uv run python scripts/smoke.py   # реальные вызовы, требует ключей
 ```
-
-Результаты проверки провайдеров — в [docs/smoke-2026-09.md](docs/smoke-2026-09.md).

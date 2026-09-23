@@ -164,6 +164,20 @@ def test_ask_model_flag_overrides_level(fake_kit):
     assert completion.calls[0]["model"] == "openai/m2"
 
 
+def test_ask_timeout_flag_overrides_default(fake_kit):
+    completion = fake_kit()
+    assert run("ask", "вопрос", "--timeout", "5", "--no-cache").exit_code == 0
+    assert completion.calls[0]["timeout"] == 5.0
+
+
+def test_ask_no_retry_flag_disables_retries(fake_kit):
+    completion = fake_kit({"openai/m1": [fakes_module.RateLimitError("429")], "openai/m2": [response("вторая")]})
+    result = run("ask", "вопрос", "--no-retry", "--no-cache")
+    assert result.exit_code == 0
+    # Без --no-retry было бы три попытки a/m1 (retry.rate_limit=2) перед фолбэком.
+    assert completion.models() == ["openai/m1", "openai/m2"]
+
+
 def test_ask_reports_missing_key(monkeypatch):
     monkeypatch.delenv("TEST_A_KEY")
     monkeypatch.delenv("TEST_B_KEY")

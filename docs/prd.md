@@ -159,6 +159,7 @@ class Task:
     max_tokens: int | None = None
     timeout: float | None = None
     cache: bool | None = None                # None = из конфига
+    retry: bool = True                       # False = 0 повторов на сбойной модели, сразу следующая
     id: str | None = None                    # свой идентификатор, попадает в usage и on_progress
 
 @dataclass
