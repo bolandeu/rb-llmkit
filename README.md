@@ -4,8 +4,8 @@
 клиентов. Даёт цепочки моделей с фолбэком, JSON по схеме, кэш ответов, учёт
 токенов и стоимости с разбивкой по меткам и мягкие бюджеты.
 
-Статус — см. [docs/CHANGELOG.md](docs/CHANGELOG.md) (сделано) и
-[docs/BACKLOG.md](docs/BACKLOG.md) (план). Спецификация: [docs/PRD.md](docs/PRD.md).
+Статус — см. [docs/changelog.md](docs/changelog.md) (сделано) и
+[docs/backlog.md](docs/backlog.md) (план). Спецификация: [docs/prd.md](docs/prd.md).
 
 ## Что это даёт
 
@@ -215,12 +215,12 @@ print(kit.stats)   # итоги за время жизни экземпляра
 ## Решения и отвергнутые альтернативы
 
 Полная таблица (LiteLLM, Instructor, кэш, ключи, конфиг, CLI, прокси) и
-обоснование пина версии LiteLLM — в [docs/PRD.md](docs/PRD.md) §1.
+обоснование пина версии LiteLLM — в [docs/prd.md](docs/prd.md) §1.
 
 ## Что дальше
 
-Планы и отложенное за пределы v1 — в [docs/BACKLOG.md](docs/BACKLOG.md).
-Сделанное — в [docs/CHANGELOG.md](docs/CHANGELOG.md).
+Планы и отложенное за пределы v1 — в [docs/backlog.md](docs/backlog.md).
+Сделанное — в [docs/changelog.md](docs/changelog.md).
 
 ## Разработка
 
