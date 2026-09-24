@@ -29,6 +29,14 @@ DEFAULTS: dict[str, Any] = {
     "providers": {
         "openrouter": {"kind": "openrouter"},
         "ollama": {"kind": "ollama", "base_url": "https://ollama.com"},
+        # Ccode (ccode.dev): OpenAI-совместимый шлюз к моделям разных вендоров.
+        "ccode": {
+            "kind": "openai_compatible",
+            "base_url": "https://all-api.ccode.dev/v1",
+            "api_key_env": "CCODE_API_KEY",
+            # Вызовы инструментов шлюз поддерживает для всех вендоров, json_object — не гарантирован.
+            "mode": "TOOLS",
+        },
         # Подписки: вход через `llm auth login <провайдер>`, ключ не нужен.
         "chatgpt": {"kind": "chatgpt", "requires_key": False},
         "claude": {"kind": "claude_cli", "requires_key": False},

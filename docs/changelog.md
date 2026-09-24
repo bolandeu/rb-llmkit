@@ -3,6 +3,12 @@
 Обратный хронологический порядок, группировка по фазам (см. PRD.md §12).
 Планы и отложенное — в BACKLOG.md.
 
+## 2026-09-24
+
+- **Провайдер `ccode`** во встроенных дефолтах: шлюз ccode.dev как
+  `openai_compatible` (`https://all-api.ccode.dev/v1`, ключ `CCODE_API_KEY`,
+  режим Instructor `TOOLS`). Живой вызов не проверен — нет ключа.
+
 ## 2026-09-23
 
 - **Подписки вместо API-ключей**: `kind = "chatgpt"` (OAuth Codex CLI, Responses

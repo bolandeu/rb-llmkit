@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from llmkit import config as config_mod
 from llmkit import providers
 from llmkit.config import Config
 from llmkit.errors import ConfigError, KeyMissing
@@ -17,6 +18,7 @@ CONFIG = Config.model_validate(
             "gemini": {"kind": "gemini"},
             "ollama": {"kind": "ollama", "base_url": "https://ollama.com"},
             "local": {"kind": "ollama", "base_url": "http://localhost:11434", "requires_key": False},
+            "ccode": config_mod.DEFAULTS["providers"]["ccode"],
             "deepseek": {
                 "kind": "openai_compatible",
                 "base_url": "https://api.deepseek.com/v1",
@@ -34,10 +36,12 @@ ENV = {
     "GEMINI_API_KEY": "k-ge",
     "OLLAMA_API_KEY": "k-ol",
     "DEEPSEEK_API_KEY": "k-ds",
+    "CCODE_API_KEY": "k-cc",
 }
 
 CASES = [
     ("openrouter/openai/gpt-4o-mini", "openrouter/openai/gpt-4o-mini", None, "k-or", "TOOLS"),
+    ("ccode/claude-sonnet-4-5", "openai/claude-sonnet-4-5", "https://all-api.ccode.dev/v1", "k-cc", "TOOLS"),
     ("openai/gpt-4o", "gpt-4o", None, "k-oa", "TOOLS"),
     ("anthropic/claude-sonnet-4", "anthropic/claude-sonnet-4", None, "k-an", "TOOLS"),
     ("gemini/gemini-2.0-flash", "gemini/gemini-2.0-flash", None, "k-ge", "TOOLS"),

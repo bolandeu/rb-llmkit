@@ -86,6 +86,12 @@ export OPENROUTER_API_KEY=sk-or-...
 llm keys set openrouter
 ```
 
+Шлюз [Ccode](https://www.ccode.dev/docs/quick-start) подключён как
+`openai_compatible` (`https://all-api.ccode.dev/v1`): `llm keys set ccode` или
+`export CCODE_API_KEY=...`, затем `llm ask "…" -m ccode/<модель>`. Список моделей
+ключа — `curl -H "Authorization: Bearer $CCODE_API_KEY" https://all-api.ccode.dev/v1/models`.
+Цены шлюза LiteLLM не знает: для точного учёта задайте `[providers.ccode.prices]`.
+
 Стандартные имена переменных по виду провайдера: `OPENROUTER_API_KEY`,
 `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `OLLAMA_API_KEY`;
 `api_key_env` в конфиге перекрывает. В связке ключей значение лежит как
@@ -129,7 +135,8 @@ Support/llmkit/config.toml`, на Linux — `~/.config/llmkit/config.toml` ил�
 заменяет поиск файлов целиком — удобно для переносимого конфига между машинами.
 
 Встроенные дефолты (`config.py: DEFAULTS`) уже включают провайдеров `openrouter`,
-`ollama`, `chatgpt` и `claude` (подписки) и уровни `cheap`/`judge`/`strong` с примерными моделями — свой
+`ollama`, `ccode` (шлюз ccode.dev, ключ `CCODE_API_KEY`), `chatgpt` и `claude`
+(подписки) и уровни `cheap`/`judge`/`strong` с примерными моделями — свой
 `config.toml` не обязателен, если устраивает пример и ключи уже заведены.
 
 ```toml
