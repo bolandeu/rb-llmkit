@@ -86,6 +86,7 @@ async def test_json_schema_goes_native_and_structured_output_wins(fake_cli):
     response = await call(response_format={"type": "json_schema", "json_schema": {"name": "F", "schema": schema}})
     argv = recorded()["argv"]
     assert json.loads(argv[argv.index("--json-schema") + 1]) == schema
+    assert argv[argv.index("--max-turns") + 1] == "3"
     assert json.loads(response.choices[0].message.content) == {"name": "Яблоко"}
 
 

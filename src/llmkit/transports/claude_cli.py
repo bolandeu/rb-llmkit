@@ -102,7 +102,8 @@ def build_argv(cmd: list[str], model: str, system_file: Path, schema: dict[str, 
         "--setting-sources", "",
         "--strict-mcp-config",
         "--disable-slash-commands",
-        "--max-turns", "1",
+        # Ответ по --json-schema CLI отдаёт через внутренний инструмент — это ещё ход.
+        "--max-turns", "1" if schema is None else "3",
         "--permission-mode", "dontAsk",
         "--no-session-persistence",
     ]  # fmt: skip
