@@ -449,3 +449,12 @@ async def test_generate_returns_default_when_given():
     instance, _ = kit([fakes.BadRequestError("нет")])
     assert await instance.generate("вопрос", default="запасной ответ") == "запасной ответ"
     assert await instance.generate("вопрос") is None
+
+
+def test_strict_only_for_compatible_schema():
+    from llmkit.core import _strict_ok
+
+    loose = {"type": "object", "properties": {"a": {"type": "string"}}, "required": ["a"]}
+    strict = {**loose, "additionalProperties": False}
+    nested = {**strict, "properties": {"a": {"type": "array", "items": loose}}}
+    assert not _strict_ok(loose) and _strict_ok(strict) and not _strict_ok(nested)

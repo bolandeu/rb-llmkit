@@ -148,6 +148,21 @@ def _default_instructor_factory(completion: Callable[..., Any], mode: str) -> An
     return instructor.from_litellm(completion, mode=enum_mode)
 
 
+def _strict_ok(schema: Any) -> bool:
+    """Годится ли схема для strict-режима OpenAI: у каждого объекта
+    `additionalProperties: false` и все свойства в `required`. Иначе провайдер
+    отвергает запрос целиком — шлём без strict, ответ всё равно разбирается."""
+    if isinstance(schema, list):
+        return all(_strict_ok(item) for item in schema)
+    if not isinstance(schema, dict):
+        return True
+    if schema.get("type") == "object" or "properties" in schema:
+        props = schema.get("properties") or {}
+        if schema.get("additionalProperties") is not False or set(schema.get("required") or []) != set(props):
+            return False
+    return all(_strict_ok(value) for key, value in schema.items() if key not in ("required", "enum", "const"))
+
+
 def _mask(text: str, secret: str | None) -> str:
     """Убрать ключ провайдера из текста ошибки перед записью куда бы то ни было."""
     return text.replace(secret, "***") if secret else text
@@ -570,6 +585,10 @@ class LlmKit:
             "timeout": settings["timeout"],
             **call.params,
         }
+        if call.completion is None:
+            # Параметр, который модель не принимает (temperature=0 у рассуждающих
+            # GPT-5/6), LiteLLM молча отбрасывает, а не отклоняет весь запрос.
+            kwargs["drop_params"] = True
         if task.schema is None:
             response = await completion(**kwargs)
             text = self._text_of(response)
@@ -578,7 +597,7 @@ class LlmKit:
             response = await completion(
                 response_format={
                     "type": "json_schema",
-                    "json_schema": {"name": "answer", "schema": task.schema, "strict": True},
+                    "json_schema": {"name": "answer", "schema": task.schema, "strict": _strict_ok(task.schema)},
                 },
                 **kwargs,
             )
