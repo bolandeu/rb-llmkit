@@ -21,7 +21,14 @@ app = typer.Typer(
         f"{DESCRIPTION}.\n\n"
         "У всех команд есть `--json` (конверт в stdout), диагностика идёт в stderr.\n"
         "Коды выхода: 0 — успех, 1 — непредвиденная ошибка, 2 — неверные аргументы,\n"
-        "3 — нет ключа, 5 — все модели упали."
+        "3 — нет ключа или входа в подписку, 5 — все модели упали.\n\n"
+        "Аргументы команды: `llm <команда> --help`, например `llm ask --help`,\n"
+        "`llm auth login --help`.\n\n"
+        "Примеры:\n\n"
+        "  llm ask \"Столица Франции?\" --level cheap\n\n"
+        "  llm ask \"Привет\" -m ccode/gpt-5.6-sol\n\n"
+        "  llm json \"Разбери запрос\" --schema schema.json\n\n"
+        "  llm models · llm cost --since 7d · llm auth status"
     ),
     no_args_is_help=False,
     invoke_without_command=True,
