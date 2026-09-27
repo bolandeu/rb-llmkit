@@ -1,0 +1,26 @@
+
+ Usage: llm auth status [OPTIONS]
+
+ Показать доступ каждого провайдера: откуда берётся и работает ли. Значения не печатаются.
+
+ Ключи API и подписки (chatgpt, claude_cli) — в одном отчёте. Без `--check`
+ только наличие (`unchecked` / `missing`); с ним: openrouter, openai,
+ anthropic, gemini, ollama и OpenAI-совместимые шлюзы — один бесплатный
+ запрос с ключом; chatgpt — свежесть токена (с обновлением, если истёк);
+ claude — локальный `claude auth status`. Модели не вызываются.
+ Обязательных провайдеров у llmkit нет (`required: false`).
+ Коды выхода: 0 — нет неверных и просроченных доступов, 3 — есть
+ (`error.code: CREDENTIALS_UNHEALTHY`, отчёт всё равно выводится),
+ 2 — неизвестный `--provider`. Форма `--json` — общий контракт инструментов:
+ `tool`, `version`, `checked_at`, `credentials[]` с `provider`, `required`,
+ `fields`, `source`, `source_ref`, `status`, `expires_at`, `quota`, `message`.
+
+ Example: llm auth status --check --json
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --check                  Сделать по одному дешёвому read-only вызову на провайдера (лимит 10 с). │
+│ --provider        <str>  Только этот провайдер из конфига (по умолчанию все).                    │
+│ --json                   Машинный вывод: JSON-конверт в stdout.                                  │
+│ --help                   Show this message and exit.                                             │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+

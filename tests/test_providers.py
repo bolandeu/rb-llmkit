@@ -98,8 +98,12 @@ def test_openai_compatible_without_base_url():
 
 def test_price_from_config():
     config = Config.model_validate(
-        {"providers": {"o": {"kind": "ollama", "base_url": "http://x", "prices": {"m": {"input": 1.0, "output": 2.0}}}},
-         "levels": {}}
+        {
+            "providers": {
+                "o": {"kind": "ollama", "base_url": "http://x", "prices": {"m": {"input": 1.0, "output": 2.0}}}
+            },
+            "levels": {},
+        }
     )
     call = providers.build("o/m", config, env={"OLLAMA_API_KEY": "k"})
     assert providers.price_from_config(config, call, 1_000_000, 1_000_000) == pytest.approx(3.0)

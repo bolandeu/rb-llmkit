@@ -15,9 +15,7 @@ from llmkit.config import Config
 from llmkit.errors import LoginMissing
 from llmkit.transports import chatgpt, chatgpt_auth, claude_cli
 
-CONFIG = Config.model_validate(
-    {"providers": {"gpt": {"kind": "chatgpt"}, "cl": {"kind": "claude_cli"}}, "levels": {}}
-)
+CONFIG = Config.model_validate({"providers": {"gpt": {"kind": "chatgpt"}, "cl": {"kind": "claude_cli"}}, "levels": {}})
 
 
 def logged_in() -> None:
@@ -103,7 +101,7 @@ async def test_missing_login_falls_through_to_next_model(transport, monkeypatch)
     monkeypatch.setattr(claude_cli, "acompletion", fake_claude)
     answer = await kit().ask(Task(user="x", chain=["gpt/gpt-5.5", "cl/sonnet"]))
     assert answer.model == "cl/sonnet"
-    assert answer.attempts[0].error_type == "auth" and "llm auth login gpt" in answer.attempts[0].error
+    assert answer.attempts[0].error_type == "auth" and "llm auth login gpt" in (answer.attempts[0].error or "")
 
 
 runner = CliRunner()
@@ -112,9 +110,9 @@ runner = CliRunner()
 def test_cli_auth_status_reports_both_subscriptions():
     result = runner.invoke(app, ["auth", "status", "--json"])
     assert result.exit_code == 0, result.output
-    rows = {row["provider"]: row for row in json.loads(result.stdout)["providers"]}
-    assert rows["chatgpt"]["logged_in"] is False
-    assert rows["claude"]["installed"] is False
+    rows = {row["provider"]: row for row in json.loads(result.stdout)["credentials"]}
+    assert rows["chatgpt"]["status"] == "missing"
+    assert rows["claude"]["status"] == "missing" and "не найден" in rows["claude"]["message"]
 
 
 def test_cli_ask_without_login_exits_3_with_login_hint():

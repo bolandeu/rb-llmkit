@@ -2,6 +2,7 @@
 
 import os
 import sys
+from typing import Any
 
 import typer
 
@@ -46,6 +47,8 @@ def set_key(
 
     Ключ нигде не печатается. Коды выхода: 0 — сохранён, 1 — связка ключей
     недоступна, 2 — неизвестный провайдер или пустой ключ.
+
+    Example: echo "$KEY" | llm keys set openrouter --stdin
     """
     enable_json(ctx, json_output)
     with guard(ctx):
@@ -67,11 +70,13 @@ def status(ctx: typer.Context, json_output: bool = JsonOption) -> None:
 
     Значения ключей не печатаются — только источник: config, env, keychain
     или none. Код выхода 0, даже если ключей нет.
+
+    Example: llm keys status --json
     """
     enable_json(ctx, json_output)
     with guard(ctx):
         config = config_mod.load()
-        rows = []
+        rows: list[dict[str, Any]] = []
         for name, cfg in sorted(config.providers.items()):
             source, env_var = key_source(name, cfg)
             rows.append(
@@ -110,6 +115,8 @@ def remove(
 
     Удаление отсутствующего ключа не ошибка. Коды выхода: 0 — готово,
     2 — неизвестный провайдер.
+
+    Example: llm keys rm openrouter
     """
     enable_json(ctx, json_output)
     with guard(ctx):

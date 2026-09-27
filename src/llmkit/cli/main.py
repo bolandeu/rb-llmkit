@@ -33,9 +33,9 @@ app = typer.Typer(
         "Список провайдеров, уровней и моделей: `llm models`. Все параметры\n"
         "команды: `llm <команда> --help`, например `llm ask --help`.\n\n"
         "Примеры:\n\n"
-        "  llm ask \"Столица Франции?\" --level cheap\n\n"
-        "  llm ask \"Привет\" -m ccode/gpt-5.6-sol\n\n"
-        "  llm json \"Разбери запрос\" --schema schema.json\n\n"
+        '  llm ask "Столица Франции?" --level cheap\n\n'
+        '  llm ask "Привет" -m ccode/gpt-5.6-sol\n\n'
+        '  llm json "Разбери запрос" --schema schema.json\n\n'
         "  llm models · llm cost --since 7d · llm auth status"
     ),
     no_args_is_help=False,
@@ -71,7 +71,7 @@ def root(
     ctx.obj = {"json": json_output, "quiet": quiet, "verbose": verbose}
     configure_logging(verbose)
     if show_version:
-        print(f"llm {_version()}")
+        print(_version())
         raise typer.Exit(0)
     if ctx.invoked_subcommand is None:
         print(ctx.get_help())

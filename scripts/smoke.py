@@ -63,7 +63,7 @@ async def openrouter_json(api_key: str) -> None:
     import instructor
 
     client = instructor.from_litellm(litellm.acompletion, mode=instructor.Mode.TOOLS)
-    obj, response = await client.chat.completions.create_with_completion(
+    obj, response = await client.chat.completions.create_with_completion(  # ty: ignore[invalid-await]
         model="openrouter/openai/gpt-4o-mini",
         messages=[{"role": "user", "content": "The word is 'pong'. Fill the schema."}],
         response_model=Ping,

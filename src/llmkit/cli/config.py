@@ -11,7 +11,7 @@ from .output import JsonOption, bad_arguments, emit, enable_json, group, guard, 
 app = group("config", "Конфиг llmkit: где лежит, что получилось, как начать.")
 
 # Шаблон из раздела 3 спецификации: все поля с дефолтными значениями.
-TEMPLATE = '''# Конфиг llmkit. Слои: дефолты в коде → этот файл →
+TEMPLATE = """# Конфиг llmkit. Слои: дефолты в коде → этот файл →
 # .llmkit/config.toml проекта → LLMKIT_* → аргументы LlmKit(...).
 
 [providers.openrouter]
@@ -54,7 +54,7 @@ timeout = 1
 rate_limit = 2
 server = 2
 invalid_output = 2
-'''
+"""
 
 
 def _target() -> Path:
@@ -84,6 +84,8 @@ def path(ctx: typer.Context, json_output: bool = JsonOption) -> None:
     """Показать пути конфига, кэша и журнала вызовов.
 
     Код выхода всегда 0.
+
+    Example: llm config path
     """
     enable_json(ctx, json_output)
     with guard(ctx):
@@ -110,6 +112,8 @@ def show(ctx: typer.Context, json_output: bool = JsonOption) -> None:
 
     Значения ключей не печатаются. Коды выхода: 0 — готово, 2 — конфиг не
     разбирается.
+
+    Example: llm config show --json
     """
     enable_json(ctx, json_output)
     with guard(ctx):
@@ -133,6 +137,8 @@ def init(
 
     Существующий файл без `--force` не трогается. Коды выхода: 0 — файл
     создан, 2 — файл уже есть.
+
+    Example: llm config init
     """
     enable_json(ctx, json_output)
     with guard(ctx):

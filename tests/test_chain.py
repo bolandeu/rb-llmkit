@@ -95,5 +95,5 @@ def test_backoff_growth_and_cap():
 
 def test_backoff_uses_retry_after_header():
     exc = fakes.RateLimitError("x")
-    exc.response = type("R", (), {"headers": {"retry-after": "7"}})()
+    exc.response = type("R", (), {"headers": {"retry-after": "7"}})()  # ty: ignore[unresolved-attribute]
     assert chain.backoff_seconds("rate_limit", 0, exc) == 7.0

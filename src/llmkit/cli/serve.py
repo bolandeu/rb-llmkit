@@ -13,6 +13,8 @@ def serve(
     """Запустить локальный HTTP-прокси (фаза 4, ещё не реализовано).
 
     Код выхода 2 — команда пока не работает.
+
+    Example: llm serve --port 8765
     """
     enable_json(ctx, json_output)
     with guard(ctx):

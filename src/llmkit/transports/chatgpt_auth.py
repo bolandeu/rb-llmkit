@@ -271,9 +271,7 @@ def exchange_code(client: Any, code: str, verifier: str, redirect_uri: str) -> d
     return tokens
 
 
-def login_device(
-    path: Path, *, echo: Echo, client: Any = None, sleep: Callable[[float], None] = time.sleep
-) -> Auth:
+def login_device(path: Path, *, echo: Echo, client: Any = None, sleep: Callable[[float], None] = time.sleep) -> Auth:
     """Вход по коду устройства: ссылка + одноразовый код, работает без браузера на машине."""
     import httpx
 
@@ -364,7 +362,7 @@ def login_browser(path: Path, *, echo: Echo, open_browser: bool = True, client: 
             text = "Вход выполнен — вкладку можно закрыть." if ok else f"Ошибка входа: {result['error']}"
             self.wfile.write(f"<h3>{text}</h3>".encode())
 
-        def log_message(self, *args: Any) -> None:
+        def log_message(self, format: str, *args: Any) -> None:
             pass
 
     server = None

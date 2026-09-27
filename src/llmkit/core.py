@@ -281,12 +281,22 @@ class LlmKit:
                     continue
                 provider = ref.partition("/")[0]
                 await self.usage.arecord(
-                    model=ref, provider=provider, status="cache", task_id=task.id,
-                    tags=tags, level=level, attempt=0,
+                    model=ref,
+                    provider=provider,
+                    status="cache",
+                    task_id=task.id,
+                    tags=tags,
+                    level=level,
+                    attempt=0,
                 )
                 answer = Answer(
-                    data=self._decode(cached, task.schema), source="cache", model=ref,
-                    provider=provider, attempts=attempts, warnings=warnings, task_id=task.id,
+                    data=self._decode(cached, task.schema),
+                    source="cache",
+                    model=ref,
+                    provider=provider,
+                    attempts=attempts,
+                    warnings=warnings,
+                    task_id=task.id,
                 )
                 return self._done(answer, started, position, tags)
 
@@ -311,8 +321,17 @@ class LlmKit:
                         raise  # не ошибка провайдера, а наш баг — не маскируем
                     latency = int((time.perf_counter() - begin) * 1000)
                     await self._fail(
-                        task, tags, level, call.ref, call.provider, exc, error_type,
-                        attempts, retry_index, latency, secret,
+                        task,
+                        tags,
+                        level,
+                        call.ref,
+                        call.provider,
+                        exc,
+                        error_type,
+                        attempts,
+                        retry_index,
+                        latency,
+                        secret,
                     )
                     allowed = chain_mod.retries_for(error_type, self.config.retry, exc) if task.retry else 0
                     if retry_index < allowed:
@@ -327,31 +346,53 @@ class LlmKit:
                 budget.add(outcome.cost_usd)
                 attempts.append(
                     Attempt(
-                        model=call.ref, provider=call.provider, latency_ms=latency,
-                        prompt_tokens=outcome.prompt_tokens, completion_tokens=outcome.completion_tokens,
+                        model=call.ref,
+                        provider=call.provider,
+                        latency_ms=latency,
+                        prompt_tokens=outcome.prompt_tokens,
+                        completion_tokens=outcome.completion_tokens,
                         cost_usd=outcome.cost_usd,
                     )
                 )
                 await self.usage.arecord(
-                    model=call.ref, provider=call.provider, status="ok", task_id=task.id, tags=tags,
-                    level=level, attempt=retry_index, prompt_tokens=outcome.prompt_tokens,
-                    completion_tokens=outcome.completion_tokens, cost_usd=outcome.cost_usd,
-                    cost_known=outcome.cost_known, latency_ms=latency,
+                    model=call.ref,
+                    provider=call.provider,
+                    status="ok",
+                    task_id=task.id,
+                    tags=tags,
+                    level=level,
+                    attempt=retry_index,
+                    prompt_tokens=outcome.prompt_tokens,
+                    completion_tokens=outcome.completion_tokens,
+                    cost_usd=outcome.cost_usd,
+                    cost_known=outcome.cost_known,
+                    latency_ms=latency,
                 )
                 key = cache_keys.get(call.ref)
                 if cache_enabled and key:
                     await self.cache.aset(key, call.ref, outcome.cache_value)
                 answer = Answer(
-                    data=outcome.data, source="llm", model=call.ref, provider=call.provider,
-                    attempts=attempts, prompt_tokens=outcome.prompt_tokens,
-                    completion_tokens=outcome.completion_tokens, cost_usd=outcome.cost_usd,
-                    cost_known=outcome.cost_known, warnings=warnings, task_id=task.id,
+                    data=outcome.data,
+                    source="llm",
+                    model=call.ref,
+                    provider=call.provider,
+                    attempts=attempts,
+                    prompt_tokens=outcome.prompt_tokens,
+                    completion_tokens=outcome.completion_tokens,
+                    cost_usd=outcome.cost_usd,
+                    cost_known=outcome.cost_known,
+                    warnings=warnings,
+                    task_id=task.id,
                 )
                 return self._done(answer, started, position, tags)
 
         answer = Answer(
-            data=task.default, source="default", attempts=attempts, warnings=warnings,
-            error=attempts[-1].error if attempts else "цепочка моделей пуста", task_id=task.id,
+            data=task.default,
+            source="default",
+            attempts=attempts,
+            warnings=warnings,
+            error=attempts[-1].error if attempts else "цепочка моделей пуста",
+            task_id=task.id,
         )
         self._done(answer, started, max(len(chain) - 1, 0), tags)
         if task.default is None:
@@ -405,8 +446,11 @@ class LlmKit:
                     if raise_on_error:
                         raise
                     answer = exc.answer or Answer(
-                        data=task.default, source="default", attempts=exc.attempts,
-                        error=str(exc), task_id=task.id,
+                        data=task.default,
+                        source="default",
+                        attempts=exc.attempts,
+                        error=str(exc),
+                        task_id=task.id,
                     )
             done += 1
             self._notify(on_progress, done, total, answer)
@@ -423,9 +467,7 @@ class LlmKit:
         return [item.result() for item in running]
 
     @staticmethod
-    def _notify(
-        on_progress: Callable[[int, int, Answer], None] | None, done: int, total: int, answer: Answer
-    ) -> None:
+    def _notify(on_progress: Callable[[int, int, Answer], None] | None, done: int, total: int, answer: Answer) -> None:
         """Колбэк прогресса не должен рвать пачку своей ошибкой."""
         if on_progress is None:
             return
@@ -483,14 +525,17 @@ class LlmKit:
         self._finish(answer, started, position)
         log.info(
             "%s %s tokens=%d/%d cost=$%.6f %dms tags=%s",
-            answer.model or "—", answer.source, answer.prompt_tokens, answer.completion_tokens,
-            answer.cost_usd, answer.latency_ms, tags,
+            answer.model or "—",
+            answer.source,
+            answer.prompt_tokens,
+            answer.completion_tokens,
+            answer.cost_usd,
+            answer.latency_ms,
+            tags,
         )
         return answer
 
-    def _cache_keys(
-        self, chain: list[str], messages: list[dict], task: Task, settings: dict
-    ) -> dict[str, str]:
+    def _cache_keys(self, chain: list[str], messages: list[dict], task: Task, settings: dict) -> dict[str, str]:
         """Ключ кэша для каждой модели цепочки — до резолва ключей провайдеров."""
         keys: dict[str, str] = {}
         for ref in chain:
@@ -543,8 +588,15 @@ class LlmKit:
             Attempt(model=ref, provider=provider, error_type=error_type, error=message, latency_ms=latency_ms)
         )
         await self.usage.arecord(
-            model=ref, provider=provider, status="failed", task_id=task.id, tags=tags, level=level,
-            attempt=retry_index, error_type=error_type, latency_ms=latency_ms,
+            model=ref,
+            provider=provider,
+            status="failed",
+            task_id=task.id,
+            tags=tags,
+            level=level,
+            attempt=retry_index,
+            error_type=error_type,
+            latency_ms=latency_ms,
         )
         logger = log.error if error_type == "auth" else log.debug
         logger("%s: %s (%s)", ref, error_type, message)
@@ -572,7 +624,9 @@ class LlmKit:
             return validate(cached)
         return cached
 
-    async def _call_model(self, call: providers_mod.ModelCall, messages: list[dict], task: Task, settings: dict) -> _Outcome:
+    async def _call_model(
+        self, call: providers_mod.ModelCall, messages: list[dict], task: Task, settings: dict
+    ) -> _Outcome:
         # Подмена из тестов → свой транспорт провайдера по подписке → LiteLLM.
         completion = self._completion or call.completion
         if completion is None:
@@ -651,11 +705,17 @@ class LlmKit:
         completion_tokens = int(getattr(usage, "completion_tokens", 0) or 0)
         cost, known = self._cost(call, response, prompt_tokens, completion_tokens)
         return _Outcome(
-            data=data, cache_value=cache_value, prompt_tokens=prompt_tokens,
-            completion_tokens=completion_tokens, cost_usd=cost, cost_known=known,
+            data=data,
+            cache_value=cache_value,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            cost_usd=cost,
+            cost_known=known,
         )
 
-    def _cost(self, call: providers_mod.ModelCall, response: Any, prompt_tokens: int, completion_tokens: int) -> tuple[float, bool]:
+    def _cost(
+        self, call: providers_mod.ModelCall, response: Any, prompt_tokens: int, completion_tokens: int
+    ) -> tuple[float, bool]:
         """Стоимость: подписка → цены из конфига → LiteLLM → неизвестно (один варн на модель).
 
         Конфиг главнее справочника LiteLLM: у шлюзов (ccode) имя модели совпадает

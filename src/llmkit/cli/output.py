@@ -86,8 +86,7 @@ def _classify(exc: Exception) -> CliError:
         return CliError(
             "AUTH_REQUIRED",
             f"нет ключа для провайдера {exc.provider}",
-            f"выполните `llm keys set {exc.provider}`"
-            + (f" или `export {exc.env_var}=...`" if exc.env_var else ""),
+            f"выполните `llm keys set {exc.provider}`" + (f" или `export {exc.env_var}=...`" if exc.env_var else ""),
             exit_code=3,
         )
     if isinstance(exc, ConfigError):
@@ -129,9 +128,11 @@ def guard(ctx: typer.Context):
 
 
 def _report(ctx: typer.Context, error: CliError) -> None:
-    envelope = {"ok": False, "error": {"code": error.code, "message": error.message}}
+    envelope: dict = {"ok": False, "error": {"code": error.code, "message": error.message}}
     if error.action:
         envelope["error"]["action"] = error.action
+    # Данные рядом с ошибкой (отчёт `auth status` при коде 3) — команда кладёт их в `state(ctx)["error_data"]`.
+    envelope.update(state(ctx).get("error_data") or {})
     if is_json(ctx):
         print(json.dumps(envelope, ensure_ascii=False, indent=2))
     else:

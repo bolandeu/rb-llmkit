@@ -6,6 +6,7 @@ import json
 import sys
 import textwrap
 import time
+from collections.abc import Callable
 
 import pytest
 
@@ -38,7 +39,7 @@ def fake_cli(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAUDE_COMMAND", f"{sys.executable} {script}")
     monkeypatch.setenv("FAKE_RECORD", str(record))
 
-    def install(output: dict) -> callable:
+    def install(output: dict) -> Callable:
         monkeypatch.setenv("FAKE_OUTPUT", json.dumps(output))
         return lambda: json.loads(record.read_text("utf-8"))
 

@@ -1,5 +1,7 @@
 """Команда `llm models`: провайдеры, уровни и цепочки из конфига."""
 
+from typing import Any
+
 import typer
 from rich.table import Table
 
@@ -15,12 +17,14 @@ def models(ctx: typer.Context, json_output: bool = JsonOption) -> None:
     печатается). Цепочки уровней задаются в формате "провайдер/модель".
     Код выхода 0; 2 — если конфиг не разбирается или уровень ссылается на
     неописанного провайдера.
+
+    Example: llm models --json
     """
     enable_json(ctx, json_output)
     with guard(ctx):
         config = config_mod.load()
         config.check_levels()
-        providers = []
+        providers: list[dict[str, Any]] = []
         for name, cfg in sorted(config.providers.items()):
             source, env_var = key_source(name, cfg)
             providers.append(

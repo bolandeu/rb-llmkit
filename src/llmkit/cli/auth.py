@@ -1,16 +1,30 @@
-"""Команды `llm auth`: вход в подписки ChatGPT и Claude вместо API-ключей."""
+"""Команды `llm auth`: вход в подписки ChatGPT и Claude, отчёт о здоровье всех доступов."""
 
-import asyncio
 import subprocess
 
 import typer
+from rich.markup import escape
 
 from .. import config as config_mod
+from .. import health
 from ..providers import SUBSCRIPTION_KINDS
 from ..transports import chatgpt_auth, claude_cli
-from .output import CliError, JsonOption, bad_arguments, emit, enable_json, err, group, guard, out
+from .output import (
+    CliError,
+    JsonOption,
+    bad_arguments,
+    emit,
+    enable_json,
+    err,
+    group,
+    guard,
+    is_json,
+    is_quiet,
+    out,
+    state,
+)
 
-app = group("auth", "Вход в подписки (kind = chatgpt | claude_cli) вместо API-ключей.")
+app = group("auth", "Вход в подписки (kind = chatgpt | claude_cli) и проверка всех доступов: `llm auth status`.")
 
 
 def _subscription_provider(name: str):
@@ -22,55 +36,65 @@ def _subscription_provider(name: str):
     return cfg
 
 
-def _chatgpt_row(name: str) -> dict:
-    path = chatgpt_auth.default_path()
-    auth = chatgpt_auth.read_auth(path)
-    row = {"provider": name, "kind": "chatgpt", "logged_in": auth is not None, "auth_file": str(path)}
-    if auth is not None:
-        row["plan"] = auth.plan_type
-        row["token_expires"] = chatgpt_auth.jwt_exp(auth.access_token) or None
-    return row
-
-
-def _claude_row(name: str) -> dict:
-    status = asyncio.run(claude_cli.auth_status())
-    row = {"provider": name, "kind": "claude_cli", "logged_in": status["loggedIn"], "installed": status["installed"]}
-    for key in ("authMethod", "subscriptionType", "error"):
-        if status.get(key):
-            row[key] = status[key]
-    return row
-
-
 @app.command("status")
-def status(ctx: typer.Context, json_output: bool = JsonOption) -> None:
-    """Показать, выполнен ли вход в каждую подписку из конфига.
+def status(
+    ctx: typer.Context,
+    check: bool = typer.Option(
+        False, "--check", help="Сделать по одному дешёвому read-only вызову на провайдера (лимит 10 с)."
+    ),
+    provider: str = typer.Option(None, "--provider", help="Только этот провайдер из конфига (по умолчанию все)."),
+    json_output: bool = JsonOption,
+) -> None:
+    """Показать доступ каждого провайдера: откуда берётся и работает ли. Значения не печатаются.
 
-    Токены не печатаются. Код выхода 0, даже если входа нет.
+    Ключи API и подписки (chatgpt, claude_cli) — в одном отчёте. Без `--check`
+    только наличие (`unchecked` / `missing`); с ним: openrouter, openai,
+    anthropic, gemini, ollama и OpenAI-совместимые шлюзы — один бесплатный
+    запрос с ключом; chatgpt — свежесть токена (с обновлением, если истёк);
+    claude — локальный `claude auth status`. Модели не вызываются.
+    Обязательных провайдеров у llmkit нет (`required: false`).
+    Коды выхода: 0 — нет неверных и просроченных доступов, 3 — есть
+    (`error.code: CREDENTIALS_UNHEALTHY`, отчёт всё равно выводится),
+    2 — неизвестный `--provider`. Форма `--json` — общий контракт инструментов:
+    `tool`, `version`, `checked_at`, `credentials[]` с `provider`, `required`,
+    `fields`, `source`, `source_ref`, `status`, `expires_at`, `quota`, `message`.
+
+    Example: llm auth status --check --json
     """
     enable_json(ctx, json_output)
     with guard(ctx):
         config = config_mod.load()
-        rows = [
-            _chatgpt_row(name) if cfg.kind == "chatgpt" else _claude_row(name)
-            for name, cfg in sorted(config.providers.items())
-            if cfg.kind in SUBSCRIPTION_KINDS
+        known = sorted(name for name, cfg in config.providers.items() if health.has_credentials(cfg))
+        if provider is not None and provider not in known:
+            raise bad_arguments(f"провайдер {provider!r} не найден среди провайдеров с доступом: {', '.join(known)}")
+        report = health.report(config, check=check, only=provider)
+        problems = [
+            f"{item['provider']}: {item['status']}" for item in report["credentials"] if health.is_problem(item)
         ]
+        if not problems:
+            emit(ctx, report, lambda: _render_status(report))
+            return
+        if not is_json(ctx) and not is_quiet(ctx):
+            _render_status(report)
+        state(ctx)["error_data"] = report  # отчёт — данные и при коде 3
+        raise CliError(
+            "CREDENTIALS_UNHEALTHY",
+            "проблемы с доступом: " + ", ".join(problems),
+            "обновите ключ `llm keys set <провайдер>` или войдите заново `llm auth login <провайдер>`",
+            exit_code=3,
+        )
 
-        def render() -> None:
-            from rich.table import Table
 
-            table = Table(title="Подписки")
-            for column in ("Провайдер", "Вид", "Вход", "Подробности"):
-                table.add_column(column)
-            for row in rows:
-                if row["kind"] == "claude_cli" and not row.get("installed"):
-                    detail = "CLI `claude` не найден"
-                else:
-                    detail = row.get("plan") or row.get("subscriptionType") or row.get("error") or ""
-                table.add_row(row["provider"], row["kind"], "да" if row["logged_in"] else "нет", str(detail))
-            out.print(table)
-
-        emit(ctx, {"providers": rows}, render)
+def _render_status(report: dict) -> None:
+    if not report["credentials"]:
+        out.print("Провайдеров с доступом нет.")
+    for item in report["credentials"]:
+        mark = {"ok": "[green]✓[/green]", "unchecked": "[dim]·[/dim]"}.get(item["status"], "[red]✗[/red]")
+        detail = f" — {item['message']}" if item["message"] else ""
+        quota = item["quota"]
+        left = f", остаток {quota['remaining']} {quota['unit']}" if quota and quota.get("remaining") is not None else ""
+        line = f"{item['provider']}: {item['status']} ({item['source']}: {item['source_ref']}){left}{detail}"
+        out.print(f"{mark} {escape(line)}")
 
 
 @app.command("login")
@@ -87,6 +111,8 @@ def login(
     быть на другой машине); `--browser` — через локальный redirect на порт 1455.
     Claude: запускается `claude auth login`. Подсказки идут в stderr.
     Коды выхода: 0 — вход выполнен, 2 — не провайдер по подписке, 3 — вход не удался.
+
+    Example: llm auth login chatgpt
     """
     enable_json(ctx, json_output)
     with guard(ctx):
@@ -126,6 +152,8 @@ def logout(
     """Выйти из подписки: ChatGPT — удалить файл токенов, Claude — `claude auth logout`.
 
     Выход без входа не ошибка. Коды выхода: 0 — готово, 2 — не провайдер по подписке.
+
+    Example: llm auth logout chatgpt
     """
     enable_json(ctx, json_output)
     with guard(ctx):

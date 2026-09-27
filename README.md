@@ -4,7 +4,7 @@
 клиентов. Даёт цепочки моделей с фолбэком, JSON по схеме, кэш ответов, учёт
 токенов и стоимости с разбивкой по меткам и мягкие бюджеты.
 
-Статус — см. [docs/changelog.md](docs/changelog.md) (сделано) и
+Статус — см. [CHANGELOG.md](CHANGELOG.md) (сделано) и
 [docs/backlog.md](docs/backlog.md) (план). Спецификация: [docs/prd.md](docs/prd.md).
 
 ## Что это даёт
@@ -64,7 +64,7 @@ llm models                           # провайдеры, уровни, ес�
 llm keys set openrouter              # ввод скрыт; `--stdin` для автоматизации
 llm keys status                      # источник ключа: config | env | keychain | subscription | none
 llm auth login chatgpt               # вход в подписку ChatGPT (код устройства; --browser — через браузер)
-llm auth status                      # вход в подписки ChatGPT и Claude
+llm auth status --check             # все доступы (ключи и подписки): откуда и работают ли; 3 — есть неверные
 llm cost --by tool,niche --since 7d  # отчёт из журнала вызовов
 llm config init                      # шаблон конфига; path | show
 ```
@@ -191,9 +191,11 @@ from llmkit import LlmKit
 
 kit = LlmKit(tags={"tool": "antagor"})
 
+
 async def main():
     text = await kit.generate("Одним словом: столица Франции?", system="Отвечай кратко")
     print(text)
+
 
 asyncio.run(main())
 ```
@@ -207,18 +209,22 @@ asyncio.run(main())
 from pydantic import BaseModel
 from llmkit import LlmKit, Task
 
+
 class Verdict(BaseModel):
     intent: str
     confidence: float
 
+
 kit = LlmKit()
-answer = kit.ask_sync(Task(
-    user="Запрос: «купить кофеварку». Определи намерение.",
-    schema=Verdict,                       # или готовая JSON Schema (dict)
-    level="judge",
-    tags={"tool": "intentree", "niche": "ved"},
-    default=Verdict(intent="unknown", confidence=0.0),   # без него — AllModelsFailed
-))
+answer = kit.ask_sync(
+    Task(
+        user="Запрос: «купить кофеварку». Определи намерение.",
+        schema=Verdict,  # или готовая JSON Schema (dict)
+        level="judge",
+        tags={"tool": "intentree", "niche": "ved"},
+        default=Verdict(intent="unknown", confidence=0.0),  # без него — AllModelsFailed
+    )
+)
 print(answer.data.intent, answer.source, answer.model, answer.cost_usd)
 ```
 
@@ -245,7 +251,7 @@ answers = await kit.ask_many(
 ```python
 for row in kit.usage.report(group_by=("tool", "niche"), since="7d"):
     print(row.keys, row.calls, round(row.cost_usd, 4))
-print(kit.stats)   # итоги за время жизни экземпляра
+print(kit.stats)  # итоги за время жизни экземпляра
 ```
 
 ## Решения и отвергнутые альтернативы
@@ -256,12 +262,12 @@ print(kit.stats)   # итоги за время жизни экземпляра
 ## Что дальше
 
 Планы и отложенное за пределы v1 — в [docs/backlog.md](docs/backlog.md).
-Сделанное — в [docs/changelog.md](docs/changelog.md).
+Сделанное — в [CHANGELOG.md](CHANGELOG.md).
 
 ## Разработка
 
-Базовые команды (`uv sync`, `uv run pytest -q`, `uv run ruff check`) — в
-[AGENTS.md](AGENTS.md). Дополнительно:
+Базовые команды (`uv sync`, `uv run scripts/release.py --check`) и порядок
+релиза — в [AGENTS.md](AGENTS.md). Дополнительно:
 
 ```bash
 uv run llm --help                # CLI из исходников

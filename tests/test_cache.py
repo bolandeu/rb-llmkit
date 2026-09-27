@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -15,14 +16,15 @@ class Shape(BaseModel):
     sides: int
 
 
-BASE = {"messages": [{"role": "user", "content": "вопрос"}], "temperature": 0.0, "max_tokens": 100}
+BASE: dict[str, Any] = {"messages": [{"role": "user", "content": "вопрос"}], "temperature": 0.0, "max_tokens": 100}
 
 
 def test_key_depends_on_model_and_schema():
     first = make_key(model="openai/m1", **BASE)
     assert first != make_key(model="openai/m2", **BASE)
     assert first != make_key(model="openai/m1", schema={"type": "object"}, **BASE)
-    assert first != make_key(model="openai/m1", **{**BASE, "temperature": 0.5})
+    hot: dict[str, Any] = {**BASE, "temperature": 0.5}
+    assert first != make_key(model="openai/m1", **hot)
     assert first == make_key(model="openai/m1", **BASE)
 
 

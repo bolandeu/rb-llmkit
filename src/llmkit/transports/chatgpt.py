@@ -162,7 +162,9 @@ def _is_token_rejected(status: int, text: str) -> bool:
     return status == 401 and (not text.strip() or "token_expired" in text or "invalid_token" in text)
 
 
-async def _post(client: Any, url: str, body: dict[str, Any], auth: chatgpt_auth.Auth) -> tuple[int, str, list[str], dict]:
+async def _post(
+    client: Any, url: str, body: dict[str, Any], auth: chatgpt_auth.Auth
+) -> tuple[int, str, list[str], dict]:
     async with client.stream("POST", url, json=body, headers=_headers(auth)) as response:
         if response.status_code != 200:
             text = (await response.aread()).decode("utf-8", "replace")

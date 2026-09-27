@@ -63,7 +63,8 @@ def test_merge_keeps_account_when_new_id_token_has_none():
 def test_write_auth_is_private(auth_file):
     login(auth_file)
     assert stat.S_IMODE(auth_file.stat().st_mode) == 0o600
-    assert chatgpt_auth.read_auth(auth_file).account_id == "acc_1"
+    auth = chatgpt_auth.read_auth(auth_file)
+    assert auth is not None and auth.account_id == "acc_1"
 
 
 def test_pkce_challenge_is_sha256_of_verifier():
@@ -106,6 +107,7 @@ async def test_expired_token_is_refreshed_once_for_concurrent_calls(auth_file):
     assert server.calls == 1
     assert {r.access_token for r in results} == {fresh}
     saved = chatgpt_auth.read_auth(auth_file)
+    assert saved is not None
     assert (saved.access_token, saved.refresh_token, saved.account_id) == (fresh, "r2", "acc_1")
 
 
@@ -129,7 +131,8 @@ async def test_failed_refresh_adopts_token_written_by_other_process(auth_file):
 
     async with client_for(handler) as client:
         got = await chatgpt_auth.TokenStore(auth_file).access(client)
-    assert got.access_token == chatgpt_auth.read_auth(auth_file).access_token
+    saved = chatgpt_auth.read_auth(auth_file)
+    assert saved is not None and got.access_token == saved.access_token
     assert chatgpt_auth.parse_jwt(got.access_token)["tag"] == chatgpt_auth.parse_jwt(fresh)["tag"]
 
 

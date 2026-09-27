@@ -16,6 +16,7 @@ import shlex
 import shutil
 import signal
 import tempfile
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -43,7 +44,7 @@ CLAUDE_ENV = {
 }
 
 
-def command(env: dict[str, str] | None = None) -> list[str] | None:
+def command(env: Mapping[str, str] | None = None) -> list[str] | None:
     """Команда CLI: `CLAUDE_COMMAND` (можно с аргументами) или `claude` из PATH."""
     env = os.environ if env is None else env
     raw = env.get("CLAUDE_COMMAND", "").strip()
@@ -198,7 +199,7 @@ async def acompletion(
     return model_response(model, content, prompt_tokens, int(usage.get("output_tokens") or 0), finish)
 
 
-async def auth_status() -> dict[str, Any]:
+async def auth_status(timeout: float = 20.0) -> dict[str, Any]:
     """`claude auth status` → словарь; CLI без входа или без бинаря — пометка в ответе."""
     cmd = command()
     if cmd is None:
@@ -210,10 +211,10 @@ async def auth_status() -> dict[str, Any]:
         env=child_env(dict(os.environ)),
     )  # fmt: skip
     try:
-        stdout, _ = await asyncio.wait_for(process.communicate(), 20)
+        stdout, _ = await asyncio.wait_for(process.communicate(), timeout)
     except TimeoutError:
         process.kill()
-        return {"installed": True, "loggedIn": False, "error": "claude auth status не ответил за 20 с"}
+        return {"installed": True, "loggedIn": False, "error": f"claude auth status не ответил за {timeout:g} с"}
     try:
         data = json.loads(stdout.decode("utf-8", "replace"))
     except ValueError:

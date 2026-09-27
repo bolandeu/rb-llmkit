@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+from collections.abc import Mapping
 
 from .config import APP_NAME, ProviderConfig
 from .errors import KeyMissing
@@ -58,7 +59,7 @@ def from_keychain(provider: str) -> str | None:
         return raw or None
 
 
-def resolve(provider: str, cfg: ProviderConfig, *, env: dict[str, str] | None = None) -> str | None:
+def resolve(provider: str, cfg: ProviderConfig, *, env: Mapping[str, str] | None = None) -> str | None:
     """Ключ провайдера или None, если провайдеру ключ не нужен."""
     env = os.environ if env is None else env
     if cfg.api_key:

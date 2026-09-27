@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.metadata
 import json
 
 import conftest as fakes_module
@@ -61,7 +62,8 @@ def test_group_without_subcommand_prints_help():
 
 def test_version():
     result = run("--version")
-    assert result.exit_code == 0 and result.stdout.startswith("llm ")
+    # Голая версия: её сверяет с версией колеса гейт scripts/release.py.
+    assert result.exit_code == 0 and result.stdout.strip() == importlib.metadata.version("llmkit")
 
 
 def test_cost_on_empty_journal():

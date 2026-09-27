@@ -46,6 +46,8 @@ def cost(
 
     Без `--by` печатается одна итоговая строка. На пустом журнале — пустая
     таблица и код выхода 0; 2 — неверный период.
+
+    Example: llm cost --by tool --since 7d
     """
     enable_json(ctx, json_output)
     with guard(ctx):

@@ -12,6 +12,7 @@ import copy
 import os
 import re
 import tomllib
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Literal
 
@@ -218,7 +219,7 @@ def merge(base: dict[str, Any], over: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-def env_layer(env: dict[str, str] | None = None) -> dict[str, Any]:
+def env_layer(env: Mapping[str, str] | None = None) -> dict[str, Any]:
     """Скалярные переопределения из env (раздел 3 спецификации)."""
     env = os.environ if env is None else env
     layer: dict[str, Any] = {}
@@ -230,7 +231,7 @@ def env_layer(env: dict[str, str] | None = None) -> dict[str, Any]:
     return layer
 
 
-def layers(env: dict[str, str] | None = None) -> list[dict[str, Any]]:
+def layers(env: Mapping[str, str] | None = None) -> list[dict[str, Any]]:
     """Слои конфига по порядку применения."""
     env = os.environ if env is None else env
     result = [copy.deepcopy(DEFAULTS)]
@@ -251,9 +252,7 @@ def layers(env: dict[str, str] | None = None) -> list[dict[str, Any]]:
     return result
 
 
-def load(
-    *, overrides: dict[str, Any] | None = None, env: dict[str, str] | None = None
-) -> Config:
+def load(*, overrides: dict[str, Any] | None = None, env: dict[str, str] | None = None) -> Config:
     """Собрать конфиг из всех слоёв; `overrides` — аргументы `LlmKit(...)`."""
     data: dict[str, Any] = {}
     for layer in [*layers(env), overrides or {}]:
