@@ -656,9 +656,16 @@ class LlmKit:
         )
 
     def _cost(self, call: providers_mod.ModelCall, response: Any, prompt_tokens: int, completion_tokens: int) -> tuple[float, bool]:
-        """Стоимость: подписка → LiteLLM → цены из конфига → неизвестно (один варн на модель)."""
+        """Стоимость: подписка → цены из конфига → LiteLLM → неизвестно (один варн на модель).
+
+        Конфиг главнее справочника LiteLLM: у шлюзов (ccode) имя модели совпадает
+        с вендорским, и LiteLLM отдал бы прайс вендора, а не шлюза.
+        """
         if call.subscription:
             return 0.0, True  # оплачено подпиской, отдельного счёта за вызов нет
+        from_config = providers_mod.price_from_config(self.config, call, prompt_tokens, completion_tokens)
+        if from_config is not None:
+            return from_config, True
         cost = 0.0
         # litellm импортируем только если он и так в игре: с подменённым
         # `completion` (тесты) модуль тянуть незачем.
@@ -672,9 +679,6 @@ class LlmKit:
             return cost, True
         if prompt_tokens == 0 and completion_tokens == 0:
             return 0.0, True
-        from_config = providers_mod.price_from_config(self.config, call, prompt_tokens, completion_tokens)
-        if from_config is not None:
-            return from_config, True
         if call.ref not in _warned_prices:
             _warned_prices.add(call.ref)
             log.warning("цена модели %s неизвестна: расход не учитывается", call.ref)

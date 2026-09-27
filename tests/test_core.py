@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import sys
 import time
 
 import conftest as fakes
@@ -209,6 +210,24 @@ async def test_unknown_price_marks_cost_unknown():
     instance, _ = kit([response()])
     answer = await instance.ask(Task(user="вопрос", chain=["b/m2"]))  # цен для b в конфиге нет
     assert answer.cost_usd == 0.0 and answer.cost_known is False
+
+
+class _FakeLitellm:
+    """Подмена litellm: справочник знает цену любой модели."""
+
+    @staticmethod
+    def completion_cost(completion_response):
+        return 99.0
+
+
+async def test_config_price_beats_litellm(monkeypatch):
+    # Шлюз вроде ccode: LiteLLM знает имя модели по прайсу вендора, а у шлюза цена другая.
+    monkeypatch.setitem(sys.modules, "litellm", _FakeLitellm)
+    instance, _ = kit([response(), response()])
+    configured = await instance.ask(Task(user="вопрос", chain=["a/m1"]))
+    assert configured.cost_usd == pytest.approx((10 * 1.0 + 5 * 2.0) / 1_000_000)
+    fallback = await instance.ask(Task(user="другой", chain=["b/m2"]))  # цен для b в конфиге нет
+    assert fallback.cost_usd == 99.0 and fallback.cost_known
 
 
 async def test_ask_many_keeps_order_and_limits_concurrency():

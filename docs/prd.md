@@ -68,7 +68,7 @@ kind = "openrouter"                 # openrouter | openai | anthropic | gemini |
 [providers.ollama]
 kind = "ollama"
 base_url = "https://ollama.com"     # локальный: http://localhost:11434
-[providers.ollama.prices]           # $/1M токенов, если LiteLLM цену не знает
+[providers.ollama.prices]           # $/1M токенов; главнее цен LiteLLM
 "gpt-oss:120b" = { input = 0.15, output = 0.60 }
 
 [providers.deepseek]
