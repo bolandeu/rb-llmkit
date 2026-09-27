@@ -27,7 +27,7 @@ advisory на PyPI/GitHub.
 ## 2. Пакет
 
 - Имя пакета и импорта `llmkit`, CLI-команда `llm`. Репозиторий `github.com/bolandeu/llmkit`,
-  установка в потребители через `[tool.uv.sources] llmkit = { git = ... }`.
+  установка в потребители через `[tool.uv.sources] rb-llmkit = { git = ..., tag = ... }` (дистрибутив `rb-llmkit`, импорт `llmkit`).
 - Python >= 3.11, `uv`, `hatchling`, `src/llmkit/`. Тесты `pytest` + `pytest-asyncio`.
 - Зависимости: `litellm==1.102.0`, `instructor>=1.17`, `pydantic>=2`, `keyring>=25`,
   `platformdirs>=4`, `typer>=0.12`, `rich>=13`, `tomli-w>=1`, `httpx>=0.27` (транспорт

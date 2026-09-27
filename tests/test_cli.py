@@ -63,7 +63,7 @@ def test_group_without_subcommand_prints_help():
 def test_version():
     result = run("--version")
     # Голая версия: её сверяет с версией колеса гейт scripts/release.py.
-    assert result.exit_code == 0 and result.stdout.strip() == importlib.metadata.version("llmkit")
+    assert result.exit_code == 0 and result.stdout.strip() == importlib.metadata.version("rb-llmkit")
 
 
 def test_cost_on_empty_journal():

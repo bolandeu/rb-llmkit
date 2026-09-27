@@ -20,16 +20,23 @@
 
 ## Установка
 
+Дистрибутив называется **`rb-llmkit`** (стандарт tools §10: все наши пакеты —
+`rb-<tool>`, чтобы не столкнуться с чужими пакетами на PyPI). Импорт
+по-прежнему `import llmkit`, команда — `llm`. Ставить всегда по тегу `vX.Y.Z`
+(последний — в `CHANGELOG.md`).
+
 Как библиотека — в проект:
 
 ```bash
-uv add "git+https://github.com/bolandeu/llmkit"
+uv add "rb-llmkit @ git+https://github.com/bolandeu/llmkit@vX.Y.Z"
 ```
 
-Как команда `llm` — в систему:
+Как команда `llm` — в систему. Старый инструмент под именем `llmkit` сначала
+удалить, иначе два инструмента спорят за одну команду `llm`:
 
 ```bash
-uv tool install "git+https://github.com/bolandeu/llmkit"
+uv tool uninstall llmkit   # если стоял до переименования
+uv tool install "rb-llmkit @ git+https://github.com/bolandeu/llmkit@vX.Y.Z"
 ```
 
 Репозиторий приватный, поэтому на машине нужен доступ к GitHub: `gh auth login`
@@ -39,11 +46,17 @@ uv tool install "git+https://github.com/bolandeu/llmkit"
 
 ```toml
 [project]
-dependencies = ["llmkit"]
+dependencies = ["rb-llmkit"]
 
 [tool.uv.sources]
-llmkit = { git = "https://github.com/bolandeu/llmkit" }
+rb-llmkit = { git = "https://github.com/bolandeu/llmkit", tag = "vX.Y.Z" }
 ```
+
+Переход потребителя со старого имени: в `dependencies` и ключе
+`[tool.uv.sources]` заменить `llmkit` на `rb-llmkit`, затем один раз
+`uv sync --reinstall-package rb-llmkit`. Обычный `uv sync` ставит новый
+дистрибутив и удаляет старый вместе с общим скриптом `llm` — и `uv run llm`
+молча запускает другой `llm` из PATH.
 
 Требуется Python >= 3.11.
 

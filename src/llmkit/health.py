@@ -26,6 +26,8 @@ from .config import Config, ProviderConfig
 from .providers import SUBSCRIPTION_KINDS
 
 TOOL = "llmkit"
+# Имя дистрибутива (pyproject `[project] name`), по нему importlib.metadata ищет версию.
+DIST_NAME = "rb-llmkit"
 CHECK_TIMEOUT = 10.0
 # Проблема даже у необязательного провайдера: доступ есть, но неверный.
 ALWAYS_PROBLEMS = frozenset({"invalid", "expired"})
@@ -88,7 +90,7 @@ def _scrub(message: str | None, secrets: list[str]) -> str | None:
 
 def _version() -> str:
     try:
-        return version(TOOL)
+        return version(DIST_NAME)
     except PackageNotFoundError:  # запуск из исходников без установки
         return "0.0.0"
 

@@ -1,5 +1,5 @@
 [project]
-name = "llmkit"
+name = "rb-llmkit"
 # Версия — из git-тега vX.Y.Z (uv-dynamic-versioning); строку `version =` не добавлять.
 dynamic = ["version"]
 description = "Общий LLM-слой: цепочки моделей, кэш, учёт расходов"
@@ -44,6 +44,10 @@ fallback-version = "0.0.0"
 [tool.uv]
 # Пересобирать editable-установку, когда сдвигается коммит или тег: `--version` следует за тегом.
 cache-keys = [{ file = "pyproject.toml" }, { git = { commit = true, tags = true } }]
+
+[tool.cli-generator]
+# Команды llmkit — в src/*/cli/*.py (не commands/), см. scripts/check_command_docstrings.py.
+commands = "src/*/cli/*.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/llmkit"]

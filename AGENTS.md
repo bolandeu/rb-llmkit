@@ -1,7 +1,9 @@
 # llmkit — инструкция для агента
 
 Библиотека-слой над LLM-провайдерами: цепочки моделей, кэш, учёт расходов.
-Пакетный менеджер — `uv` (не pip/poetry).
+Пакетный менеджер — `uv` (не pip/poetry). Дистрибутив — `rb-llmkit`
+(`[project] name`, по нему `importlib.metadata.version` — `health.DIST_NAME`),
+импорт-пакет — `llmkit`, команда — `llm`.
 
 - Спецификация — `docs/prd.md`, она главнее этого файла.
 - Планы — `docs/backlog.md`, сделанное — `CHANGELOG.md` (собирается из `changelog.d/`).
@@ -9,7 +11,7 @@
 ## Команды
 
 ```bash
-uv sync
+uv sync                              # после переименования в rb-llmkit один раз: uv sync --reinstall-package rb-llmkit
 uv run scripts/release.py --check   # весь гейт: lock, ruff, ty, pytest, фрагмент, сборка колеса — перед каждым коммитом
 uv run pytest -q                    # только тесты
 uv run python -X importtime -c "import llmkit" 2>&1 | tail -1   # должно быть < 300 мс

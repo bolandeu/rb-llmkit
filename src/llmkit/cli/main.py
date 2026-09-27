@@ -54,7 +54,7 @@ app.add_typer(config_mod.app, name="config")
 
 def _version() -> str:
     try:
-        return version("llmkit")
+        return version("rb-llmkit")
     except PackageNotFoundError:  # запуск из исходников без установки
         return "0.0.0+source"
 
