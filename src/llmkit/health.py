@@ -18,16 +18,14 @@ import sys
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from importlib.metadata import PackageNotFoundError, version
 from typing import Any
 
 from . import keys
 from .config import Config, ProviderConfig
 from .providers import SUBSCRIPTION_KINDS
+from .version import installed_version
 
 TOOL = "llmkit"
-# Имя дистрибутива (pyproject `[project] name`), по нему importlib.metadata ищет версию.
-DIST_NAME = "rb-llmkit"
 CHECK_TIMEOUT = 10.0
 # Проблема даже у необязательного провайдера: доступ есть, но неверный.
 ALWAYS_PROBLEMS = frozenset({"invalid", "expired"})
@@ -89,10 +87,7 @@ def _scrub(message: str | None, secrets: list[str]) -> str | None:
 
 
 def _version() -> str:
-    try:
-        return version(DIST_NAME)
-    except PackageNotFoundError:  # запуск из исходников без установки
-        return "0.0.0"
+    return installed_version() or "0.0.0"  # запуск из исходников без установки
 
 
 def _with_timeout(check: Callable[[], Health]) -> Health:

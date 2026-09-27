@@ -7,6 +7,7 @@ import typer
 
 from ..core import Task
 from . import runtime
+from .app import app
 from .output import JsonOption, bad_arguments, emit, enable_json, guard, out
 
 
@@ -46,6 +47,7 @@ def _run(text, system, level, model, tags, no_cache, temperature, max_tokens, ti
     return answer
 
 
+@app.command("ask")
 def ask(
     ctx: typer.Context,
     text: str = typer.Argument(None, help="Текст запроса; без него читается stdin."),
@@ -74,6 +76,7 @@ def ask(
         emit(ctx, _answer_payload(answer), lambda: out.print(answer.data, highlight=False, markup=False))
 
 
+@app.command("json")
 def json_command(
     ctx: typer.Context,
     text: str = typer.Argument(None, help="Текст запроса; без него читается stdin."),

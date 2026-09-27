@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import importlib.metadata
 import json
+import re
+import tomllib
+from pathlib import Path
 
 import conftest as fakes_module
 import pytest
@@ -12,6 +15,7 @@ from typer.testing import CliRunner
 
 from llmkit import LlmKit
 from llmkit import keys as keys_mod
+from llmkit._distribution import DIST_NAME
 from llmkit.cli import runtime
 from llmkit.cli.main import app
 
@@ -266,3 +270,30 @@ def test_provider_failure_exit_code(fake_kit):
     result = run("ask", "вопрос", "--json")
     assert result.exit_code == 5  # PROVIDER_ERROR по conventions.md
     assert payload(result)["error"]["code"] == "PROVIDER_ERROR"
+
+
+def test_distribution_name_declared_once():
+    """DIST_NAME задаёт только _distribution.py; повторное объявление при мерже молча победило бы."""
+    src = Path(__file__).resolve().parents[1] / "src" / "llmkit"
+    declaring = sorted(
+        str(path.relative_to(src))
+        for path in src.rglob("*.py")
+        if re.search(r"^DIST_NAME\s*[:=]", path.read_text(), re.M)
+    )
+    assert declaring == ["_distribution.py"]
+
+
+def test_distribution_name_matches_pyproject():
+    pyproject = tomllib.loads((Path(__file__).resolve().parents[1] / "pyproject.toml").read_text())
+    assert pyproject["project"]["name"] == DIST_NAME
+
+
+def test_version_falls_back_to_legacy_distribution_name(monkeypatch):
+    from llmkit import version
+
+    installed = version.installed_version()
+    monkeypatch.setattr(version, "DIST_NAME", "no-such-distribution-xyz")
+    monkeypatch.setattr(version, "DIST_NAME_LEGACY", DIST_NAME)  # установка под старым именем
+    assert version.installed_version() == installed
+    monkeypatch.setattr(version, "DIST_NAME_LEGACY", None)
+    assert version.installed_version() is None

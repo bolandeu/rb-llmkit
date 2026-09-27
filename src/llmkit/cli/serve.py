@@ -2,9 +2,11 @@
 
 import typer
 
+from .app import app
 from .output import CliError, JsonOption, enable_json, guard
 
 
+@app.command("serve")
 def serve(
     ctx: typer.Context,
     port: int = typer.Option(8765, "--port", help="Порт локального прокси."),

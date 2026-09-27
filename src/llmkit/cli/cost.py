@@ -7,6 +7,7 @@ from rich.table import Table
 
 from .. import config as config_mod
 from ..usage import Usage
+from .app import app
 from .output import JsonOption, bad_arguments, emit, enable_json, guard, out
 
 
@@ -35,6 +36,7 @@ def _row_payload(row) -> dict:
     }
 
 
+@app.command("cost")
 def cost(
     ctx: typer.Context,
     by: str = typer.Option(None, "--by", help="Метки для группировки через запятую, например tool,niche."),

@@ -6,10 +6,12 @@ import typer
 from rich.table import Table
 
 from .. import config as config_mod
+from .app import app
 from .keys import key_source
 from .output import JsonOption, emit, enable_json, guard, out
 
 
+@app.command("models")
 def models(ctx: typer.Context, json_output: bool = JsonOption) -> None:
     """Показать провайдеров, уровни и их цепочки моделей.
 

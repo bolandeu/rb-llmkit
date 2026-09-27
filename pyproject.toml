@@ -46,7 +46,8 @@ fallback-version = "0.0.0"
 cache-keys = [{ file = "pyproject.toml" }, { git = { commit = true, tags = true } }]
 
 [tool.cli-generator]
-# Команды llmkit — в src/*/cli/*.py (не commands/), см. scripts/check_command_docstrings.py.
+# Где scripts/check_command_docstrings.py (git pre-commit + хуки Claude Code) ищет
+# команды: у llmkit они в src/*/cli/*.py (не commands/), регистрация — `@app.command`.
 commands = "src/*/cli/*.py"
 
 [tool.hatch.build.targets.wheel]
@@ -113,6 +114,10 @@ source = ["src"]
 # Порог — по факту на момент перехода на стандарт; поднимать, не опускать.
 fail_under = 85
 show_missing = true
+
+[tool.ty.terminal]
+# Гейт валят только ошибки; ty >= 0.0.84 иначе выходит с 1 и на предупреждениях.
+error-on-warning = false
 
 [tool.ruff]
 line-length = 120
