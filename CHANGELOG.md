@@ -8,6 +8,13 @@
 
 <!-- towncrier release notes start -->
 
+## [0.4.0] - 2026-09-27
+
+### Changed
+
+- Дистрибутив переименован: `llmkit` → `rb-llmkit` (стандарт tools §10). Импорт `llmkit` и команда `llm` не меняются. Потребителям: в `dependencies` и `[tool.uv.sources]` заменить `llmkit` на `rb-llmkit` и один раз выполнить `uv sync --reinstall-package rb-llmkit`; глобальный инструмент — `uv tool uninstall llmkit`, затем `uv tool install "rb-llmkit @ git+https://github.com/bolandeu/llmkit@vX.Y.Z"`.
+
+
 ## [0.3.0] - 2026-09-27
 
 ### Changed
