@@ -337,3 +337,11 @@ FastAPI, extra `[serve]`. `POST /v1/chat/completions` (OpenAI-формат, бе
 | 4 | Прокси (раздел 11) + скилл Claude Code, вызывающий `llm ... --json` | `curl` к прокси возвращает ответ, вызов виден в `llm cost` |
 
 Вне v1: streaming, embeddings (`levels.embed`), батч-API провайдеров, веб-панель.
+
+##  13. Правка руками
+
+# в VS Code
+code ~/Library/Application\ Support/llmkit/config.toml
+
+# или в редакторе macOS по умолчанию
+open -e ~/Library/Application\ Support/llmkit/config.toml
