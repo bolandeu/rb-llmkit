@@ -8,6 +8,17 @@
 
 <!-- towncrier release notes start -->
 
+## [0.4.1] - 2026-09-27
+
+### Changed
+
+- litellm 1.102.0 → 1.102.1 (patch).
+
+### Fixed
+
+- Версия (`llm --version`, `auth status`) находится и у установки под старым именем дистрибутива `llmkit`, ещё не переустановленной как `rb-llmkit`.
+
+
 ## [0.4.0] - 2026-09-27
 
 ### Changed
