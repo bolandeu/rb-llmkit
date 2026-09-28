@@ -124,7 +124,9 @@ def json_command(
 def decide(
     ctx: typer.Context,
     text: str = typer.Argument(None, help="Состояние, о котором спрашиваем; без него читается stdin."),
-    questions: Path = typer.Option(..., "--questions", "-q", help="JSON-файл вопросов: имя → type/instructions/criteria."),
+    questions: Path = typer.Option(
+        ..., "--questions", "-q", help="JSON-файл вопросов: имя → type/instructions/criteria."
+    ),
     level: str = typer.Option(None, "--level", "-l", help="Уровень из конфига; по умолчанию decide."),
     model: str = typer.Option(None, "--model", "-m", help="Модель 'openrouter/…' вместо уровня."),
     tag: list[str] = typer.Option(None, "--tag", help="Метка k=v для учёта расходов; можно несколько."),
