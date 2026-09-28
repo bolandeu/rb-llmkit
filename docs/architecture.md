@@ -18,6 +18,7 @@ src/llmkit/
     chatgpt_auth.py вход OAuth Codex, файл токенов, обновление под замком
     chatgpt.py      Responses API chatgpt.com/backend-api/codex, SSE
     claude_cli.py   вызов `claude -p`, чистое окружение, kill группы процессов
+    decisions.py    модели решений OpenRouter (`LlmKit.decide`), POST на httpx
   cli/          команда `llm` — см. cli-conventions.md
 scripts/smoke.py  реальные вызовы провайдеров (фаза 0)
 ```

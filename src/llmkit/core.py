@@ -8,7 +8,7 @@ import logging
 import sys
 import time
 from collections import Counter
-from collections.abc import Callable, Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -19,7 +19,7 @@ from . import chain as chain_mod
 from . import config as config_mod
 from . import providers as providers_mod
 from .cache import Cache
-from .config import Config
+from .config import DECIDE_LEVEL, Config
 from .errors import AllModelsFailed, ConfigError, KeyMissing, LlmKitError
 from .usage import Usage
 
@@ -83,6 +83,7 @@ class Answer:
     warnings: list[str] = field(default_factory=list)
     error: str | None = None
     task_id: str | None = None
+    served_model: str = ""  # версия, которую назвал провайдер (за алиасом вида `~…-latest`)
 
     @property
     def ok(self) -> bool:
@@ -114,6 +115,7 @@ class _Outcome:
     completion_tokens: int = 0
     cost_usd: float = 0.0
     cost_known: bool = True
+    served_model: str = ""
 
 
 async def _sleep(seconds: float) -> None:
@@ -208,6 +210,7 @@ class LlmKit:
         tags: dict[str, str] | None = None,
         completion: Callable[..., Any] | None = None,
         instructor_factory: Callable[[Callable[..., Any], str], Any] | None = None,
+        decisions: Callable[..., Any] | None = None,
         level: str | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
@@ -244,6 +247,7 @@ class LlmKit:
         )
         self.usage = Usage(self.config.usage_path())
         self._completion = completion
+        self._decisions = decisions
         self._instructor_factory = instructor_factory or _default_instructor_factory
         self._instructor_clients: dict[tuple[str, Any], Any] = {}
         self._stats = Stats()
@@ -300,6 +304,52 @@ class LlmKit:
                 )
                 return self._done(answer, started, position, tags)
 
+        async def invoke(call: providers_mod.ModelCall) -> _Outcome:
+            outcome = await self._call_model(call, messages, task, settings)
+            key = cache_keys.get(call.ref)
+            if cache_enabled and key:
+                await self.cache.aset(key, call.ref, outcome.cache_value)
+            return outcome
+
+        return await self._through_chain(task, chain, tags, level, started, attempts, warnings, invoke)
+
+    async def decide(
+        self, state: str, questions: dict[str, Any], *, level: str | None = None, **task_kw: Any
+    ) -> Answer:
+        """Модель решений OpenRouter: вероятности по типизированным вопросам о состоянии.
+
+        `data` — словарь `answers` из ответа как есть, `served_model` — версия,
+        которая реально ответила. Кэша нет: ответ зависит от состояния. Цепочка —
+        уровень `decide` (или `level`/`chain`), только модели провайдера kind=openrouter.
+        """
+        task = Task(level=level or DECIDE_LEVEL, **task_kw)
+        started = time.perf_counter()
+        chain = chain_mod.resolve(self.config, chain=task.chain, level=task.level)
+        for ref in chain:
+            provider, _ = providers_mod.split_ref(ref)
+            if self.config.provider(provider).kind != "openrouter":
+                raise ConfigError(f"decide: модель {ref!r} не у OpenRouter — эндпоинт решений есть только там")
+        timeout = self.config.defaults.timeout if task.timeout is None else task.timeout
+        tags = {**self.tags, **task.tags}
+
+        async def invoke(call: providers_mod.ModelCall) -> _Outcome:
+            return await self._call_decisions(call, state, questions, timeout)
+
+        level_name = None if task.chain else task.level
+        return await self._through_chain(task, chain, tags, level_name, started, [], [], invoke)
+
+    async def _through_chain(
+        self,
+        task: Task,
+        chain: list[str],
+        tags: dict[str, str],
+        level: str | None,
+        started: float,
+        attempts: list[Attempt],
+        warnings: list[str],
+        invoke: Callable[[providers_mod.ModelCall], Awaitable[_Outcome]],
+    ) -> Answer:
+        """Сетевые попытки по цепочке: ретраи, журнал, бюджет; всё упало — default или AllModelsFailed."""
         budget = await self._budget_tracker(tags)
         for position, ref in enumerate(chain):
             try:
@@ -314,7 +364,7 @@ class LlmKit:
                 warnings.extend(budget.check())
                 begin = time.perf_counter()
                 try:
-                    outcome = await self._call_model(call, messages, task, settings)
+                    outcome = await invoke(call)
                 except Exception as exc:
                     error_type = chain_mod.classify(exc)
                     if error_type is None:
@@ -367,10 +417,8 @@ class LlmKit:
                     cost_usd=outcome.cost_usd,
                     cost_known=outcome.cost_known,
                     latency_ms=latency,
+                    served_model=outcome.served_model or None,
                 )
-                key = cache_keys.get(call.ref)
-                if cache_enabled and key:
-                    await self.cache.aset(key, call.ref, outcome.cache_value)
                 answer = Answer(
                     data=outcome.data,
                     source="llm",
@@ -383,6 +431,7 @@ class LlmKit:
                     cost_known=outcome.cost_known,
                     warnings=warnings,
                     task_id=task.id,
+                    served_model=outcome.served_model,
                 )
                 return self._done(answer, started, position, tags)
 
@@ -492,6 +541,11 @@ class LlmKit:
         from ._sync import run
 
         return run(self.ask_many(tasks, **kwargs))
+
+    def decide_sync(self, state: str, questions: dict[str, Any], **kwargs: Any) -> Answer:
+        from ._sync import run
+
+        return run(self.decide(state, questions, **kwargs))
 
     async def aclose(self) -> None:
         """Ресурсов, живущих между вызовами, нет; метод есть для симметрии API."""
@@ -737,9 +791,46 @@ class LlmKit:
                 log.debug("completion_cost для %s не сработал: %s", call.ref, exc)
         if cost > 0:
             return cost, True
+        return self._unknown_price(call, prompt_tokens, completion_tokens)
+
+    @staticmethod
+    def _unknown_price(call: providers_mod.ModelCall, prompt_tokens: int, completion_tokens: int) -> tuple[float, bool]:
+        """Цены нет: без токенов — ноль, иначе «неизвестно» и один варн на модель."""
         if prompt_tokens == 0 and completion_tokens == 0:
             return 0.0, True
         if call.ref not in _warned_prices:
             _warned_prices.add(call.ref)
             log.warning("цена модели %s неизвестна: расход не учитывается", call.ref)
         return 0.0, False
+
+    async def _call_decisions(
+        self, call: providers_mod.ModelCall, state: str, questions: dict[str, Any], timeout: float
+    ) -> _Outcome:
+        # Подмена из тестов → транспорт эндпоинта решений.
+        decide = self._decisions
+        if decide is None:
+            from .transports import decisions
+
+            decide = decisions.adecide
+        body = await decide(model=call.model, state=state, questions=questions, timeout=timeout, **call.params)
+        usage = body.get("usage") or {}
+        prompt_tokens = int(usage.get("input_tokens") or 0)
+        completion_tokens = int(usage.get("output_tokens") or 0)
+        # Цену OpenRouter отдаёт в ответе; нет её — цены из конфига.
+        if usage.get("cost") is not None:
+            cost, known = float(usage["cost"]), True
+        else:
+            from_config = providers_mod.price_from_config(self.config, call, prompt_tokens, completion_tokens)
+            if from_config is not None:
+                cost, known = from_config, True
+            else:
+                cost, known = self._unknown_price(call, prompt_tokens, completion_tokens)
+        return _Outcome(
+            data=body["answers"],
+            cache_value=None,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            cost_usd=cost,
+            cost_known=known,
+            served_model=str(body.get("model") or ""),
+        )

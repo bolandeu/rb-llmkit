@@ -259,6 +259,31 @@ answers = await kit.ask_many(
 )
 ```
 
+### Модели решений: `decide`
+
+Эндпоинт OpenRouter `/api/alpha/decisions`: модель отвечает на узкие
+типизированные вопросы о состоянии (`noul`, `choice`, `score`) вероятностями, а
+не текстом. Ключ, ретраи, журнал и бюджет — как у `ask`; кэша нет.
+
+```python
+answer = await kit.decide(
+    "Help! My payouts have been failing for 3 days.",
+    {
+        "is_urgent": {
+            "type": "noul",
+            "instructions": "Does this message convey urgency?",
+            "criteria": {"true": "Explicitly time-sensitive", "false": "No urgency expressed"},
+        }
+    },
+)
+answer.data["is_urgent"]["noul"]  # 0.95 — словарь answers из ответа как есть
+answer.served_model  # "typesafe/jev-1.13-20260917" — кто ответил за алиасом
+```
+
+Цепочка — уровень `decide` (по умолчанию `openrouter/~typesafe/jev-latest`),
+допустимы только модели провайдера `kind = "openrouter"`. Цена берётся из
+`usage.cost` ответа.
+
 ### Расходы
 
 ```python

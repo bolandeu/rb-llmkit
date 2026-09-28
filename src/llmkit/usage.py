@@ -39,7 +39,8 @@ CREATE TABLE IF NOT EXISTS calls (
     cost_usd REAL,
     cost_known INTEGER,
     latency_ms INTEGER,
-    pid INTEGER
+    pid INTEGER,
+    served_model TEXT
 );
 CREATE INDEX IF NOT EXISTS calls_ts ON calls (ts);
 CREATE INDEX IF NOT EXISTS calls_status ON calls (status);
@@ -116,6 +117,11 @@ class Usage:
             with self._connect() as connection:
                 _set_wal(connection)
                 connection.executescript(SCHEMA)
+                columns = {row[1] for row in connection.execute("PRAGMA table_info(calls)")}
+                if "served_model" not in columns:
+                    # База до v0.4.2. Соседний процесс мог добавить колонку первым — не ошибка.
+                    with contextlib.suppress(sqlite3.OperationalError):
+                        connection.execute("ALTER TABLE calls ADD COLUMN served_model TEXT")
             self._ready = True
 
     def record(
@@ -134,13 +140,14 @@ class Usage:
         cost_usd: float = 0.0,
         cost_known: bool = True,
         latency_ms: int = 0,
+        served_model: str | None = None,
     ) -> None:
         self._prepare()
         with self._connect() as connection:
             connection.execute(
                 "INSERT INTO calls (ts, task_id, tags, level, model, provider, status, error_type, attempt,"
-                " prompt_tokens, completion_tokens, cost_usd, cost_known, latency_ms, pid)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                " prompt_tokens, completion_tokens, cost_usd, cost_known, latency_ms, pid, served_model)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     time.time(),
                     task_id,
@@ -157,6 +164,7 @@ class Usage:
                     int(cost_known),
                     latency_ms,
                     os.getpid(),
+                    served_model,
                 ),
             )
 

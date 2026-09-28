@@ -126,6 +126,9 @@ invalid_output = 2
 | chatgpt | не LiteLLM: `transports/chatgpt.acompletion` | вход `llm auth login <провайдер>`, файл токенов 0600; ключ не нужен |
 | claude_cli | не LiteLLM: `transports/claude_cli.acompletion` | вход держит Claude Code CLI; `CLAUDE_COMMAND` — другой бинарь |
 
+Модели решений (`LlmKit.decide`, раздел 5) — не LiteLLM: `transports/decisions.adecide`,
+POST на `https://openrouter.ai/api/alpha/decisions` с ключом провайдера `kind = "openrouter"`.
+
 Провайдеры по подписке: режим Instructor `JSON_SCHEMA` (схема уходит нативно),
 стоимость вызова 0 и `cost_known = true`, нет входа — `LoginMissing` (подкласс
 `KeyMissing`, тип ошибки `auth`, код выхода CLI 3).
@@ -192,6 +195,7 @@ class Answer:
     warnings: list[str] = field(default_factory=list)   # бюджет, неизвестная цена
     error: str | None = None    # заполнен, если source == "default"
     task_id: str | None = None
+    served_model: str = ""      # версия, которую назвал провайдер (сейчас — только decide)
     @property
     def ok(self) -> bool: return self.source in ("llm", "cache")
 
@@ -207,10 +211,18 @@ async def ask_many(self, tasks: Sequence[Task], *, concurrency: int | None = Non
     # порядок результатов = порядок задач; упавшая задача → Answer(source="default", error=...)
     # даже без default (data=None), чтобы пачка не рвалась; raise_on_error=True — бросать AllModelsFailed
     # семафор concurrency; кэш делает возобновление после сбоя бесплатным
+async def decide(self, state: str, questions: dict, *, level: str | None = None,
+                 **task_kw) -> Answer
+    # модели решений OpenRouter: data — словарь answers из ответа как есть
+    # (noul — вероятность 0..1; choice/score — с probabilities, confidence);
+    # level по умолчанию "decide", только модели kind=openrouter (иначе ConfigError);
+    # task_kw — chain, tags, default, timeout, retry, id; кэша нет — ответ зависит от состояния;
+    # цена — usage.cost ответа, иначе prices конфига; served_model — версия за алиасом
 # --- sync-обёртки ---
 def ask_sync(self, task) -> Answer
 def generate_sync(self, prompt, **kw) -> str | None
 def ask_many_sync(self, tasks, **kw) -> list[Answer]
+def decide_sync(self, state, questions, **kw) -> Answer
 # --- прочее ---
 @property
 def stats(self) -> Stats     # за время жизни экземпляра: calls, cached, failed, fallbacks,
@@ -275,8 +287,10 @@ SQLite `usage.sqlite`, `journal_mode=WAL`. Таблица `calls`:
 id INTEGER PK, ts REAL, task_id TEXT, tags TEXT (JSON), level TEXT,
 model TEXT, provider TEXT, status TEXT ('ok'|'cache'|'failed'),
 error_type TEXT, attempt INTEGER, prompt_tokens INT, completion_tokens INT,
-cost_usd REAL, cost_known INT, latency_ms INT, pid INT
+cost_usd REAL, cost_known INT, latency_ms INT, pid INT, served_model TEXT
 ```
+`served_model` — версия, которую назвал провайдер (нужна за алиасами вида `~…-latest`, чтобы
+видеть смену модели); в базу до v0.4.2 колонка добавляется при первом открытии.
 Одна строка на попытку. Индексы: `ts`, `status`. Отчёты через `json_extract(tags, '$.tool')`.
 
 API:

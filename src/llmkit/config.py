@@ -25,6 +25,9 @@ APP_NAME = "llmkit"
 # Имя метки: только то, что безопасно подставить в json_extract(tags, '$.имя').
 TAG_NAME_RE = re.compile(r"^[A-Za-z0-9_]+$")
 
+# Уровень `LlmKit.decide` по умолчанию: модели решений OpenRouter.
+DECIDE_LEVEL = "decide"
+
 # Провайдер и уровни «из коробки»: без своего конфига kit всё равно работает.
 DEFAULTS: dict[str, Any] = {
     "providers": {
@@ -48,6 +51,7 @@ DEFAULTS: dict[str, Any] = {
         "cheap": ["ollama/gpt-oss:120b", "openrouter/openai/gpt-4o-mini"],
         "judge": ["openrouter/anthropic/claude-sonnet-4", "openrouter/openai/gpt-4o"],
         "strong": ["openrouter/anthropic/claude-opus-4"],
+        DECIDE_LEVEL: ["openrouter/~typesafe/jev-latest"],
     },
     "budget": {"daily_usd": 20.0},
 }
