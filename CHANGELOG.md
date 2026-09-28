@@ -8,6 +8,14 @@
 
 <!-- towncrier release notes start -->
 
+## [0.4.2] - 2026-09-28
+
+### Added
+
+- `LlmKit.decide(state, questions)` / `decide_sync` — модели решений OpenRouter (`/api/alpha/decisions`): вероятности по типизированным вопросам вместо текста. Тот же ключ OpenRouter, цепочка и ретраи, цена из ответа в журнал. Уровень `decide` по умолчанию — `openrouter/~typesafe/jev-latest`. Версия, которая реально ответила, — в `Answer.served_model` и новой колонке `served_model` журнала (старые базы дополняются сами).
+- Команда `llm decide "состояние" --questions q.json [--json]` — вызов моделей решений из CLI; в `--json` конверт с `served_model`.
+
+
 ## [0.4.1] - 2026-09-27
 
 ### Changed
