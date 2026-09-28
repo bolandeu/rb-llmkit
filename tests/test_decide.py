@@ -142,6 +142,41 @@ def test_decide_sync():
     assert kit.decide_sync("s", QUESTIONS).data == ANSWERS
 
 
+def test_cli_decide_json(monkeypatch, tmp_path):
+    from typer.testing import CliRunner
+
+    from llmkit.cli import runtime
+    from llmkit.cli.main import app
+
+    fake = FakeDecisions()
+    monkeypatch.setattr(runtime, "build_kit", lambda **kwargs: LlmKit(decisions=fake, **kwargs))
+    questions = tmp_path / "q.json"
+    questions.write_text(json.dumps(QUESTIONS), encoding="utf-8")
+
+    result = CliRunner().invoke(app, ["decide", "Payouts failing", "--questions", str(questions), "--json"])
+
+    assert result.exit_code == 0, result.output
+    envelope = json.loads(result.stdout)
+    assert envelope["data"] == ANSWERS
+    assert envelope["served_model"] == "typesafe/jev-1.13-20260917"
+    assert fake.calls[0]["state"] == "Payouts failing"
+
+
+def test_cli_decide_rejects_non_openrouter_model(monkeypatch, tmp_path):
+    from typer.testing import CliRunner
+
+    from llmkit.cli import runtime
+    from llmkit.cli.main import app
+
+    monkeypatch.setattr(runtime, "build_kit", lambda **kwargs: LlmKit(decisions=FakeDecisions(), **kwargs))
+    questions = tmp_path / "q.json"
+    questions.write_text(json.dumps(QUESTIONS), encoding="utf-8")
+
+    result = CliRunner().invoke(app, ["decide", "s", "-q", str(questions), "--model", "a/m1"])
+
+    assert result.exit_code == 2
+
+
 def test_old_usage_db_gets_served_model_column(tmp_path):
     path = tmp_path / "old.sqlite"
     with sqlite3.connect(path) as connection:

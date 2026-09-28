@@ -118,3 +118,54 @@ def json_command(
             _answer_payload(answer),
             lambda: print(json.dumps(answer.data, ensure_ascii=False, indent=2)),
         )
+
+
+@app.command("decide")
+def decide(
+    ctx: typer.Context,
+    text: str = typer.Argument(None, help="Состояние, о котором спрашиваем; без него читается stdin."),
+    questions: Path = typer.Option(..., "--questions", "-q", help="JSON-файл вопросов: имя → type/instructions/criteria."),
+    level: str = typer.Option(None, "--level", "-l", help="Уровень из конфига; по умолчанию decide."),
+    model: str = typer.Option(None, "--model", "-m", help="Модель 'openrouter/…' вместо уровня."),
+    tag: list[str] = typer.Option(None, "--tag", help="Метка k=v для учёта расходов; можно несколько."),
+    timeout: float = typer.Option(None, "--timeout", help="Таймаут вызова в секундах; по умолчанию из конфига."),
+    no_retry: bool = typer.Option(False, "--no-retry", help="Не повторять на сбойной модели, сразу к следующей."),
+    json_output: bool = JsonOption,
+) -> None:
+    """Спросить модель решений OpenRouter: вероятности вместо текста.
+
+    Вопросы типов noul (да/нет), choice и score описываются в JSON-файле, как
+    в API `/api/alpha/decisions`. В stdout — словарь answers; в режиме
+    `--json` — конверт с `data`, ценой и `served_model` (версия за алиасом).
+    Коды выхода: 0 — ответ получен, 2 — неверные аргументы или модель не
+    OpenRouter, 3 — нет ключа, 5 — все модели упали.
+
+    Example: llm decide "Payouts failing for 3 days" --questions q.json --json
+    """
+    enable_json(ctx, json_output)
+    with guard(ctx):
+        try:
+            loaded = json.loads(questions.read_text(encoding="utf-8"))
+        except OSError as exc:
+            raise bad_arguments(f"вопросы не читаются: {exc}") from exc
+        except ValueError as exc:
+            raise bad_arguments(f"вопросы не разбираются как JSON: {exc}") from exc
+        if not isinstance(loaded, dict) or not loaded:
+            raise bad_arguments("вопросы должны быть непустым JSON-объектом")
+        kit = runtime.build_kit()
+        answer = kit.decide_sync(
+            runtime.read_text(text),
+            loaded,
+            level=level,
+            chain=[model] if model else None,
+            tags=runtime.parse_tags(tag),
+            timeout=timeout,
+            retry=not no_retry,
+        )
+        for warning in answer.warnings:
+            typer.echo(warning, err=True)
+        emit(
+            ctx,
+            {**_answer_payload(answer), "served_model": answer.served_model},
+            lambda: print(json.dumps(answer.data, ensure_ascii=False, indent=2)),
+        )
