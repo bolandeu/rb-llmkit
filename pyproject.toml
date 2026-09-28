@@ -50,6 +50,13 @@ cache-keys = [{ file = "pyproject.toml" }, { git = { commit = true, tags = true 
 # команды: у llmkit они в src/*/cli/*.py (не commands/), регистрация — `@app.command`.
 commands = "src/*/cli/*.py"
 
+# Внешние программы (стандарт §12); гейт сверяет список с src/ в обе стороны.
+[[tool.rb.external]]
+name = "claude"
+required = false
+check = "claude --version"
+why = "провайдер claude-cli (подписка Claude): transports/claude_cli.py, `llm auth login/logout claude`; путь переопределяет CLAUDE_COMMAND"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/llmkit"]
 
