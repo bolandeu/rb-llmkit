@@ -105,6 +105,14 @@ llm keys set openrouter
 ключа — `curl -H "Authorization: Bearer $CCODE_API_KEY" https://all-api.ccode.dev/v1/models`.
 Цены шлюза LiteLLM не знает: для точного учёта задайте `[providers.ccode.prices]`.
 
+Шлюз [AnyModel](https://anymodel.org/api-docs.md) — так же, `openai_compatible`
+(`https://anymodel.org/v1`): `llm keys set anymodel` или `export ANYMODEL_API_KEY=...`,
+затем `llm ask "…" -m anymodel/am/gpt-5.6-terra`. Id модели — ровно как в каталоге,
+с префиксом (`am/…`, `cc/…`): голый id — другой маршрут и другая цена. Каталог —
+`curl -H "Authorization: Bearer $ANYMODEL_API_KEY" https://anymodel.org/v1/models`.
+Шлюз считает в своих «токенах баланса», а не в $: для учёта в $ задайте
+`[providers.anymodel.prices]`.
+
 Стандартные имена переменных по виду провайдера: `OPENROUTER_API_KEY`,
 `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `OLLAMA_API_KEY`;
 `api_key_env` в конфиге перекрывает. В связке ключей значение лежит как
@@ -148,7 +156,8 @@ Support/llmkit/config.toml`, на Linux — `~/.config/llmkit/config.toml` ил�
 заменяет поиск файлов целиком — удобно для переносимого конфига между машинами.
 
 Встроенные дефолты (`config.py: DEFAULTS`) уже включают провайдеров `openrouter`,
-`ollama`, `ccode` (шлюз ccode.dev, ключ `CCODE_API_KEY`), `chatgpt` и `claude`
+`ollama`, `ccode` (шлюз ccode.dev, ключ `CCODE_API_KEY`), `anymodel` (шлюз
+anymodel.org, ключ `ANYMODEL_API_KEY`), `chatgpt` и `claude`
 (подписки) и уровни `cheap`/`judge`/`strong` с примерными моделями — свой
 `config.toml` не обязателен, если устраивает пример и ключи уже заведены.
 

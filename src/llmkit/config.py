@@ -41,6 +41,14 @@ DEFAULTS: dict[str, Any] = {
             # Вызовы инструментов шлюз поддерживает для всех вендоров, json_object — не гарантирован.
             "mode": "TOOLS",
         },
+        # AnyModel (anymodel.org): OpenAI-совместимый шлюз; id моделей с префиксом, "am/gpt-5.6-terra".
+        "anymodel": {
+            "kind": "openai_compatible",
+            "base_url": "https://anymodel.org/v1",
+            "api_key_env": "ANYMODEL_API_KEY",
+            # Свои функции шлюз передаёт всем вендорам, json_object — не гарантирован.
+            "mode": "TOOLS",
+        },
         # Подписки: вход через `llm auth login <провайдер>`, ключ не нужен.
         "chatgpt": {"kind": "chatgpt", "requires_key": False},
         "claude": {"kind": "claude_cli", "requires_key": False},

@@ -19,6 +19,7 @@ CONFIG = Config.model_validate(
             "ollama": {"kind": "ollama", "base_url": "https://ollama.com"},
             "local": {"kind": "ollama", "base_url": "http://localhost:11434", "requires_key": False},
             "ccode": config_mod.DEFAULTS["providers"]["ccode"],
+            "anymodel": config_mod.DEFAULTS["providers"]["anymodel"],
             "deepseek": {
                 "kind": "openai_compatible",
                 "base_url": "https://api.deepseek.com/v1",
@@ -37,11 +38,13 @@ ENV = {
     "OLLAMA_API_KEY": "k-ol",
     "DEEPSEEK_API_KEY": "k-ds",
     "CCODE_API_KEY": "k-cc",
+    "ANYMODEL_API_KEY": "k-am",
 }
 
 CASES = [
     ("openrouter/openai/gpt-4o-mini", "openrouter/openai/gpt-4o-mini", None, "k-or", "TOOLS"),
     ("ccode/claude-sonnet-4-5", "openai/claude-sonnet-4-5", "https://all-api.ccode.dev/v1", "k-cc", "TOOLS"),
+    ("anymodel/am/gpt-5.6-terra", "openai/am/gpt-5.6-terra", "https://anymodel.org/v1", "k-am", "TOOLS"),
     ("openai/gpt-4o", "gpt-4o", None, "k-oa", "TOOLS"),
     ("anthropic/claude-sonnet-4", "anthropic/claude-sonnet-4", None, "k-an", "TOOLS"),
     ("gemini/gemini-2.0-flash", "gemini/gemini-2.0-flash", None, "k-ge", "TOOLS"),
