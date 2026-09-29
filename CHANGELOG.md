@@ -8,6 +8,13 @@
 
 <!-- towncrier release notes start -->
 
+## [0.4.3] - 2026-09-29
+
+### Added
+
+- **Провайдер `anymodel`** во встроенных дефолтах: шлюз anymodel.org как `openai_compatible` (`https://anymodel.org/v1`, ключ `ANYMODEL_API_KEY`, режим `TOOLS`). Модель — id из каталога шлюза с префиксом: `anymodel/am/gpt-5.6-terra`.
+
+
 ## [0.4.2] - 2026-09-28
 
 ### Added

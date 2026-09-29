@@ -1,1 +1,0 @@
-**Провайдер `anymodel`** во встроенных дефолтах: шлюз anymodel.org как `openai_compatible` (`https://anymodel.org/v1`, ключ `ANYMODEL_API_KEY`, режим `TOOLS`). Модель — id из каталога шлюза с префиксом: `anymodel/am/gpt-5.6-terra`.
