@@ -48,3 +48,13 @@ uv run python -X importtime -c "import llmkit" 2>&1 | tail -1   # должно �
 - [docs/testing.md](docs/testing.md) — как писать тесты (без сети).
 - [docs/cli-conventions.md](docs/cli-conventions.md) — паттерн CLI-команд,
   коды выхода.
+
+## Каждое заметное изменение выходит релизом
+
+Серверы, другие инструменты и Mac ставят только по тегам, не из `main`:
+влитое без релиза изменение для них не существует. Изменение с фрагментом
+changelog закончено только после релиза: влить в `main` →
+`uv run scripts/release.py patch|minor|major` → попросить пользователя
+сделать push с `--follow-tags` → назвать новый тег в отчёте. Служебные коммиты
+(без фрагмента) ждут следующего релиза. Не оставлять фрагмент на `main` без
+релиза, не назвав причину (`~/Projects/tools/docs/standard-release.md` §3).
