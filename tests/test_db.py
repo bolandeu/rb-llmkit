@@ -95,12 +95,17 @@ def test_sqlite_is_created_and_migrated_on_open(local_path: Path) -> None:
     assert local_path.is_file()
 
 
-def test_every_table_has_a_primary_key() -> None:
-    """Без PRIMARY KEY Directus таблицу не покажет и не даст править — и в метаданных, и после миграций."""
-    assert all(table.primary_key.columns for table in tables.metadata.sorted_tables)
+def test_every_table_has_a_single_column_primary_key() -> None:
+    """Без PRIMARY KEY Directus таблицу не покажет и не даст править, составной он не поддерживает.
+
+    Ключ — суррогатный `id`; естественный ключ — UNIQUE. Проверяются и метаданные, и база после миграций.
+    """
+    for table in tables.metadata.sorted_tables:
+        assert len(table.primary_key.columns) == 1, f"{table.name}: PRIMARY KEY должен быть из одной колонки"
     inspector = sa.inspect(db.open_db())
     for name in inspector.get_table_names():
-        assert inspector.get_pk_constraint(name)["constrained_columns"], f"{name} без PRIMARY KEY"
+        columns = inspector.get_pk_constraint(name)["constrained_columns"]
+        assert len(columns) == 1, f"{name}: PRIMARY KEY должен быть из одной колонки, а он {columns}"
 
 
 def test_tables_match_the_migrations() -> None:
