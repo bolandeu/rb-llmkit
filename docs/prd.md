@@ -31,7 +31,8 @@ advisory на PyPI/GitHub.
 - Python >= 3.11, `uv`, `hatchling`, `src/llmkit/`. Тесты `pytest` + `pytest-asyncio`.
 - Зависимости: `litellm==1.102.0`, `instructor>=1.17`, `pydantic>=2`, `keyring>=25`,
   `platformdirs>=4`, `typer>=0.12`, `rich>=13`, `tomli-w>=1`, `httpx>=0.27` (транспорт
-  подписки ChatGPT; уже приходит с LiteLLM, указан явно).
+  подписки ChatGPT; уже приходит с LiteLLM, указан явно), `sqlalchemy>=2.0`, `alembic>=1.14`,
+  `psycopg[binary]>=3.2` (журнал расходов в общей PostgreSQL, слой БД шаблона cli-generator).
   Extra `serve`: `fastapi`, `uvicorn`.
 - Структура:
 
@@ -43,7 +44,8 @@ src/llmkit/
   providers.py     # описание провайдера → аргументы litellm
   chain.py         # цепочки, классификация ошибок, политика ретраев
   cache.py         # SQLite-кэш ответов
-  usage.py         # SQLite-журнал вызовов, бюджеты, отчёты
+  usage.py         # журнал вызовов (llmkit_calls), бюджеты, отчёты
+  db/              # слой БД: PostgreSQL или SQLite, миграции Alembic
   core.py          # LlmKit: ask / generate / ask_many + sync-обёртки
   errors.py
   _sync.py         # запуск корутины из синхронного кода
@@ -281,17 +283,20 @@ TTL из конфига; протухшие записи удаляются пр
 
 ## 8. Учёт и бюджет (`usage.py`)
 
-SQLite `usage.sqlite`, `journal_mode=WAL`. Таблица `calls`:
+База llmkit (`llmkit.db`): общая PostgreSQL, если задан `LLMKIT_DATABASE_URL`, иначе SQLite
+`usage.sqlite` (`journal_mode=WAL`). Таблица `llmkit_calls` (до v0.5.0 — `calls`; миграция
+0001 переименовывает её в локальной SQLite вместе со строками):
 
 ```
-id INTEGER PK, ts REAL, task_id TEXT, tags TEXT (JSON), level TEXT,
+id INTEGER PK, ts REAL, task_id TEXT, tags JSON (JSONB в PostgreSQL), level TEXT,
 model TEXT, provider TEXT, status TEXT ('ok'|'cache'|'failed'),
 error_type TEXT, attempt INTEGER, prompt_tokens INT, completion_tokens INT,
 cost_usd REAL, cost_known INT, latency_ms INT, pid INT, served_model TEXT
 ```
 `served_model` — версия, которую назвал провайдер (нужна за алиасами вида `~…-latest`, чтобы
-видеть смену модели); в базу до v0.4.2 колонка добавляется при первом открытии.
-Одна строка на попытку. Индексы: `ts`, `status`. Отчёты через `json_extract(tags, '$.tool')`.
+видеть смену модели); базам до v0.4.2 колонку добавляет миграция 0001.
+Одна строка на попытку. Индексы: `ts`, `status`. Отчёты группируются по меткам из `tags`.
+Другие инструменты читают представление `llmkit_v1_calls` (без `pid`, `ts` → `called_at`).
 
 API:
 ```python

@@ -376,8 +376,8 @@ async def test_cache_row_is_recorded_as_first_attempt():
     instance, _ = kit([response()])
     await instance.ask(Task(user="вопрос"))
     await instance.ask(Task(user="вопрос"))
-    with instance.usage._connect() as connection:
-        rows = connection.execute("SELECT status, attempt FROM calls ORDER BY id").fetchall()
+    with instance.usage._db().connect() as connection:
+        rows = connection.exec_driver_sql("SELECT status, attempt FROM llmkit_calls ORDER BY id").fetchall()
     assert rows == [("ok", 0), ("cache", 0)]
 
 

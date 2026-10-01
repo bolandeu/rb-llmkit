@@ -62,7 +62,7 @@ def usage_rows(kit: LlmKit) -> list[tuple]:
     with sqlite3.connect(kit.config.usage_path()) as connection:
         return connection.execute(
             "SELECT model, status, level, attempt, prompt_tokens, completion_tokens, cost_usd, served_model"
-            " FROM calls ORDER BY id"
+            " FROM llmkit_calls ORDER BY id"
         ).fetchall()
 
 
@@ -189,7 +189,7 @@ def test_old_usage_db_gets_served_model_column(tmp_path):
     Usage(path).record(model="openrouter/x", provider="openrouter", status="ok", served_model="x-1")
 
     with sqlite3.connect(path) as connection:
-        assert connection.execute("SELECT served_model FROM calls").fetchall() == [("x-1",)]
+        assert connection.execute("SELECT served_model FROM llmkit_calls").fetchall() == [("x-1",)]
 
 
 # --- транспорт ---

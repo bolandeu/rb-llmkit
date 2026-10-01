@@ -5,7 +5,8 @@ stdout — только данные (в режиме `--json` там же ле�
 stderr — диагностика: строки `Ошибка:`, предупреждения, логи.
 
 Коды выхода (conventions.md cli-builder): 0 — успех, 1 — непредвиденная
-ошибка, 2 — неверные аргументы, 3 — нет авторизации, 5 — ошибка провайдера.
+ошибка (и база не смигрирована), 2 — неверные аргументы, 3 — нет авторизации,
+5 — ошибка провайдера или база недоступна, 6 — базу смигрировал более новый релиз.
 """
 
 import json
@@ -17,7 +18,7 @@ from contextlib import contextmanager
 import typer
 from rich.console import Console
 
-from ..errors import AllModelsFailed, ConfigError, KeyMissing, LoginMissing
+from ..errors import AllModelsFailed, ConfigError, DatabaseError, KeyMissing, LoginMissing
 
 # Консоли: данные — в stdout, всё остальное — в stderr.
 out = Console()
@@ -80,6 +81,8 @@ def emit(ctx: typer.Context, payload: dict, render: Callable[[], None] | None = 
 
 def _classify(exc: Exception) -> CliError:
     """Ошибки ядра → коды конверта (см. conventions.md)."""
+    if isinstance(exc, DatabaseError):
+        return CliError(exc.code, exc.message, exc.action, exc.exit_code)
     if isinstance(exc, LoginMissing):
         return CliError("AUTH_REQUIRED", f"нет входа в подписку для провайдера {exc.provider}", exc.action, 3)
     if isinstance(exc, KeyMissing):

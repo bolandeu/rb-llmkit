@@ -15,7 +15,7 @@
 | Ретраи по типу ошибки | таймаут, 429 и 5xx повторяются на той же модели, отказ и «слишком длинный контекст» — сразу следующая |
 | JSON по схеме | pydantic-класс через [Instructor](https://github.com/567-labs/instructor) или готовая JSON Schema (dict) |
 | Кэш | SQLite, ключ по конкретной модели: ответ дешёвой модели не выдаётся за ответ сильной |
-| Учёт | SQLite-журнал: одна строка на попытку, отчёты по меткам (`tool`, `niche`, …) |
+| Учёт | Журнал: одна строка на попытку, отчёты по меткам (`tool`, `niche`, …); SQLite или общая PostgreSQL (`LLMKIT_DATABASE_URL`, `llm db`) |
 | Бюджеты | предупреждения при превышении дневного лимита; работа не прерывается |
 
 ## Установка
@@ -80,6 +80,9 @@ llm auth login chatgpt               # вход в подписку ChatGPT (к�
 llm auth status --check             # все доступы (ключи и подписки): откуда и работают ли; 3 — есть неверные
 llm cost --by tool,niche --since 7d  # отчёт из журнала вызовов
 llm config init                      # шаблон конфига; path | show
+llm db status                        # база журнала: SQLite или PostgreSQL (LLMKIT_DATABASE_URL), ревизия схемы
+llm db upgrade                       # миграции общей PostgreSQL (неявно она не мигрируется)
+llm db import-sqlite --dry-run       # разовый переезд локального журнала в PostgreSQL
 ```
 
 Полный список команд и флагов — `llm --help` и `llm <команда> --help`; справка

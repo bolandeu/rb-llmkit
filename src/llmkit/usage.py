@@ -1,50 +1,26 @@
 """Журнал вызовов, отчёты и бюджеты (раздел 8).
 
-Одна строка на попытку. Отчёты группируются по меткам через
-`json_extract(tags, '$.<метка>')`.
+Одна строка на попытку, таблица `llmkit_calls` в базе llmkit (`llmkit.db`):
+общая PostgreSQL, если задан `LLMKIT_DATABASE_URL`, иначе локальная SQLite
+(`usage.sqlite`). Отчёты группируются по меткам из JSON-колонки `tags`.
 """
 
 from __future__ import annotations
 
 import asyncio
-import contextlib
-import json
 import os
 import re
-import sqlite3
 import threading
 import time
-from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .config import TAG_NAME_RE
 
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS calls (
-    id INTEGER PRIMARY KEY,
-    ts REAL,
-    task_id TEXT,
-    tags TEXT,
-    level TEXT,
-    model TEXT,
-    provider TEXT,
-    status TEXT,
-    error_type TEXT,
-    attempt INTEGER,
-    prompt_tokens INTEGER,
-    completion_tokens INTEGER,
-    cost_usd REAL,
-    cost_known INTEGER,
-    latency_ms INTEGER,
-    pid INTEGER,
-    served_model TEXT
-);
-CREATE INDEX IF NOT EXISTS calls_ts ON calls (ts);
-CREATE INDEX IF NOT EXISTS calls_status ON calls (status);
-"""
+if TYPE_CHECKING:  # pragma: no cover
+    import sqlalchemy as sa
 
 _SINCE_RE = re.compile(r"^(\d+)([dhw])$")
 
@@ -76,53 +52,29 @@ def parse_since(since: datetime | str | None) -> float | None:
     return (datetime.now(UTC) - timedelta(hours=hours)).timestamp()
 
 
-def _set_wal(connection: sqlite3.Connection) -> None:
-    """WAL — режим файла, он живёт между запусками.
-
-    Смена режима требует эксклюзивной блокировки и, в отличие от обычных
-    запросов, не ждёт busy_timeout: если файл уже открыт другим процессом,
-    SQLite сразу отвечает "database is locked". Режим при этом уже такой,
-    какой нужно, поэтому ошибку глотаем.
-    """
-    with contextlib.suppress(sqlite3.OperationalError):
-        connection.execute("PRAGMA journal_mode=WAL")
-
-
 class Usage:
-    """Журнал вызовов в SQLite."""
+    """Журнал вызовов: `path` — локальная SQLite, когда `LLMKIT_DATABASE_URL` не задан."""
 
     def __init__(self, path: Path) -> None:
         self.path = Path(path)
-        self._ready = False
+        self._engine: sa.Engine | None = None
         self._lock = threading.Lock()
 
-    @contextmanager
-    def _connect(self):
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        connection = sqlite3.connect(self.path, timeout=5.0)
-        try:
-            # Ждать блокировку, а не падать: базу пишут несколько процессов.
-            connection.execute("PRAGMA busy_timeout=5000")
-            yield connection
-            connection.commit()
-        finally:
-            connection.close()
+    def _db(self) -> sa.Engine:
+        """База открывается при первом обращении: SQLite мигрируется, PostgreSQL сверяется."""
+        if self._engine is None:
+            with self._lock:
+                if self._engine is None:  # успели, пока ждали лок
+                    from . import db
 
-    def _prepare(self) -> None:
-        if self._ready:
-            return
+                    self._engine = db.open_db(self.path)
+        return self._engine
+
+    def close(self) -> None:
         with self._lock:
-            if self._ready:  # успели, пока ждали лок
-                return
-            with self._connect() as connection:
-                _set_wal(connection)
-                connection.executescript(SCHEMA)
-                columns = {row[1] for row in connection.execute("PRAGMA table_info(calls)")}
-                if "served_model" not in columns:
-                    # База до v0.4.2. Соседний процесс мог добавить колонку первым — не ошибка.
-                    with contextlib.suppress(sqlite3.OperationalError):
-                        connection.execute("ALTER TABLE calls ADD COLUMN served_model TEXT")
-            self._ready = True
+            if self._engine is not None:
+                self._engine.dispose()
+                self._engine = None
 
     def record(
         self,
@@ -142,58 +94,56 @@ class Usage:
         latency_ms: int = 0,
         served_model: str | None = None,
     ) -> None:
-        self._prepare()
-        with self._connect() as connection:
+        import sqlalchemy as sa
+
+        from .db.tables import calls
+
+        with self._db().begin() as connection:
             connection.execute(
-                "INSERT INTO calls (ts, task_id, tags, level, model, provider, status, error_type, attempt,"
-                " prompt_tokens, completion_tokens, cost_usd, cost_known, latency_ms, pid, served_model)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (
-                    time.time(),
-                    task_id,
-                    json.dumps(tags or {}, ensure_ascii=False),
-                    level,
-                    model,
-                    provider,
-                    status,
-                    error_type,
-                    attempt,
-                    prompt_tokens,
-                    completion_tokens,
-                    cost_usd,
-                    int(cost_known),
-                    latency_ms,
-                    os.getpid(),
-                    served_model,
-                ),
+                sa.insert(calls).values(
+                    ts=time.time(),
+                    task_id=task_id,
+                    tags=tags or {},
+                    level=level,
+                    model=model,
+                    provider=provider,
+                    status=status,
+                    error_type=error_type,
+                    attempt=attempt,
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
+                    cost_usd=cost_usd,
+                    cost_known=int(cost_known),
+                    latency_ms=latency_ms,
+                    pid=os.getpid(),
+                    served_model=served_model,
+                )
             )
 
     async def arecord(self, **kwargs: Any) -> None:
         await asyncio.to_thread(lambda: self.record(**kwargs))
 
-    def _window(self, since: datetime | str | None, until: datetime | str | None) -> tuple[str, list[Any]]:
-        where, params = [], []
+    @staticmethod
+    def _window(since: datetime | str | None, until: datetime | str | None) -> list[Any]:
+        from .db.tables import calls
+
+        where = []
         start = parse_since(since)
         if start is not None:
-            where.append("ts >= ?")
-            params.append(start)
+            where.append(calls.c.ts >= start)
         end = parse_since(until)
         if end is not None:
-            where.append("ts <= ?")
-            params.append(end)
-        return (" WHERE " + " AND ".join(where) if where else ""), params
-
-    _AGGREGATES = (
-        "COUNT(*), SUM(status = 'cache'), SUM(status = 'failed'),"
-        " COALESCE(SUM(prompt_tokens), 0), COALESCE(SUM(completion_tokens), 0), COALESCE(SUM(cost_usd), 0)"
-    )
+            where.append(calls.c.ts <= end)
+        return where
 
     @staticmethod
-    def _json_extract(name: str) -> str:
-        """Фрагмент SQL для метки; имя проверяется, значения идут параметрами."""
+    def _tag(name: str):
+        """Значение метки из JSON `tags`; имя проверяется, хотя в SQL оно идёт параметром."""
+        from .db.tables import calls
+
         if not TAG_NAME_RE.match(name):
             raise ValueError(f"имя метки должно быть [A-Za-z0-9_], получено {name!r}")
-        return "json_extract(tags, '$." + name + "')"
+        return calls.c.tags[name].as_string()
 
     def report(
         self,
@@ -202,18 +152,26 @@ class Usage:
         until: datetime | str | None = None,
     ) -> list[Row]:
         """Агрегаты по меткам за период; без `group_by` — одна общая строка."""
-        self._prepare()
+        import sqlalchemy as sa
+
+        from .db.tables import calls
+
         group_by = tuple(group_by)
-        selects = [self._json_extract(name) for name in group_by]
-        where, params = self._window(since, until)
-        columns = ", ".join([*selects, self._AGGREGATES])
-        # Имена меток уже проверены в _json_extract, значения идут параметрами.
-        query = "SELECT " + columns + " FROM calls" + where  # noqa: S608
-        if selects:
-            query += " GROUP BY " + ", ".join(str(i + 1) for i in range(len(selects)))
-            query += f" ORDER BY {len(selects) + 6} DESC"
-        with self._connect() as connection:
-            raw = connection.execute(query, params).fetchall()
+        keys = [self._tag(name).label(f"k{i}") for i, name in enumerate(group_by)]
+        cost = sa.func.coalesce(sa.func.sum(calls.c.cost_usd), 0)
+        query = sa.select(
+            *keys,
+            sa.func.count(),
+            sa.func.sum(sa.case((calls.c.status == "cache", 1), else_=0)),
+            sa.func.sum(sa.case((calls.c.status == "failed", 1), else_=0)),
+            sa.func.coalesce(sa.func.sum(calls.c.prompt_tokens), 0),
+            sa.func.coalesce(sa.func.sum(calls.c.completion_tokens), 0),
+            cost,
+        ).where(*self._window(since, until))
+        if keys:
+            query = query.group_by(*keys).order_by(cost.desc())
+        with self._db().connect() as connection:
+            raw = connection.execute(query).all()
         rows = []
         for record in raw:
             values, aggregates = record[: len(group_by)], record[len(group_by) :]
@@ -236,16 +194,17 @@ class Usage:
 
     def spent_today(self, tag: str | None = None) -> float:
         """Потрачено с начала текущих суток UTC; `tag` — строка `метка=значение`."""
-        self._prepare()
+        import sqlalchemy as sa
+
+        from .db.tables import calls
+
         start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
-        query = "SELECT COALESCE(SUM(cost_usd), 0) FROM calls WHERE ts >= ?"
-        params: list[Any] = [start]
+        query = sa.select(sa.func.coalesce(sa.func.sum(calls.c.cost_usd), 0)).where(calls.c.ts >= start)
         if tag:
             name, _, value = tag.partition("=")
-            query += " AND " + self._json_extract(name) + " = ?"
-            params.append(value)
-        with self._connect() as connection:
-            return float(connection.execute(query, params).fetchone()[0] or 0.0)
+            query = query.where(self._tag(name) == value)
+        with self._db().connect() as connection:
+            return float(connection.execute(query).scalar_one() or 0.0)
 
     async def aspent_today(self, tag: str | None = None) -> float:
         return await asyncio.to_thread(self.spent_today, tag)

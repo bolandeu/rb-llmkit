@@ -5,13 +5,17 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 import pytest
+import sqlalchemy as sa
 
+from llmkit.db.tables import calls
 from llmkit.usage import Usage, parse_since
 
 
 @pytest.fixture
 def journal(tmp_path):
-    return Usage(tmp_path / "usage.sqlite")
+    usage = Usage(tmp_path / "usage.sqlite")
+    yield usage
+    usage.close()
 
 
 def test_parse_since_accepts_relative_and_absolute():
@@ -38,8 +42,8 @@ def test_report_counts_statuses(journal):
 
 def test_report_window_filters_old_rows(journal):
     journal.record(model="a/m1", provider="a", status="ok", cost_usd=1.0)
-    with journal._connect() as connection:
-        connection.execute("UPDATE calls SET ts = ts - ?", (10 * 86400,))
+    with journal._db().begin() as connection:
+        connection.execute(sa.update(calls).values(ts=calls.c.ts - 10 * 86400))
     assert journal.total(since="7d").calls == 0
     assert journal.total().calls == 1
 

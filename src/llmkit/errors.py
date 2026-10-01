@@ -52,3 +52,58 @@ class AllModelsFailed(LlmKitError):
         self.error_type: str | None = types.pop() if len(types) == 1 else None
         details = "; ".join(f"{a.model}: {a.error_type} {a.error}" for a in attempts) or "попыток не было"
         super().__init__(f"все модели цепочки упали ({details})")
+
+
+class DatabaseError(LlmKitError):
+    """Ошибка слоя БД (llmkit.db): код и код выхода — для конверта CLI."""
+
+    def __init__(self, code: str, message: str, *, action: str | None = None, exit_code: int = 1) -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
+        self.action = action
+        self.exit_code = exit_code
+
+
+class InvalidArguments(DatabaseError):
+    def __init__(self, message: str) -> None:
+        super().__init__("INVALID_ARGUMENTS", message, exit_code=2)
+
+
+class DatabaseUnavailable(DatabaseError):
+    """`LLMKIT_DATABASE_URL` задан, но базой не воспользоваться: недоступна, чужой пароль, не PostgreSQL.
+
+    Никогда не подменяется локальной SQLite: записи туда молча пропали бы из общей базы.
+    """
+
+    def __init__(self, message: str, *, action: str | None = None) -> None:
+        super().__init__(
+            "DATABASE_UNAVAILABLE",
+            message,
+            action=action or "проверьте строку подключения и доступность сервера, затем повторите",
+            exit_code=5,
+        )
+
+
+class DatabaseNotMigrated(DatabaseError):
+    """Схема общей базы отстала от миграций этой версии llmkit."""
+
+    def __init__(self, current: str | None, head: str) -> None:
+        super().__init__(
+            "DATABASE_NOT_MIGRATED",
+            f"схема базы на ревизии {current or 'none'}, этой версии llmkit нужна {head}",
+            action="выполните `llm db upgrade` выпущенной версией (меняет общую базу)",
+            exit_code=1,
+        )
+
+
+class DatabaseTooNew(DatabaseError):
+    """Базу смигрировал более новый релиз: обновлять нужно llmkit."""
+
+    def __init__(self, current: str) -> None:
+        super().__init__(
+            "CLI_TOO_OLD",
+            f"схема базы на ревизии {current}, которой эта версия llmkit не знает: её смигрировал более новый релиз",
+            action="обновите llmkit (`uv tool upgrade rb-llmkit` или пин в проекте), затем повторите",
+            exit_code=6,
+        )

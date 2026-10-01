@@ -147,6 +147,7 @@ def isolated(tmp_path, monkeypatch):
     monkeypatch.setenv("TEST_B_KEY", "ключ-b")
     monkeypatch.delenv("LLMKIT_CACHE", raising=False)
     monkeypatch.delenv("LLMKIT_LOG_LEVEL", raising=False)
+    monkeypatch.delenv("LLMKIT_DATABASE_URL", raising=False)  # никогда не общая PostgreSQL
     # Подписки: ни настоящего файла токенов ChatGPT, ни настоящего CLI claude.
     from llmkit.transports import chatgpt_auth
 

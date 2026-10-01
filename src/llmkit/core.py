@@ -548,10 +548,12 @@ class LlmKit:
         return run(self.decide(state, questions, **kwargs))
 
     async def aclose(self) -> None:
-        """Ресурсов, живущих между вызовами, нет; метод есть для симметрии API."""
+        """Закрыть соединения журнала с базой (`Usage.close`)."""
+        self.usage.close()
 
     def close(self) -> None:
-        """Ресурсов, живущих между вызовами, нет; метод есть для симметрии API."""
+        """Закрыть соединения журнала с базой (`Usage.close`)."""
+        self.usage.close()
 
     # --- внутреннее ---
 

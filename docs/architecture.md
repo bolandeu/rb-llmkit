@@ -8,8 +8,9 @@ src/llmkit/
   keys.py       ключи: конфиг → env → связка ключей ОС
   providers.py  провайдер + модель → аргументы LiteLLM
   chain.py      цепочки, классификация ошибок, ретраи и backoff
-  cache.py      SQLite-кэш ответов
-  usage.py      SQLite-журнал вызовов, отчёты, бюджеты
+  cache.py      SQLite-кэш ответов (локальный, вне слоя БД)
+  usage.py      журнал вызовов, отчёты, бюджеты — таблица llmkit_calls
+  db/           слой БД: PostgreSQL из LLMKIT_DATABASE_URL или SQLite, миграции Alembic
   core.py       LlmKit: ask / generate / ask_many и sync-обёртки
   errors.py     исключения
   _sync.py      запуск корутины из синхронного кода
@@ -25,7 +26,7 @@ scripts/smoke.py  реальные вызовы провайдеров (фаза
 
 ## Ленивые импорты
 
-`litellm`, `instructor` и `keyring` импортируются лениво, внутри функций
+`litellm`, `instructor`, `keyring` и `sqlalchemy`/`alembic` (слой БД) импортируются лениво, внутри функций
 пути вызова: `import llmkit` обязан оставаться быстрым (порог — 300 мс,
 проверка — команда в корневом AGENTS.md).
 
@@ -41,6 +42,20 @@ scripts/smoke.py  реальные вызовы провайдеров (фаза
 Идёт по **имени класса** исключения (`chain.py`), чтобы модуль не тянул
 litellm на импорте. `classify()` возвращает `None` для чужих исключений —
 их ядро пробрасывает, а не маскирует под ошибку провайдера.
+
+## База (cli-generator architecture.md §12)
+
+- `LLMKIT_DATABASE_URL` задан → только PostgreSQL; недоступна → `DatabaseUnavailable`
+  (выход 5), никогда не подмена на SQLite. Не задан → SQLite из `usage.path`.
+- PostgreSQL не мигрируется при открытии: только `llm db upgrade` выпущенной
+  версией (advisory lock, одна транзакция). Отстала → `DatabaseNotMigrated`,
+  неизвестная ревизия → `DatabaseTooNew` (`CLI_TOO_OLD`, выход 6).
+- Каждая миграция совместима с кодом предыдущего релиза (expand/contract):
+  сначала добавить (nullable/default), переключить код, удалить или переименовать
+  старое — в следующем релизе. Переименование — добавить + скопировать + позже удалить.
+- Имена — `llmkit_*` в `public`; другим инструментам — только `llmkit_v1_*`;
+  новая форма — `llmkit_v2_*` рядом. Ключи связи — `db/normalize.py`, колонкой
+  рядом с исходным текстом.
 
 ## Ключи
 
