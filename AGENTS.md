@@ -17,13 +17,23 @@ uv run pytest -q                    # только тесты
 uv run python -X importtime -c "import llmkit" 2>&1 | tail -1   # должно быть < 300 мс
 ```
 
+**Команда, которая может идти дольше пары минут, запускается отвязанно —
+только через `scripts/run_detached.sh <метка> <команда...>`, затем опрос
+`scripts/runs_status.sh <метка>` (`--json` — код выхода и хвосты вывода).**
+Любая: гейт, `scripts/pg_test.sh`, долгий прогон `llm`. В своём shell агента
+она умирает вместе с ходом: прерывание (входящее сообщение herdr — тоже)
+убивает её, и работа делается заново. У отвязанного запуска своя сессия; pid,
+вывод (`<метка>.log`), ошибки (`<метка>.stderr`) и код выхода (`<метка>.exit`) —
+в каталоге состояния инструмента (`runs/`); остановить —
+`python3 scripts/detach.py stop <метка>`.
+
 ## Версии, changelog, справка
 
 Стандарт — `~/Work/tools/docs/standard-release.md`.
 
 - Версия только из git-тега `vX.Y.Z`, строки `version =` в `pyproject.toml` нет.
   Релиз — `uv run scripts/release.py patch|minor|major` с чистого `main`; push
-  только с подтверждения пользователя. SemVer на `0.x`: исправление или
+  делает корневой агент (см. «Инструмент в системе»). SemVer на `0.x`: исправление или
   совместимая функция — patch, ломающее (Python API, команды, флаги, форма
   `--json`, коды выхода и ошибок) — minor.
 - `CHANGELOG.md` руками не правится: на каждое заметное изменение —
@@ -52,7 +62,7 @@ uv run python -X importtime -c "import llmkit" 2>&1 | tail -1   # должно �
 ## База (журнал расходов)
 
 - Слой БД — `src/llmkit/db/`, перенесён вручную из шаблона cli-generator
-  **v1.4.3** (`core/db.py`, `core/tables.py`, `core/normalize.py`, `migrations/`,
+  **v1.4.4** (`core/db.py`, `core/tables.py`, `core/normalize.py`, `migrations/`,
   `commands/db.py`, `tests/test_db.py`, `scripts/pg_test.sh`; architecture.md §12). При обновлении
   шаблона сверять с ним эти файлы. Отличия от шаблона:
   - пакет `llmkit/db/` вместо `core/` (`core.py` здесь — модуль `LlmKit`);
