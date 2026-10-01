@@ -8,6 +8,13 @@
 
 <!-- towncrier release notes start -->
 
+## [0.5.0] - 2026-10-01
+
+### Changed
+
+- Журнал расходов переехал на слой БД шаблона cli-generator v1.4.2: с `LLMKIT_DATABASE_URL` он пишется в общую PostgreSQL, без неё — в SQLite `usage.sqlite`, как раньше. Таблица `calls` при первом открытии переименовывается в `llmkit_calls` вместе со строками, поэтому llmkit во всех потребителях одной машины поднимать одновременно: v0.4.x после переименования писал бы в новую пустую `calls`. Новые команды `llm db status|upgrade|import-sqlite`; другие инструменты читают представление `llmkit_v1_calls`. Новые зависимости: sqlalchemy, alembic, psycopg.
+
+
 ## [0.4.3] - 2026-09-29
 
 ### Added
