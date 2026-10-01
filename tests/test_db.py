@@ -25,7 +25,7 @@ from llmkit.usage import Usage
 runner = CliRunner()
 
 # Настоящий контракт PostgreSQL (advisory lock, последовательности, psycopg, JSONB) —
-# только на одноразовом сервере: TEST_DATABASE_URL=postgresql://postgres:pw@localhost:5432/postgres
+# только на одноразовом сервере, который поднимает scripts/pg_test.sh и называет в TEST_DATABASE_URL.
 PG_URL = os.environ.get("TEST_DATABASE_URL")
 
 LEGACY_SCHEMA = (
@@ -93,6 +93,14 @@ def test_sqlite_is_created_and_migrated_on_open(local_path: Path) -> None:
     assert "llmkit_v1_calls" in sa.inspect(engine).get_view_names()
     assert db.schema_state(engine).up_to_date
     assert local_path.is_file()
+
+
+def test_every_table_has_a_primary_key() -> None:
+    """Без PRIMARY KEY Directus таблицу не покажет и не даст править — и в метаданных, и после миграций."""
+    assert all(table.primary_key.columns for table in tables.metadata.sorted_tables)
+    inspector = sa.inspect(db.open_db())
+    for name in inspector.get_table_names():
+        assert inspector.get_pk_constraint(name)["constrained_columns"], f"{name} без PRIMARY KEY"
 
 
 def test_tables_match_the_migrations() -> None:
@@ -255,6 +263,8 @@ def test_import_sqlite_rejects_bad_sources(tmp_path: Path) -> None:
 @pytest.mark.skipif(not PG_URL, reason="TEST_DATABASE_URL не задан")
 def test_postgres_round_trip(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     assert PG_URL
+    # Тест удаляет таблицы llmkit: только одноразовый локальный сервер.
+    assert sa.make_url(PG_URL).host in ("127.0.0.1", "localhost"), "TEST_DATABASE_URL — только из scripts/pg_test.sh"
     monkeypatch.setenv(db.ENV_VAR, PG_URL)
     engine = db.open_db(check=False)
     with engine.begin() as conn:  # с чистого листа: только объекты llmkit

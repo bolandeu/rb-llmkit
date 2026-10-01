@@ -52,8 +52,8 @@ uv run python -X importtime -c "import llmkit" 2>&1 | tail -1   # должно �
 ## База (журнал расходов)
 
 - Слой БД — `src/llmkit/db/`, перенесён вручную из шаблона cli-generator
-  **v1.4.2** (`core/db.py`, `core/tables.py`, `core/normalize.py`, `migrations/`,
-  `commands/db.py`, `tests/test_db.py`; architecture.md §12). При обновлении
+  **v1.4.3** (`core/db.py`, `core/tables.py`, `core/normalize.py`, `migrations/`,
+  `commands/db.py`, `tests/test_db.py`, `scripts/pg_test.sh`; architecture.md §12). При обновлении
   шаблона сверять с ним эти файлы. Отличия от шаблона:
   - пакет `llmkit/db/` вместо `core/` (`core.py` здесь — модуль `LlmKit`);
     ошибки — в `errors.py` (`DatabaseError` и потомки, библиотечные);
@@ -70,10 +70,10 @@ uv run python -X importtime -c "import llmkit" 2>&1 | tail -1   # должно �
   другие инструменты читают только `llmkit_v1_calls`.
 - Кэш ответов (`cache.py`, `cache.sqlite`) — вне слоя БД, локальный `sqlite3`:
   ответы можно получить заново, делить их между машинами незачем (решение пользователя).
-- Проверка PostgreSQL: временный контейнер на свободном порту, который выдал Docker
-  (`-p 127.0.0.1::5432`, порт — `docker port`), затем
-  `TEST_DATABASE_URL=postgresql://postgres:pw@127.0.0.1:<порт>/postgres uv run pytest tests/test_db.py`.
-  Фиксированный порт может оказаться чужим контейнером.
+- У каждой таблицы — PRIMARY KEY (без него Directus её не покажет); проверяет tests/test_db.py.
+- Тесты на PostgreSQL — только через `scripts/pg_test.sh -q tests/test_db.py` (свой
+  контейнер, порт от Docker, удаляется после) — никогда не фиксированный порт и
+  не чужой сервер.
 
 ## Каждое заметное изменение выходит релизом
 
