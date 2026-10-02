@@ -101,11 +101,11 @@ routing v1, публичный контракт: `src/llmkit/contracts/routing-v
 
 | настройка | дефолт |
 |---|---|
-| temperature / timeout / max_tokens / concurrency | 0.0 / 120 с / 4096 / 6 |
+| temperature / timeout / max_tokens / concurrency | 0.0 / 120 с / 16000 / 6 |
 | cache | включён, ttl 30 дней, `platformdirs.user_cache_dir/cache.sqlite` |
 | usage | `platformdirs.user_data_dir/usage.sqlite` (или `LLMKIT_DATABASE_URL`) |
 | budget.daily_usd | 20.0 — только предупреждение |
-| retry | timeout 1, rate_limit 2, server 2, invalid_output 2 (раздел 6) |
+| retry | timeout 0, rate_limit 6, server 6, invalid_output 2 (раздел 6) |
 
 Модель-ссылка: строка `provider/model`, где `provider` — ключ из `routing.providers`, всё после
 первого `/` — имя модели у провайдера (у OpenRouter само содержит `/`).

@@ -23,9 +23,10 @@ APP_NAME = "llmkit"
 # Имя метки: только то, что безопасно подставить в json_extract(tags, '$.имя').
 TAG_NAME_RE = re.compile(r"^[A-Za-z0-9_]+$")
 
-# Дефолты настроек; переопределяются аргументами LlmKit(...) и флагами CLI.
+# Дефолты настроек — бывшие значения config.toml с Mac (0.8.1); переопределяются
+# аргументами LlmKit(...), флагами CLI и LLMKIT_CACHE / LLMKIT_LOG_LEVEL.
 DEFAULTS: dict[str, Any] = {
-    "defaults": {"temperature": 0.0, "timeout": 120.0, "max_tokens": 4096, "concurrency": 6},
+    "defaults": {"temperature": 0.0, "timeout": 120.0, "max_tokens": 16000, "concurrency": 6},
     "budget": {"daily_usd": 20.0},
 }
 
@@ -35,7 +36,7 @@ class Defaults(BaseModel):
 
     temperature: float = 0.0
     timeout: float = 120.0
-    max_tokens: int = 4096
+    max_tokens: int = 16000
     concurrency: int = 6
 
 
@@ -72,9 +73,11 @@ class BudgetConfig(BaseModel):
 class RetryConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    timeout: int = 1
-    rate_limit: int = 2
-    server: int = 2
+    # timeout 0 — без повтора на той же модели: сразу следующая (не ждать 2× таймаут на застрявшем шлюзе);
+    # rate_limit/server 6 — шлюзы просят повтор через ~60 с, пауза до 30 с ×6 ≈ 3 мин (config.toml с Mac).
+    timeout: int = 0
+    rate_limit: int = 6
+    server: int = 6
     invalid_output: int = 2
 
 
