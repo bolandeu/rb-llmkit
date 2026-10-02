@@ -1,7 +1,7 @@
 
  Usage: llm auth [OPTIONS] COMMAND [ARGS]...
 
- Вход в подписки (kind = chatgpt | claude_cli) и проверка всех доступов: `llm auth status`.
+ Вход в подписки (protocol = chatgpt | claude_cli) и проверка всех доступов: `llm auth status`.
 
 ╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
 │ --help          Show this message and exit.                                                      │

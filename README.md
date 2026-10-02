@@ -11,7 +11,8 @@
 
 | Возможность | Коротко |
 |---|---|
-| Цепочка моделей | `cheap = ["ollama/gpt-oss:120b", "openrouter/openai/gpt-4o-mini"]` — упала первая, отвечает вторая |
+| Routing данными | провайдеры, цепочка и цены — JSON routing v1 в вызове (`--routing`, `LlmKit(routing=...)`); встроенных провайдеров и уровней нет |
+| Цепочка моделей | `"chain": ["ccode/gpt-5.6-terra", "openrouter/openai/gpt-4o-mini"]` — упала первая, отвечает вторая |
 | Ретраи по типу ошибки | таймаут, 429 и 5xx повторяются на той же модели, отказ и «слишком длинный контекст» — сразу следующая |
 | JSON по схеме | pydantic-класс через [Instructor](https://github.com/567-labs/instructor) или готовая JSON Schema (dict) |
 | Кэш | SQLite, ключ по конкретной модели: ответ дешёвой модели не выдаётся за ответ сильной |
@@ -70,7 +71,10 @@ cli-builder: **0** — успех, **1** — непредвиденная оши
 
 ```bash
 llm                                  # справка: список команд, код выхода 0
-llm ask "Столица Франции?" --level cheap --tag tool=notes
+llm ask "Столица Франции?" --routing routing.json --tag tool=notes
+llm ask "Привет" -m ccode/gpt-5.6-sol -m openrouter/openai/gpt-4o-mini   # цепочка из CLI
+llm routing validate routing.json    # проверка перед сохранением; ROUTING_INVALID с путём к полю
+llm routing import config.toml       # перенос config.toml llmkit < 0.8 (провайдеры, цены, уровни отдельно)
 cat prompt.txt | llm ask --system "Отвечай кратко" --json
 llm json "Разбери запрос" --schema schema.json          # в stdout только JSON-объект
 llm render --template prompt.md --vars vars.json        # шаблон mustache; нет переменной — код 2
@@ -127,21 +131,21 @@ JSON `{"api_key": "..."}` в службе `llmkit:<провайдер>`.
 ## Подписки ChatGPT и Claude
 
 Модели можно вызывать по подписке ChatGPT Plus/Pro и Claude Pro/Max, без
-API-ключей. Провайдеры `chatgpt` и `claude` уже есть во встроенных дефолтах.
+API-ключей. В routing это провайдеры с `protocol` `chatgpt` и `claude_cli`, без `key_env`.
 
 ```bash
 llm auth login chatgpt               # ссылка + одноразовый код; токены — в файле 0600
-llm ask "Привет" -m chatgpt/gpt-5.5
+llm ask "Привет" -m chatgpt/gpt-5.5   # routing: {"providers": {"chatgpt": {"protocol": "chatgpt"}}}
 claude auth login                    # вход держит сам Claude Code CLI
-llm ask "Привет" -m claude/sonnet
+llm ask "Привет" -m claude/sonnet    # routing: {"providers": {"claude": {"protocol": "claude_cli"}}}
 ```
 
-- **ChatGPT** (`kind = "chatgpt"`): вход OAuth, как у Codex CLI; запросы идут в
+- **ChatGPT** (`protocol: "chatgpt"`): вход OAuth, как у Codex CLI; запросы идут в
   Responses API `chatgpt.com/backend-api/codex`. Файл токенов свой
   (`platformdirs.user_data_dir("llmkit")/chatgpt-auth.json`), не `~/.codex/auth.json`:
   refresh-токен одноразовый, два клиента на одном выбивали бы друг друга.
   Температура и `max_tokens` не отправляются — бэкенд подписки их отвергает.
-- **Claude** (`kind = "claude_cli"`): вызов установленного `claude -p` без
+- **Claude** (`protocol: "claude_cli"`): вызов установленного `claude -p` без
   инструментов и сессий, в пустом каталоге. Токен читает сам CLI (`claude auth login`
   или `CLAUDE_CODE_OAUTH_TOKEN`); `ANTHROPIC_API_KEY` и прочие `ANTHROPIC_*` из
   окружения CLI не передаются, иначе вызов ушёл бы на платный ключ. Другой бинарь —
@@ -151,61 +155,45 @@ llm ask "Привет" -m claude/sonnet
 - Условия Anthropic ограничивают использование подписки вне Claude Code —
   проверьте их перед массовыми вызовами; риск блокировки аккаунта за пользователем.
 
-## Конфиг
+## Routing v1 и настройки
 
-Слои (позже перекрывает раньше): дефолты в коде → пользовательский конфиг
-(`platformdirs.user_config_dir("llmkit")`: на macOS — `~/Library/Application
-Support/llmkit/config.toml`, на Linux — `~/.config/llmkit/config.toml` или
-`$XDG_CONFIG_HOME/llmkit/config.toml`) → `.llmkit/config.toml` проекта
-(ищется вверх от текущего каталога) → переменные `LLMKIT_CACHE`,
-`LLMKIT_LOG_LEVEL` → аргументы `LlmKit(...)`. `LLMKIT_CONFIG=/путь/config.toml`
-заменяет поиск файлов целиком — удобно для переносимого конфига между машинами.
+С 0.8.0 файла конфига нет, `config.toml` не читается. Провайдеры, цепочка и цены
+приходят **данными** в каждом вызове — routing v1 (схема
+`src/llmkit/contracts/routing-v1.schema.json`, векторы `routing-v1.vectors.json` —
+публичный контракт). Секретов в routing нет: только имена переменных с ключами.
 
-Встроенные дефолты (`config.py: DEFAULTS`) уже включают провайдеров `openrouter`,
-`ollama`, `ccode` (шлюз ccode.dev, ключ `CCODE_API_KEY`), `anymodel` (шлюз
-anymodel.org, ключ `ANYMODEL_API_KEY`), `chatgpt` и `claude`
-(подписки) и уровни `cheap`/`judge`/`strong` с примерными моделями — свой
-`config.toml` не обязателен, если устраивает пример и ключи уже заведены.
-
-```toml
-[providers.openrouter]
-kind = "openrouter"                 # openrouter | openai | anthropic | gemini | ollama | openai_compatible | chatgpt | claude_cli
-
-[providers.ollama]
-kind = "ollama"
-base_url = "https://ollama.com"     # локальный: http://localhost:11434
-[providers.ollama.prices]           # $ за 1M токенов; главнее цен LiteLLM
-"gpt-oss:120b" = { input = 0.15, output = 0.60 }
-
-[levels]                            # уровень = цепочка "провайдер/модель" по порядку
-# Модели ниже — пример: набор выбираете вы. Слева от первого "/" — ключ из
-# [providers], справа — имя модели у этого провайдера (у OpenRouter оно само
-# содержит "/"). Упала первая модель — отвечает следующая.
-cheap  = ["ollama/gpt-oss:120b", "openrouter/openai/gpt-4o-mini"]
-judge  = ["openrouter/anthropic/claude-sonnet-4"]
-
-[defaults]
-level = "cheap"
-temperature = 0.0
-timeout = 120
-max_tokens = 4096
-concurrency = 6
-
-[cache]
-enabled = true
-ttl_days = 30
-
-[budget]                            # только предупреждения
-daily_usd = 20.0
-[budget.tags]
-"tool=intentree" = 2.0
-
-[retry]
-timeout = 1
-rate_limit = 2
-server = 2
-invalid_output = 2
+```json
+{
+  "providers": {
+    "ccode": {"protocol": "openai_compatible", "base_url": "https://all-api.ccode.dev/v1",
+              "key_env": "LLM_CCODE_API_KEY", "mode": "TOOLS"},
+    "openrouter": {"protocol": "openrouter", "key_env": "LLM_OPENROUTER_API_KEY"}
+  },
+  "chain": ["ccode/gpt-5.6-terra", "openrouter/openai/gpt-4o-mini"],
+  "prices": {"ccode/gpt-5.6-terra": {"input": 0.09, "output": 0.54}}
+}
 ```
+
+- `protocol`: openrouter | openai | anthropic | gemini | ollama | openai_compatible |
+  chatgpt | claude_cli; `base_url` обязателен для ollama и openai_compatible.
+- CLI: `--routing '<json>'` или `--routing <файл>` (не stdin — он для текста и
+  шаблона); без него — файл из `LLMKIT_ROUTING_FILE`; нет ни того ни другого —
+  код 2, `ROUTING_MISSING`. Цепочку можно задать `-m` (повторяемый) при routing
+  без `chain`; оба сразу — `ROUTING_INVALID` «chain задана дважды».
+- Ключ: `key_env`, по умолчанию `LLM_<ПРОВАЙДЕР>_API_KEY` → старое имя
+  (`OPENROUTER_API_KEY`, `CCODE_API_KEY`…; один цикл, с предупреждением «rename to
+  LLM_…») → связка ключей `llmkit:<провайдер>` → код 3, `AUTH_MISSING` с именем
+  переменной.
+- Цена: `routing.prices` → справочник LiteLLM → неизвестна (`cost_usd: null`,
+  `cost_source: "unknown"`, предупреждение `price unknown for <модель>`).
+- Перенос старого конфига: `llm routing import ~/Library/Application\ Support/llmkit/config.toml`
+  — провайдеры (с адресами бывших встроенных) и цены в `routing`, уровни — отдельно
+  в `levels` подсказкой для своих цепочек.
+
+Настройки вызовов — дефолты в коде (температура 0, таймаут 120 с, `max_tokens`
+4096, 6 параллельных, кэш 30 дней, дневной бюджет $20 — только предупреждение) →
+`LLMKIT_CACHE`, `LLMKIT_LOG_LEVEL` → аргументы `LlmKit(...)` и флаги CLI
+(`--temperature`, `--max-tokens`, `--timeout`, `--no-retry`, `--no-cache`).
 
 ## Примеры
 
@@ -217,7 +205,7 @@ invalid_output = 2
 import asyncio
 from llmkit import LlmKit
 
-kit = LlmKit(tags={"tool": "antagor"})
+kit = LlmKit(routing=routing, tags={"tool": "antagor"})  # routing — dict по схеме v1
 
 
 async def main():
@@ -243,12 +231,12 @@ class Verdict(BaseModel):
     confidence: float
 
 
-kit = LlmKit()
+kit = LlmKit(routing=routing)
 answer = kit.ask_sync(
     Task(
         user="Запрос: «купить кофеварку». Определи намерение.",
         schema=Verdict,  # или готовая JSON Schema (dict)
-        level="judge",
+        chain=["openrouter/anthropic/claude-sonnet-4"],  # вместо routing.chain; провайдеры — из routing
         tags={"tool": "intentree", "niche": "ved"},
         default=Verdict(intent="unknown", confidence=0.0),  # без него — AllModelsFailed
     )
@@ -256,9 +244,11 @@ answer = kit.ask_sync(
 print(answer.data.intent, answer.source, answer.model, answer.cost_usd)
 ```
 
-`Answer` содержит `data`, `source` (`llm` | `cache` | `default`), `model`,
-`provider`, `attempts` (по одной записи на попытку), токены, `cost_usd`,
-`cost_known`, `latency_ms`, `warnings` и `ok`.
+`Answer` содержит `data`, `source` (`llm` | `cache` | `default`), `model`
+(элемент цепочки), `served_model` (версия от провайдера), `chain_position`,
+`provider`, `attempts` (по одной записи на попытку), токены, `cost_usd` (None —
+цена неизвестна), `cost_source`, `cache_hit`, `latency_ms`, `warnings` и `ok`.
+Без routing экземпляр создаётся, а первый вызов бросает `RoutingMissing`.
 
 ### Пачка задач: `ask_many`
 
@@ -295,9 +285,9 @@ answer.data["is_urgent"]["noul"]  # 0.95 — словарь answers из отв�
 answer.served_model  # "typesafe/jev-1.13-20260917" — кто ответил за алиасом
 ```
 
-Цепочка — уровень `decide` (по умолчанию `openrouter/~typesafe/jev-latest`),
-допустимы только модели провайдера `kind = "openrouter"`. Цена берётся из
-`usage.cost` ответа.
+Цепочка — из routing (например `["openrouter/~typesafe/jev-latest"]`),
+допустимы только модели провайдеров с `protocol: "openrouter"`. Цена берётся из
+`usage.cost` ответа (`cost_source: "provider"`).
 
 ### Расходы
 

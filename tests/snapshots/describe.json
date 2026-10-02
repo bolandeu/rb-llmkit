@@ -7,7 +7,7 @@
   },
   "command": {
     "name": "llm",
-    "description": "llmkit: вызовы LLM с цепочками моделей, кэшем и учётом расходов.\n\nУ всех команд есть `--json` (конверт в stdout), диагностика идёт в stderr.\nКоды выхода: 0 — успех, 1 — непредвиденная ошибка, 2 — неверные аргументы,\n3 — нет ключа или входа в подписку, 5 — все модели упали или база недоступна,\n6 — базу расходов смигрировал более новый релиз (`llm db`).\n\nОсновные параметры `llm ask` и `llm json`:\n\n  -m, --model ПРОВАЙДЕР/МОДЕЛЬ   одна модель вместо уровня: ccode/gpt-5.6-sol\n\n  -l, --level УРОВЕНЬ            цепочка моделей из конфига: cheap, judge…\n\n  -s, --system ТЕКСТ             системное сообщение\n\n  --schema ФАЙЛ                  JSON Schema ответа (только llm json)\n\n  --temperature, --max-tokens, --timeout   перекрыть значения из конфига\n\n  --tag k=v                      метка для учёта расходов, можно несколько\n\n  --no-cache, --no-retry         без кэша; без повторов на сбойной модели\n\nСписок провайдеров, уровней и моделей: `llm models`. Все параметры\nкоманды: `llm <команда> --help`, например `llm ask --help`.\n\nПримеры:\n\n  llm ask \"Столица Франции?\" --level cheap\n\n  llm ask \"Привет\" -m ccode/gpt-5.6-sol\n\n  llm json \"Разбери запрос\" --schema schema.json\n\n  llm models · llm cost --since 7d · llm auth status · llm db status",
+    "description": "llmkit: вызовы LLM с цепочками моделей, кэшем и учётом расходов.\n\nУ всех команд есть `--json` (конверт в stdout), диагностика идёт в stderr.\nКоды выхода: 0 — успех, 1 — непредвиденная ошибка, 2 — неверные аргументы,\n3 — нет ключа или входа в подписку, 5 — все модели упали или база недоступна,\n6 — базу расходов смигрировал более новый релиз (`llm db`).\n\nПровайдеры и цепочка — routing v1 (данные, встроенных нет):\n\n  --routing JSON|ФАЙЛ             routing аргументом или файлом; иначе LLMKIT_ROUTING_FILE\n\n  -m ПРОВАЙДЕР/МОДЕЛЬ             цепочка из CLI, можно несколько: -m a/x -m b/y\n\n  -s, --system ТЕКСТ             системное сообщение\n\n  --schema ФАЙЛ                  JSON Schema ответа (только llm json)\n\n  --template ФАЙЛ --vars JSON     шаблон промпта mustache вместо текста\n\n  --temperature, --max-tokens, --timeout   перекрыть значения по умолчанию\n\n  --tag k=v                      метка для учёта расходов, можно несколько\n\n  --no-cache, --no-retry         без кэша; без повторов на сбойной модели\n\nКлюч провайдера — LLM_<ПРОВАЙДЕР>_API_KEY или связка ключей (`llm keys set`).\nСтарый config.toml не читается: `llm routing import config.toml`.\n\nПровайдеры routing и источник ключей: `llm models`. Все параметры\nкоманды: `llm <команда> --help`, например `llm ask --help`.\n\nПримеры:\n\n  llm ask \"Столица Франции?\" --routing routing.json\n\n  llm ask \"Привет\" -m ccode/gpt-5.6-sol -m openrouter/openai/gpt-4o-mini\n\n  llm json \"Разбери запрос\" --schema schema.json\n\n  llm routing validate routing.json · llm models · llm cost --since 7d · llm auth status",
     "options": [
       {
         "name": "--json",
@@ -138,7 +138,7 @@
       },
       {
         "name": "ask",
-        "description": "Задать вопрос модели и напечатать текстовый ответ.\n\nЦепочка моделей берётся из уровня конфига; упавшая модель уступает\nследующей. Вместо текста — шаблон: `--template` с `--vars` (как у\n`llm render`; в учёт расходов — имя и хэш шаблона, без значений). Коды\nвыхода: 0 — ответ получен, 2 — неверные аргументы или нет переменной\nшаблона, 3 — нет ключа провайдера, 5 — все модели упали.\n\nExample: llm ask \"Столица Франции?\" --level cheap",
+        "description": "Задать вопрос модели и напечатать текстовый ответ.\n\nПровайдеры и цепочка — из routing v1 (`--routing` JSON или файл, иначе\nLLMKIT_ROUTING_FILE); встроенных нет. Упавшая модель уступает следующей.\nВместо текста — шаблон: `--template` с `--vars` (в учёт расходов — имя и\nхэш шаблона, без значений). В `--json`: text, model, served_model,\nchain_position, attempts, tokens_in/out, cost_usd, cost_source, cache_hit.\nКоды выхода: 0 — ответ получен, 2 — нет routing, routing не по схеме или\nневерные аргументы, 3 — нет ключа провайдера, 5 — все модели упали.\n\nExample: llm ask \"Столица Франции?\" --routing routing.json",
         "options": [
           {
             "name": "--system",
@@ -160,17 +160,14 @@
             ]
           },
           {
-            "name": "--level",
-            "aliases": [
-              "-l"
-            ],
+            "name": "--routing",
             "arguments": [
               {
-                "name": "LEVEL",
+                "name": "ROUTING",
                 "required": true
               }
             ],
-            "description": "Уровень из конфига: cheap, judge, strong…",
+            "description": "Routing v1: JSON-строка или путь к JSON-файлу; без него — файл из LLMKIT_ROUTING_FILE. Не stdin.",
             "metadata": [
               {
                 "name": "x-rb-type",
@@ -189,7 +186,31 @@
                 "required": true
               }
             ],
-            "description": "Конкретная модель 'провайдер/модель' вместо уровня.",
+            "description": "Модель 'провайдер/модель'; повторяется — цепочка с фолбэком по порядку (вместо routing.chain).",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "str"
+              },
+              {
+                "name": "x-rb-multiple",
+                "value": true
+              }
+            ]
+          },
+          {
+            "name": "--level",
+            "aliases": [
+              "-l"
+            ],
+            "arguments": [
+              {
+                "name": "LEVEL",
+                "required": true
+              }
+            ],
+            "description": "Удалён: передайте цепочку.",
+            "hidden": true,
             "metadata": [
               {
                 "name": "x-rb-type",
@@ -239,7 +260,7 @@
                 "required": true
               }
             ],
-            "description": "Температура; по умолчанию из конфига.",
+            "description": "Температура; по умолчанию 0.",
             "metadata": [
               {
                 "name": "x-rb-type",
@@ -271,7 +292,7 @@
                 "required": true
               }
             ],
-            "description": "Таймаут вызова в секундах; по умолчанию из конфига.",
+            "description": "Таймаут вызова в секундах.",
             "metadata": [
               {
                 "name": "x-rb-type",
@@ -377,7 +398,7 @@
       },
       {
         "name": "json",
-        "description": "Получить ответ модели как JSON по схеме.\n\nВ обычном режиме в stdout попадает только сам объект ответа, в режиме\n`--json` — конверт с полем `data` и метаданными вызова. Валидацию по\nсхеме выполняет потребитель. Текст запроса можно собрать шаблоном:\n`--template` с `--vars`, как у `llm ask`. Коды выхода: 0 — ответ получен,\n2 — неверные аргументы, 3 — нет ключа провайдера, 5 — все модели упали\nили ответ не разобрался.\n\nExample: llm json \"Разбери запрос\" --schema schema.json --json",
+        "description": "Получить ответ модели как JSON по схеме.\n\nВ обычном режиме в stdout попадает только сам объект ответа, в режиме\n`--json` — конверт с полем `data` и метаданными вызова, как у `llm ask`.\nRouting, `-m` и `--template/--vars` — как у `llm ask`. Валидацию по\nсхеме выполняет потребитель. Коды выхода: 0 — ответ получен,\n2 — неверные аргументы или routing, 3 — нет ключа провайдера, 5 — все\nмодели упали или ответ не разобрался.\n\nExample: llm json \"Разбери запрос\" --schema schema.json --routing routing.json --json",
         "options": [
           {
             "name": "--schema",
@@ -416,17 +437,14 @@
             ]
           },
           {
-            "name": "--level",
-            "aliases": [
-              "-l"
-            ],
+            "name": "--routing",
             "arguments": [
               {
-                "name": "LEVEL",
+                "name": "ROUTING",
                 "required": true
               }
             ],
-            "description": "Уровень из конфига: cheap, judge, strong…",
+            "description": "Routing v1: JSON-строка или путь к JSON-файлу; без него — файл из LLMKIT_ROUTING_FILE. Не stdin.",
             "metadata": [
               {
                 "name": "x-rb-type",
@@ -445,7 +463,31 @@
                 "required": true
               }
             ],
-            "description": "Конкретная модель 'провайдер/модель' вместо уровня.",
+            "description": "Модель 'провайдер/модель'; повторяется — цепочка с фолбэком по порядку (вместо routing.chain).",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "str"
+              },
+              {
+                "name": "x-rb-multiple",
+                "value": true
+              }
+            ]
+          },
+          {
+            "name": "--level",
+            "aliases": [
+              "-l"
+            ],
+            "arguments": [
+              {
+                "name": "LEVEL",
+                "required": true
+              }
+            ],
+            "description": "Удалён: передайте цепочку.",
+            "hidden": true,
             "metadata": [
               {
                 "name": "x-rb-type",
@@ -495,7 +537,7 @@
                 "required": true
               }
             ],
-            "description": "Температура; по умолчанию из конфига.",
+            "description": "Температура; по умолчанию 0.",
             "metadata": [
               {
                 "name": "x-rb-type",
@@ -527,7 +569,7 @@
                 "required": true
               }
             ],
-            "description": "Таймаут вызова в секундах; по умолчанию из конфига.",
+            "description": "Таймаут вызова в секундах.",
             "metadata": [
               {
                 "name": "x-rb-type",
@@ -633,7 +675,7 @@
       },
       {
         "name": "decide",
-        "description": "Спросить модель решений OpenRouter: вероятности вместо текста.\n\nВопросы типов noul (да/нет), choice и score описываются в JSON-файле, как\nв API `/api/alpha/decisions`. Состояние можно собрать шаблоном:\n`--template` с `--vars`, как у `llm ask`. В stdout — словарь answers; в режиме\n`--json` — конверт с `data`, ценой и `served_model` (версия за алиасом).\nКоды выхода: 0 — ответ получен, 2 — неверные аргументы или модель не\nOpenRouter, 3 — нет ключа, 5 — все модели упали.\n\nExample: llm decide \"Payouts failing for 3 days\" --questions q.json --json",
+        "description": "Спросить модель решений OpenRouter: вероятности вместо текста.\n\nВопросы типов noul (да/нет), choice и score описываются в JSON-файле, как\nв API `/api/alpha/decisions`. Цепочка — из routing или `-m`, только\nпровайдеры с protocol=openrouter. Состояние можно собрать шаблоном:\n`--template` с `--vars`. В stdout — словарь answers; в режиме `--json` —\nконверт с `data`, как у `llm ask`. Коды выхода: 0 — ответ получен,\n2 — неверные аргументы, routing или модель не OpenRouter, 3 — нет ключа,\n5 — все модели упали.\n\nExample: llm decide \"Payouts failing for 3 days\" --questions q.json --routing routing.json --json",
         "options": [
           {
             "name": "--questions",
@@ -656,17 +698,14 @@
             ]
           },
           {
-            "name": "--level",
-            "aliases": [
-              "-l"
-            ],
+            "name": "--routing",
             "arguments": [
               {
-                "name": "LEVEL",
+                "name": "ROUTING",
                 "required": true
               }
             ],
-            "description": "Уровень из конфига; по умолчанию decide.",
+            "description": "Routing v1: JSON-строка или путь к JSON-файлу; без него — файл из LLMKIT_ROUTING_FILE. Не stdin.",
             "metadata": [
               {
                 "name": "x-rb-type",
@@ -685,7 +724,31 @@
                 "required": true
               }
             ],
-            "description": "Модель 'openrouter/…' вместо уровня.",
+            "description": "Модель 'провайдер/модель'; повторяется — цепочка с фолбэком по порядку (вместо routing.chain).",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "str"
+              },
+              {
+                "name": "x-rb-multiple",
+                "value": true
+              }
+            ]
+          },
+          {
+            "name": "--level",
+            "aliases": [
+              "-l"
+            ],
+            "arguments": [
+              {
+                "name": "LEVEL",
+                "required": true
+              }
+            ],
+            "description": "Удалён: передайте цепочку.",
+            "hidden": true,
             "metadata": [
               {
                 "name": "x-rb-type",
@@ -721,7 +784,7 @@
                 "required": true
               }
             ],
-            "description": "Таймаут вызова в секундах; по умолчанию из конфига.",
+            "description": "Таймаут вызова в секундах.",
             "metadata": [
               {
                 "name": "x-rb-type",
@@ -827,8 +890,24 @@
       },
       {
         "name": "models",
-        "description": "Показать провайдеров, уровни и их цепочки моделей.\n\nУ каждого провайдера видно, откуда берётся ключ (значение не\nпечатается). Цепочки уровней задаются в формате \"провайдер/модель\".\nКод выхода 0; 2 — если конфиг не разбирается или уровень ссылается на\nнеописанного провайдера.\n\nExample: llm models --json",
+        "description": "Показать провайдеров routing, источник их ключей и цепочку моделей.\n\nЗначения ключей не печатаются. Встроенных провайдеров нет: всё — из\nrouting. Коды выхода: 0 — готово, 2 — нет routing, или он не по схеме\n(например, цепочка ссылается на неописанного провайдера).\n\nExample: llm models --routing routing.json --json",
         "options": [
+          {
+            "name": "--routing",
+            "arguments": [
+              {
+                "name": "ROUTING",
+                "required": true
+              }
+            ],
+            "description": "Routing v1: JSON или файл; иначе LLMKIT_ROUTING_FILE.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "str"
+              }
+            ]
+          },
           {
             "name": "--json",
             "description": "Машинный вывод: JSON-конверт в stdout.",
@@ -979,7 +1058,7 @@
         "commands": [
           {
             "name": "set",
-            "description": "Положить ключ провайдера в связку ключей ОС.\n\nКлюч нигде не печатается. Коды выхода: 0 — сохранён, 1 — связка ключей\nнедоступна, 2 — неизвестный провайдер или пустой ключ.\n\nExample: echo \"$KEY\" | llm keys set openrouter --stdin",
+            "description": "Положить ключ провайдера в связку ключей ОС.\n\nКлюч нигде не печатается; он читается, когда в env нет\nLLM_<ПРОВАЙДЕР>_API_KEY. Коды выхода: 0 — сохранён, 1 — связка ключей\nнедоступна, 2 — неверное имя провайдера или пустой ключ.\n\nExample: echo \"$KEY\" | llm keys set openrouter --stdin",
             "options": [
               {
                 "name": "--stdin",
@@ -1018,7 +1097,7 @@
                   "minimum": 1,
                   "maximum": 1
                 },
-                "description": "Имя провайдера из конфига, например openrouter.",
+                "description": "Имя провайдера из routing, например openrouter.",
                 "metadata": [
                   {
                     "name": "x-rb-type",
@@ -1030,8 +1109,24 @@
           },
           {
             "name": "status",
-            "description": "Показать, откуда берётся ключ каждого провайдера.\n\nЗначения ключей не печатаются — только источник: config, env, keychain\nили none. Код выхода 0, даже если ключей нет.\n\nExample: llm keys status --json",
+            "description": "Показать, откуда берётся ключ каждого провайдера routing.\n\nЗначения ключей не печатаются — только источник: env, legacy_env\n(старое имя переменной), keychain, subscription или none. Коды выхода:\n0 — готово (даже если ключей нет), 2 — нет routing или он не по схеме.\n\nExample: llm keys status --json",
             "options": [
+              {
+                "name": "--routing",
+                "arguments": [
+                  {
+                    "name": "ROUTING",
+                    "required": true
+                  }
+                ],
+                "description": "Routing v1: JSON или файл; иначе LLMKIT_ROUTING_FILE.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
               {
                 "name": "--json",
                 "description": "Машинный вывод: JSON-конверт в stdout.",
@@ -1050,7 +1145,7 @@
           },
           {
             "name": "rm",
-            "description": "Удалить ключ провайдера из связки ключей.\n\nУдаление отсутствующего ключа не ошибка. Коды выхода: 0 — готово,\n2 — неизвестный провайдер.\n\nExample: llm keys rm openrouter",
+            "description": "Удалить ключ провайдера из связки ключей.\n\nУдаление отсутствующего ключа не ошибка. Коды выхода: 0 — готово,\n2 — неверное имя провайдера.\n\nExample: llm keys rm openrouter",
             "options": [
               {
                 "name": "--json",
@@ -1075,7 +1170,7 @@
                   "minimum": 1,
                   "maximum": 1
                 },
-                "description": "Имя провайдера из конфига.",
+                "description": "Имя провайдера из routing.",
                 "metadata": [
                   {
                     "name": "x-rb-type",
@@ -1089,11 +1184,11 @@
       },
       {
         "name": "auth",
-        "description": "Вход в подписки (kind = chatgpt | claude_cli) и проверка всех доступов: `llm auth status`.",
+        "description": "Вход в подписки (protocol = chatgpt | claude_cli) и проверка всех доступов: `llm auth status`.",
         "commands": [
           {
             "name": "status",
-            "description": "Показать доступ каждого провайдера: откуда берётся и работает ли. Значения не печатаются.\n\nКлючи API и подписки (chatgpt, claude_cli) — в одном отчёте. Без `--check`\nтолько наличие (`unchecked` / `missing`); с ним: openrouter, openai,\nanthropic, gemini, ollama и OpenAI-совместимые шлюзы — один бесплатный\nзапрос с ключом; chatgpt — свежесть токена (с обновлением, если истёк);\nclaude — локальный `claude auth status`. Модели не вызываются.\nОбязательных провайдеров у llmkit нет (`required: false`).\nКоды выхода: 0 — нет неверных и просроченных доступов, 3 — есть\n(`error.code: CREDENTIALS_UNHEALTHY`, отчёт всё равно выводится),\n2 — неизвестный `--provider`. Форма `--json` — общий контракт инструментов:\n`tool`, `version`, `checked_at`, `credentials[]` с `provider`, `required`,\n`fields`, `source`, `source_ref`, `status`, `expires_at`, `quota`, `message`.\n\nExample: llm auth status --check --json",
+            "description": "Показать доступ каждого провайдера: откуда берётся и работает ли. Значения не печатаются.\n\nКлючи API и подписки (chatgpt, claude_cli) — в одном отчёте. Без `--check`\nтолько наличие (`unchecked` / `missing`); с ним: openrouter, openai,\nanthropic, gemini, ollama и OpenAI-совместимые шлюзы — один бесплатный\nзапрос с ключом; chatgpt — свежесть токена (с обновлением, если истёк);\nclaude — локальный `claude auth status`. Модели не вызываются.\nПровайдеры — из routing (`--routing` или LLMKIT_ROUTING_FILE) плюс входы\nв подписки chatgpt и claude на этой машине; без routing — только они.\nОбязательных провайдеров у llmkit нет (`required: false`).\nКоды выхода: 0 — нет неверных и просроченных доступов, 3 — есть\n(`error.code: CREDENTIALS_UNHEALTHY`, отчёт всё равно выводится),\n2 — неизвестный `--provider`. Форма `--json` — общий контракт инструментов:\n`tool`, `version`, `checked_at`, `credentials[]` с `provider`, `required`,\n`fields`, `source`, `source_ref`, `status`, `expires_at`, `quota`, `message`.\n\nExample: llm auth status --check --json",
             "options": [
               {
                 "name": "--check",
@@ -1117,7 +1212,23 @@
                     "required": true
                   }
                 ],
-                "description": "Только этот провайдер из конфига (по умолчанию все).",
+                "description": "Только этот провайдер (по умолчанию все).",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--routing",
+                "arguments": [
+                  {
+                    "name": "ROUTING",
+                    "required": true
+                  }
+                ],
+                "description": "Routing v1: JSON или файл; иначе LLMKIT_ROUTING_FILE.",
                 "metadata": [
                   {
                     "name": "x-rb-type",
@@ -1143,7 +1254,7 @@
           },
           {
             "name": "login",
-            "description": "Войти в подписку.\n\nChatGPT: по умолчанию вход по коду устройства (ссылка и код, браузер может\nбыть на другой машине); `--browser` — через локальный redirect на порт 1455.\nClaude: запускается `claude auth login`. Подсказки идут в stderr.\nКоды выхода: 0 — вход выполнен, 2 — не провайдер по подписке, 3 — вход не удался.\n\nExample: llm auth login chatgpt",
+            "description": "Войти в подписку.\n\nChatGPT: по умолчанию вход по коду устройства (ссылка и код, браузер может\nбыть на другой машине); `--browser` — через локальный redirect на порт 1455.\nClaude: запускается `claude auth login`. Провайдер — chatgpt, claude или\nпровайдер routing (LLMKIT_ROUTING_FILE) с protocol chatgpt | claude_cli.\nПодсказки идут в stderr. Коды выхода: 0 — вход выполнен, 2 — не провайдер\nпо подписке, 3 — вход не удался.\n\nExample: llm auth login chatgpt",
             "options": [
               {
                 "name": "--browser",
@@ -1196,7 +1307,7 @@
                   "minimum": 1,
                   "maximum": 1
                 },
-                "description": "Провайдер по подписке из конфига, например chatgpt или claude.",
+                "description": "Провайдер по подписке: chatgpt, claude или из routing.",
                 "metadata": [
                   {
                     "name": "x-rb-type",
@@ -1208,7 +1319,7 @@
           },
           {
             "name": "logout",
-            "description": "Выйти из подписки: ChatGPT — удалить файл токенов, Claude — `claude auth logout`.\n\nВыход без входа не ошибка. Коды выхода: 0 — готово, 2 — не провайдер по подписке.\n\nExample: llm auth logout chatgpt",
+            "description": "Выйти из подписки: ChatGPT — удалить файл токенов, Claude — `claude auth logout`.\n\nПровайдер — как у `llm auth login`. Выход без входа не ошибка. Коды\nвыхода: 0 — готово, 2 — не провайдер по подписке.\n\nExample: llm auth logout chatgpt",
             "options": [
               {
                 "name": "--json",
@@ -1233,7 +1344,7 @@
                   "minimum": 1,
                   "maximum": 1
                 },
-                "description": "Провайдер по подписке из конфига.",
+                "description": "Провайдер по подписке: chatgpt, claude или из routing.",
                 "metadata": [
                   {
                     "name": "x-rb-type",
@@ -1247,11 +1358,11 @@
       },
       {
         "name": "config",
-        "description": "Конфиг llmkit: где лежит, что получилось, как начать.",
+        "description": "Настройки llmkit: где лежат кэш, журнал и файл routing, что получилось в итоге.",
         "commands": [
           {
             "name": "path",
-            "description": "Показать пути конфига, кэша и журнала вызовов.\n\nКод выхода всегда 0.\n\nExample: llm config path",
+            "description": "Показать пути кэша, журнала вызовов и файла routing (LLMKIT_ROUTING_FILE).\n\nКод выхода всегда 0.\n\nExample: llm config path",
             "options": [
               {
                 "name": "--json",
@@ -1271,42 +1382,8 @@
           },
           {
             "name": "show",
-            "description": "Показать итоговый конфиг после слияния всех слоёв.\n\nЗначения ключей не печатаются. Коды выхода: 0 — готово, 2 — конфиг не\nразбирается.\n\nExample: llm config show --json",
+            "description": "Показать итоговые настройки вызовов: дефолты кода и LLMKIT_*.\n\nПровайдеров и цепочек здесь нет — они в routing (`llm models`).\nКоды выхода: 0 — готово, 2 — настройки не проходят проверку.\n\nExample: llm config show --json",
             "options": [
-              {
-                "name": "--json",
-                "description": "Машинный вывод: JSON-конверт в stdout.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "name": "init",
-            "description": "Записать шаблон конфига.\n\nСуществующий файл без `--force` не трогается. Коды выхода: 0 — файл\nсоздан, 2 — файл уже есть.\n\nExample: llm config init",
-            "options": [
-              {
-                "name": "--force",
-                "description": "Перезаписать существующий файл.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              },
               {
                 "name": "--json",
                 "description": "Машинный вывод: JSON-конверт в stdout.",
@@ -1435,6 +1512,100 @@
             ]
           }
         ]
+      },
+      {
+        "name": "routing",
+        "description": "Routing v1: провайдеры, цепочка и цены данными — проверка и перенос старого config.toml.",
+        "commands": [
+          {
+            "name": "import",
+            "description": "Перенести старый config.toml в routing v1.\n\nПровайдеры (с адресами бывших встроенных) и цены — в `routing`, без\nцепочки: её задаёт вызов (`-m …`) или вы. Уровни — отдельно в `levels`,\nподсказкой для своих цепочек. Ключи не переносятся: `key_env` —\nLLM_<ПРОВАЙДЕР>_API_KEY. Секции defaults, cache, budget, retry\nперечислены в `dropped`. В stdout — JSON {routing, levels, warnings,\ndropped}. Коды выхода: 0 — готово, 2 — файл не читается или не TOML.\n\nExample: llm routing import config.toml > routing.json",
+            "options": [
+              {
+                "name": "--json",
+                "description": "Машинный вывод: JSON-конверт в stdout.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ],
+            "arguments": [
+              {
+                "name": "path",
+                "required": true,
+                "arity": {
+                  "minimum": 1,
+                  "maximum": 1
+                },
+                "description": "config.toml llmkit < 0.8 (только читается).",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "path"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "validate",
+            "description": "Проверить routing v1 перед сохранением (Windmill, Directus).\n\nТа же проверка, что перед вызовом модели: схема плюс ссылки цепочки и\nцен на описанных провайдеров. Ключи не проверяются (`llm auth status`).\nКоды выхода: 0 — routing годен, 2 — ROUTING_INVALID с `error.path`\n(JSON Pointer поля).\n\nExample: llm routing validate '{\"providers\": {\"openrouter\": {\"protocol\": \"openrouter\"}}, \"chain\": [\"openrouter/openai/gpt-4o-mini\"]}'",
+            "options": [
+              {
+                "name": "--providers-only",
+                "description": "Без цепочки: файл провайдеров под `-m …` (LLMKIT_ROUTING_FILE).",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              },
+              {
+                "name": "--json",
+                "description": "Машинный вывод: JSON-конверт в stdout.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ],
+            "arguments": [
+              {
+                "name": "routing",
+                "required": true,
+                "arity": {
+                  "minimum": 1,
+                  "maximum": 1
+                },
+                "description": "Routing v1: путь к JSON-файлу или JSON-строка.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
       }
     ],
     "exitCodes": [
@@ -1480,37 +1651,16 @@
         "name": "x-rb-env",
         "value": [
           {
-            "name": "OPENROUTER_API_KEY",
+            "name": "LLM_<PROVIDER>_API_KEY",
             "purpose": "credential",
-            "provider": "openrouter",
             "field": "api_key",
+            "description": "Ключ провайдера routing (имя в верхнем регистре, не буквы и не цифры → _) или переменная из его key_env; старые имена (OPENROUTER_API_KEY…) — один цикл с предупреждением",
             "required": false
           },
           {
-            "name": "OLLAMA_API_KEY",
-            "purpose": "credential",
-            "provider": "ollama",
-            "field": "api_key",
-            "required": false
-          },
-          {
-            "name": "CCODE_API_KEY",
-            "purpose": "credential",
-            "provider": "ccode",
-            "field": "api_key",
-            "required": false
-          },
-          {
-            "name": "ANYMODEL_API_KEY",
-            "purpose": "credential",
-            "provider": "anymodel",
-            "field": "api_key",
-            "required": false
-          },
-          {
-            "name": "LLMKIT_CONFIG",
+            "name": "LLMKIT_ROUTING_FILE",
             "purpose": "config",
-            "description": "Файл конфига вместо поиска ~/.config/llmkit и .llmkit/ проекта",
+            "description": "JSON-файл routing v1 для CLI, когда --routing не передан",
             "required": false
           },
           {

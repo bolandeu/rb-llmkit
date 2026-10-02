@@ -6,9 +6,19 @@
 from __future__ import annotations
 
 from .config import Config
-from .config import load as load_config
 from .core import Answer, Attempt, LlmKit, Stats, Task
-from .errors import AllModelsFailed, ConfigError, KeyMissing, LlmKitError, TemplateError, TemplateVariableMissing
+from .errors import (
+    AllModelsFailed,
+    ConfigError,
+    KeyMissing,
+    LlmKitError,
+    RoutingInvalid,
+    RoutingMissing,
+    TemplateError,
+    TemplateVariableMissing,
+)
+from .routing import Routing
+from .routing import parse as parse_routing
 from .template import render
 
 __all__ = [
@@ -20,10 +30,13 @@ __all__ = [
     "KeyMissing",
     "LlmKit",
     "LlmKitError",
+    "Routing",
+    "RoutingInvalid",
+    "RoutingMissing",
     "Stats",
     "Task",
     "TemplateError",
     "TemplateVariableMissing",
-    "load_config",
+    "parse_routing",
     "render",
 ]

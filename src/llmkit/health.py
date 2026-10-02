@@ -21,8 +21,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from . import keys
-from .config import Config, ProviderConfig
-from .providers import SUBSCRIPTION_KINDS
+from .routing import Provider, Routing
 from .version import installed_version
 
 TOOL = "llmkit"
@@ -31,7 +30,10 @@ CHECK_TIMEOUT = 10.0
 ALWAYS_PROBLEMS = frozenset({"invalid", "expired"})
 HEALTHY = frozenset({"ok", "unchecked"})
 
-# Дешёвый read-only вызов по виду провайдера: (метод, адрес, заголовки с ключом).
+# Входы в подписки на этой машине: в отчёте всегда, даже без routing (их ведёт `llm auth login`).
+LOCAL_SUBSCRIPTIONS = {"chatgpt": Provider(protocol="chatgpt"), "claude": Provider(protocol="claude_cli")}
+
+# Дешёвый read-only вызов по протоколу провайдера: (метод, адрес, заголовки с ключом).
 # У ollama.com список моделей открыт без ключа, ключ проверяет только /api/me.
 _KEY_CHECKS: dict[str, Callable[[str, str | None], tuple[str, str, dict[str, str]]]] = {
     "openrouter": lambda key, base: ("GET", "https://openrouter.ai/api/v1/key", {"Authorization": f"Bearer {key}"}),
@@ -143,14 +145,16 @@ def check_key(kind: str, api_key: str, base_url: str | None, *, transport: Any =
     return Health()
 
 
-def _key_entry(name: str, cfg: ProviderConfig, check: bool, env: Mapping[str, str]) -> dict[str, Any]:
+def _key_entry(name: str, cfg: Provider, check: bool, env: Mapping[str, str]) -> dict[str, Any]:
     env_name = keys.env_var(name, cfg)
+    legacy = keys.legacy_env(name, cfg)
     keychain_ref = f"keychain service {keys.service_name(name)}"
     entry = _blank(name, ["api_key"], f"{env_name} or {keychain_ref}")
-    if cfg.api_key:  # порядок как в keys.resolve: конфиг → env → связка
-        value, source, ref = cfg.api_key, "file", f"providers.{name}.api_key в конфиге (`llm config path`)"
-    elif env.get(env_name):
+    if env.get(env_name):  # порядок как в keys.resolve: env → старое имя → связка
         value, source, ref = env[env_name], "env", env_name
+    elif legacy != env_name and env.get(legacy):
+        value, source, ref = env[legacy], "env", legacy
+        entry["message"] = f"rename {legacy} to {env_name}"
     elif found := keys.from_keychain(name):
         value, source, ref = found, "keychain", keychain_ref
     else:
@@ -160,7 +164,7 @@ def _key_entry(name: str, cfg: ProviderConfig, check: bool, env: Mapping[str, st
     if not check:
         entry["status"] = "unchecked"
         return entry
-    return _apply(entry, _with_timeout(lambda: check_key(cfg.kind, value, cfg.base_url)), [value])
+    return _apply(entry, _with_timeout(lambda: check_key(cfg.protocol, value, cfg.base_url)), [value])
 
 
 # --- подписки -------------------------------------------------------------------
@@ -240,7 +244,7 @@ def _claude_entry(name: str, check: bool) -> dict[str, Any]:
 def _blank(name: str, fields: list[str], source_ref: str) -> dict[str, Any]:
     return {
         "provider": name,
-        # llmkit работает с любым подмножеством провайдеров конфига — обязательных нет.
+        # llmkit работает с любым подмножеством провайдеров routing — обязательных нет.
         "required": False,
         "fields": fields,
         "source": "missing",
@@ -265,32 +269,35 @@ def _apply(entry: dict[str, Any], health: Health, secrets: list[str]) -> dict[st
     return entry
 
 
-def has_credentials(cfg: ProviderConfig) -> bool:
-    """Провайдеры без доступа (локальный ollama с requires_key=false) в отчёт не попадают."""
-    return cfg.kind in SUBSCRIPTION_KINDS or cfg.requires_key
+def providers_of(routing: Routing | None) -> dict[str, Provider]:
+    """Провайдеры отчёта: из routing плюс входы в подписки этой машины, если routing их не описал."""
+    found = dict(routing.providers) if routing is not None else {}
+    described = {cfg.protocol for cfg in found.values() if cfg.subscription}
+    for name, cfg in LOCAL_SUBSCRIPTIONS.items():
+        if cfg.protocol not in described and name not in found:
+            found[name] = cfg
+    return found
 
 
-def credential_entry(
-    name: str, cfg: ProviderConfig, *, check: bool, env: Mapping[str, str] | None = None
-) -> dict[str, Any]:
+def credential_entry(name: str, cfg: Provider, *, check: bool, env: Mapping[str, str] | None = None) -> dict[str, Any]:
     """Строка отчёта §8 для одного провайдера."""
-    if cfg.kind == "chatgpt":
+    if cfg.protocol == "chatgpt":
         return _chatgpt_entry(name, check)
-    if cfg.kind == "claude_cli":
+    if cfg.protocol == "claude_cli":
         return _claude_entry(name, check)
     return _key_entry(name, cfg, check, os.environ if env is None else env)
 
 
-def report(config: Config, *, check: bool, only: str | None = None) -> dict[str, Any]:
-    """Отчёт §8 по провайдерам конфига (или по одному, `only`)."""
+def report(routing: Routing | None, *, check: bool, only: str | None = None) -> dict[str, Any]:
+    """Отчёт §8 по провайдерам routing и подпискам машины (или по одному, `only`)."""
     return {
         "tool": TOOL,
         "version": _version(),
         "checked_at": _iso(_now()),
         "credentials": [
             credential_entry(name, cfg, check=check)
-            for name, cfg in sorted(config.providers.items())
-            if has_credentials(cfg) and (only is None or name == only)
+            for name, cfg in sorted(providers_of(routing).items())
+            if only is None or name == only
         ],
     }
 

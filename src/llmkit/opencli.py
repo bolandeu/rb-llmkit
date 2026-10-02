@@ -158,31 +158,25 @@ def _summary() -> str:
 
 
 def env_vars() -> list[dict]:
-    """Все env, которые читает llmkit: ключи встроенных провайдеров, конфиг, база, внешний CLI."""
-    from . import config, db, keys
-    from .providers import SUBSCRIPTION_KINDS
+    """Все env, которые читает llmkit: ключи провайдеров routing, файл routing, база, внешний CLI."""
+    from . import db
 
-    found: list[dict] = []
-    # Встроенные провайдеры (config.DEFAULTS), не конфиг пользователя: документ не зависит от машины.
-    # Провайдер из своего конфига читает `api_key_env` или <ПРОВАЙДЕР>_API_KEY.
-    defaults = config.Config.model_validate(config.DEFAULTS)
-    for name, cfg in defaults.providers.items():
-        if cfg.kind in SUBSCRIPTION_KINDS or not cfg.requires_key:
-            continue
-        found.append(
-            {
-                "name": keys.env_var(name, cfg),
-                "purpose": "credential",
-                "provider": name,
-                "field": "api_key",
-                "required": False,  # нужен, только если цепочка идёт через этого провайдера
-            }
-        )
+    # Встроенных провайдеров нет: ключ провайдера из routing — LLM_<ПРОВАЙДЕР>_API_KEY или его key_env.
+    found: list[dict] = [
+        {
+            "name": "LLM_<PROVIDER>_API_KEY",
+            "purpose": "credential",
+            "field": "api_key",
+            "description": "Ключ провайдера routing (имя в верхнем регистре, не буквы и не цифры → _) "
+            "или переменная из его key_env; старые имена (OPENROUTER_API_KEY…) — один цикл с предупреждением",
+            "required": False,  # нужен, только если цепочка идёт через этого провайдера
+        }
+    ]
     found += [
         {
-            "name": "LLMKIT_CONFIG",
+            "name": "LLMKIT_ROUTING_FILE",
             "purpose": "config",
-            "description": "Файл конфига вместо поиска ~/.config/llmkit и .llmkit/ проекта",
+            "description": "JSON-файл routing v1 для CLI, когда --routing не передан",
             "required": False,
         },
         {

@@ -327,7 +327,8 @@ def test_r7_new_env_name(fake_kit, monkeypatch):
     monkeypatch.setenv("OPENROUTER_API_KEY", "старый")
     fake = fake_kit()
     body = payload(run("ask", "вопрос", "--routing", json.dumps(OPENROUTER), "--json"))
-    assert fake.calls[0]["api_key"] == "новый" and body["warnings"] == []
+    assert fake.calls[0]["api_key"] == "новый"
+    assert not any("rename" in warning for warning in body["warnings"])
 
 
 def test_r7_key_env_defaults_to_llm_provider_api_key(fake_kit, monkeypatch):
@@ -383,7 +384,8 @@ def test_r7_no_key_anywhere_is_exit_3(fake_kit, tmp_path):
 def test_r7_key_never_printed_or_journaled(fake_kit, monkeypatch, tmp_path):
     monkeypatch.setenv("LLM_OPENROUTER_API_KEY", SECRET_KEY)
     fake_kit([fakes.AuthenticationError(f"bad key {SECRET_KEY}")])
-    result = run("ask", "вопрос", "--routing", json.dumps(OPENROUTER), "--json", "--verbose")
+    result = run("--verbose", "ask", "вопрос", "--routing", json.dumps(OPENROUTER), "--json")
+    assert result.exit_code == 3
     assert SECRET_KEY not in result.output
     assert SECRET_KEY not in json.dumps(usage_rows(tmp_path), ensure_ascii=False)
 

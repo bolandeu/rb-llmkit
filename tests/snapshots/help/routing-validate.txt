@@ -1,0 +1,22 @@
+
+ Usage: llm routing validate [OPTIONS] {routing}
+
+ Проверить routing v1 перед сохранением (Windmill, Directus).
+
+ Та же проверка, что перед вызовом модели: схема плюс ссылки цепочки и
+ цен на описанных провайдеров. Ключи не проверяются (`llm auth status`).
+ Коды выхода: 0 — routing годен, 2 — ROUTING_INVALID с `error.path`
+ (JSON Pointer поля).
+
+ Example: llm routing validate '{"providers": {"openrouter": {"protocol": "openrouter"}}, "chain":
+ ["openrouter/openai/gpt-4o-mini"]}'
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
+│ *    routing      <str>  Routing v1: путь к JSON-файлу или JSON-строка. [required]               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --providers-only          Без цепочки: файл провайдеров под `-m …` (LLMKIT_ROUTING_FILE).        │
+│ --json                    Машинный вывод: JSON-конверт в stdout.                                 │
+│ --help                    Show this message and exit.                                            │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+

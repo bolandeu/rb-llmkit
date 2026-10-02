@@ -449,7 +449,8 @@ async def test_budget_warning_is_not_repeated_per_model_in_chain(slept):
     instance.config.budget.daily_usd = 0.0
     instance.usage.record(model="a/m1", provider="a", status="ok", cost_usd=1.0)
     answer = await instance.ask(Task(user="вопрос"))
-    assert len(answer.warnings) == 1  # одно предупреждение на задачу, не на модель
+    # Одно предупреждение бюджета на задачу, не на модель (у b/m2 ещё и «price unknown» — R4).
+    assert len([w for w in answer.warnings if "бюджет" in w]) == 1
 
 
 async def test_api_key_is_masked_in_errors():

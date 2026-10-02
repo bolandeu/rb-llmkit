@@ -156,7 +156,7 @@ def test_ask_renders_template_before_request(fake_kit, template_file):
     result = run("ask", "--template", str(template_file), "--vars", '{"name": "Мир"}', "--json")
     assert result.exit_code == 0, result.output
     assert completion.calls[0]["messages"][-1]["content"] == "Привет, Мир!"
-    assert payload(result)["data"] == "ответ модели"
+    assert payload(result)["text"] == "ответ модели"
 
 
 def test_ask_missing_variable_does_not_call_model(fake_kit, template_file):

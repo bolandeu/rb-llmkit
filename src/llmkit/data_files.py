@@ -2,8 +2,8 @@
 
 Шаблон cli-generator v1.5.6 (`core/data_files.py`); отличие — поле `dir`: кэш
 ответов у llmkit лежит не в каталоге данных, а в каталоге кэша
-(`platformdirs.user_cache_dir("llmkit")`). Пути — по умолчанию, конфиг
-(`cache.path`, `usage.path`) может их перенести. Новый файл, который пишет
+(`platformdirs.user_cache_dir("llmkit")`). Пути — по умолчанию, настройки
+`LlmKit(config=...)` (`cache.path`, `usage.path`) могут их перенести. Новый файл, который пишет
 llmkit, — новая запись здесь.
 """
 

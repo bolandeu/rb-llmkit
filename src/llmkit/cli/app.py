@@ -12,21 +12,24 @@ app = typer.Typer(
         "Коды выхода: 0 — успех, 1 — непредвиденная ошибка, 2 — неверные аргументы,\n"
         "3 — нет ключа или входа в подписку, 5 — все модели упали или база недоступна,\n"
         "6 — базу расходов смигрировал более новый релиз (`llm db`).\n\n"
-        "Основные параметры `llm ask` и `llm json`:\n\n"
-        "  -m, --model ПРОВАЙДЕР/МОДЕЛЬ   одна модель вместо уровня: ccode/gpt-5.6-sol\n\n"
-        "  -l, --level УРОВЕНЬ            цепочка моделей из конфига: cheap, judge…\n\n"
+        "Провайдеры и цепочка — routing v1 (данные, встроенных нет):\n\n"
+        "  --routing JSON|ФАЙЛ             routing аргументом или файлом; иначе LLMKIT_ROUTING_FILE\n\n"
+        "  -m ПРОВАЙДЕР/МОДЕЛЬ             цепочка из CLI, можно несколько: -m a/x -m b/y\n\n"
         "  -s, --system ТЕКСТ             системное сообщение\n\n"
         "  --schema ФАЙЛ                  JSON Schema ответа (только llm json)\n\n"
-        "  --temperature, --max-tokens, --timeout   перекрыть значения из конфига\n\n"
+        "  --template ФАЙЛ --vars JSON     шаблон промпта mustache вместо текста\n\n"
+        "  --temperature, --max-tokens, --timeout   перекрыть значения по умолчанию\n\n"
         "  --tag k=v                      метка для учёта расходов, можно несколько\n\n"
         "  --no-cache, --no-retry         без кэша; без повторов на сбойной модели\n\n"
-        "Список провайдеров, уровней и моделей: `llm models`. Все параметры\n"
+        "Ключ провайдера — LLM_<ПРОВАЙДЕР>_API_KEY или связка ключей (`llm keys set`).\n"
+        "Старый config.toml не читается: `llm routing import config.toml`.\n\n"
+        "Провайдеры routing и источник ключей: `llm models`. Все параметры\n"
         "команды: `llm <команда> --help`, например `llm ask --help`.\n\n"
         "Примеры:\n\n"
-        '  llm ask "Столица Франции?" --level cheap\n\n'
-        '  llm ask "Привет" -m ccode/gpt-5.6-sol\n\n'
+        '  llm ask "Столица Франции?" --routing routing.json\n\n'
+        '  llm ask "Привет" -m ccode/gpt-5.6-sol -m openrouter/openai/gpt-4o-mini\n\n'
         '  llm json "Разбери запрос" --schema schema.json\n\n'
-        "  llm models · llm cost --since 7d · llm auth status · llm db status"
+        "  llm routing validate routing.json · llm models · llm cost --since 7d · llm auth status"
     ),
     no_args_is_help=False,
     invoke_without_command=True,

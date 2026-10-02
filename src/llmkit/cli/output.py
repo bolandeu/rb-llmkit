@@ -24,6 +24,8 @@ from ..errors import (
     DatabaseError,
     KeyMissing,
     LoginMissing,
+    RoutingInvalid,
+    RoutingMissing,
     TemplateError,
     TemplateVariableMissing,
 )
@@ -98,10 +100,27 @@ def _classify(exc: Exception) -> CliError:
         return CliError("AUTH_REQUIRED", f"нет входа в подписку для провайдера {exc.provider}", exc.action, exit_code=3)
     if isinstance(exc, KeyMissing):
         return CliError(
-            "AUTH_REQUIRED",
-            f"нет ключа для провайдера {exc.provider}",
-            f"выполните `llm keys set {exc.provider}`" + (f" или `export {exc.env_var}=...`" if exc.env_var else ""),
+            "AUTH_MISSING",
+            f"нет ключа для провайдера {exc.provider}: переменная {exc.env_var}",
+            f"`export {exc.env_var}=...` или `llm keys set {exc.provider}`",
             exit_code=3,
+            details={"variable": exc.env_var},
+        )
+    if isinstance(exc, RoutingMissing):
+        return CliError(
+            "ROUTING_MISSING",
+            str(exc),
+            "передайте --routing '<json>' или путь к JSON-файлу, либо задайте LLMKIT_ROUTING_FILE; "
+            "старый config.toml не читается — перенести: `llm routing import <config.toml>`",
+            exit_code=2,
+        )
+    if isinstance(exc, RoutingInvalid):
+        return CliError(
+            "ROUTING_INVALID",
+            str(exc),
+            "проверьте routing: `llm routing validate <файл|json>`",
+            exit_code=2,
+            details={"path": exc.path},
         )
     if isinstance(exc, TemplateVariableMissing):
         return CliError(
@@ -116,8 +135,17 @@ def _classify(exc: Exception) -> CliError:
     if isinstance(exc, ConfigError):
         return CliError("INVALID_ARGUMENTS", str(exc), "проверьте конфиг: `llm config show`", exit_code=2)
     if isinstance(exc, AllModelsFailed):
+        attempts = [{"model": a.model, "error_code": a.error_type} for a in exc.attempts]
         # Ядро ловит KeyMissing внутри цепочки; если все попытки упали
         # по ключам, это не сбой провайдера, а отсутствующая авторизация.
+        if exc.error_type == "auth" and exc.missing_keys:
+            return CliError(
+                "AUTH_MISSING",
+                "нет ключей для моделей цепочки: " + ", ".join(exc.missing_keys),
+                f"`export {exc.missing_keys[0]}=...` или `llm keys set <провайдер>`",
+                exit_code=3,
+                details={"variable": exc.missing_keys[0], "variables": exc.missing_keys, "attempts": attempts},
+            )
         if exc.error_type == "auth":
             providers = sorted({attempt.provider for attempt in exc.attempts})
             return CliError(
@@ -126,12 +154,14 @@ def _classify(exc: Exception) -> CliError:
                 "выполните `llm keys set " + providers[0] + "` или задайте переменную окружения"
                 "; для провайдера по подписке — `llm auth login " + providers[0] + "`",
                 exit_code=3,
+                details={"attempts": attempts},
             )
         return CliError(
             "PROVIDER_ERROR",
             str(exc),
-            "попробуйте другой уровень: `llm ask ... --level judge`",
+            "попробуйте другую цепочку: -m провайдер/модель … или routing.chain",
             exit_code=5,
+            details={"attempts": attempts},
         )
     return CliError("UNEXPECTED", f"{type(exc).__name__}: {exc}", "повторите с `--verbose`")
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .config import Config, RetryConfig
+from .config import RetryConfig
 
 # Классификация по имени класса исключения, а не по самому классу: так модуль
 # не тянет litellm на импорте. MRO обходится от частного к общему, поэтому
@@ -124,10 +124,3 @@ def backoff_seconds(error_type: str, attempt: int, exc: BaseException | None = N
         if header is not None:
             return min(max(header, 0.0), MAX_BACKOFF)
     return min(2.0 * (2**attempt), MAX_BACKOFF)
-
-
-def resolve(config: Config, *, chain: list[str] | None = None, level: str | None = None) -> list[str]:
-    """`task.chain` → `levels[task.level]` → `levels[defaults.level]`."""
-    if chain:
-        return list(chain)
-    return config.chain_for(level or config.defaults.level)

@@ -18,9 +18,11 @@ from . import cache as cache_mod
 from . import chain as chain_mod
 from . import config as config_mod
 from . import providers as providers_mod
+from . import routing as routing_mod
 from .cache import Cache
-from .config import DECIDE_LEVEL, Config
-from .errors import AllModelsFailed, ConfigError, KeyMissing, LlmKitError
+from .config import Config
+from .errors import AllModelsFailed, ConfigError, KeyMissing, LlmKitError, RoutingInvalid, RoutingMissing
+from .routing import Routing
 from .usage import Usage
 
 log = logging.getLogger("llmkit.core")
@@ -40,8 +42,7 @@ class Task:
     system: str | None = None
     messages: list[dict] | None = None
     schema: type[BaseModel] | dict | None = None  # None = обычный текст
-    level: str | None = None
-    chain: list[str] | None = None
+    chain: list[str] | None = None  # вместо routing.chain; провайдеры — из routing
     tags: dict[str, str] = field(default_factory=dict)
     default: Any = None
     temperature: float | None = None
@@ -72,22 +73,33 @@ class Answer:
 
     data: Any
     source: str  # llm | cache | default
-    model: str = ""
+    model: str = ""  # элемент цепочки, который ответил: "провайдер/модель"
     provider: str = ""
     attempts: list[Attempt] = field(default_factory=list)
     prompt_tokens: int = 0
     completion_tokens: int = 0
-    cost_usd: float = 0.0
-    cost_known: bool = True
+    cost_usd: float | None = 0.0  # None — цену не знает ни routing, ни LiteLLM
+    # routing | litellm | provider (цена в ответе) | subscription | cache | unknown
+    cost_source: str = "routing"
     latency_ms: int = 0
     warnings: list[str] = field(default_factory=list)
     error: str | None = None
     task_id: str | None = None
-    served_model: str = ""  # версия, которую назвал провайдер (за алиасом вида `~…-latest`)
+    # Версия, которую назвал провайдер (за алиасом вида `~…-latest`); не назвал — `model`.
+    served_model: str = ""
+    chain_position: int = 0  # 0-based номер ответившей модели в цепочке
 
     @property
     def ok(self) -> bool:
         return self.source in ("llm", "cache")
+
+    @property
+    def cache_hit(self) -> bool:
+        return self.source == "cache"
+
+    @property
+    def cost_known(self) -> bool:
+        return self.cost_source != "unknown"
 
 
 @dataclass
@@ -113,8 +125,8 @@ class _Outcome:
     cache_value: Any
     prompt_tokens: int = 0
     completion_tokens: int = 0
-    cost_usd: float = 0.0
-    cost_known: bool = True
+    cost_usd: float | None = 0.0
+    cost_source: str = "routing"
     served_model: str = ""
 
 
@@ -201,17 +213,17 @@ class _BudgetTracker:
 
 
 class LlmKit:
-    """Точка входа: конфиг, кэш, журнал, цепочки моделей."""
+    """Точка входа: routing (провайдеры и цепочка данными), настройки, кэш, журнал."""
 
     def __init__(
         self,
         *,
+        routing: Routing | dict[str, Any] | None = None,
         config: Config | None = None,
         tags: dict[str, str] | None = None,
         completion: Callable[..., Any] | None = None,
         instructor_factory: Callable[[Callable[..., Any], str], Any] | None = None,
         decisions: Callable[..., Any] | None = None,
-        level: str | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
         timeout: float | None = None,
@@ -219,8 +231,10 @@ class LlmKit:
         cache: bool | None = None,
     ) -> None:
         overrides: dict[str, Any] = {}
+        # Без routing экземпляр создаётся, а первый вызов бросит RoutingMissing.
+        # Цепочка может прийти и задачей (Task.chain), поэтому здесь она не обязательна.
+        self.routing = None if routing is None else routing_mod.parse(routing, require_chain=False)
         defaults = {
-            "level": level,
             "temperature": temperature,
             "max_tokens": max_tokens,
             "timeout": timeout,
@@ -267,12 +281,12 @@ class LlmKit:
         """
         started = time.perf_counter()
         messages = self._messages(task)
-        chain = chain_mod.resolve(self.config, chain=task.chain, level=task.level)
-        level = None if task.chain else (task.level or self.config.defaults.level)
+        routing, chain = self._chain(task)
+        level = None  # уровней нет; метка level, если нужна, — в tags
         tags = {**self.tags, **task.tags}
         settings = self._settings(task)
         cache_enabled = task.cache if task.cache is not None else self.config.cache.enabled
-        cache_keys = self._cache_keys(chain, messages, task, settings)
+        cache_keys = self._cache_keys(routing, chain, messages, task, settings)
 
         attempts: list[Attempt] = []
         warnings: list[str] = []
@@ -299,8 +313,11 @@ class LlmKit:
                     model=ref,
                     provider=provider,
                     attempts=attempts,
+                    cost_source="cache",
                     warnings=warnings,
                     task_id=task.id,
+                    served_model=ref,
+                    chain_position=position,
                 )
                 return self._done(answer, started, position, tags)
 
@@ -311,36 +328,48 @@ class LlmKit:
                 await self.cache.aset(key, call.ref, outcome.cache_value)
             return outcome
 
-        return await self._through_chain(task, chain, tags, level, started, attempts, warnings, invoke)
+        return await self._through_chain(task, routing, chain, tags, level, started, attempts, warnings, invoke)
 
-    async def decide(
-        self, state: str, questions: dict[str, Any], *, level: str | None = None, **task_kw: Any
-    ) -> Answer:
+    async def decide(self, state: str, questions: dict[str, Any], **task_kw: Any) -> Answer:
         """Модель решений OpenRouter: вероятности по типизированным вопросам о состоянии.
 
         `data` — словарь `answers` из ответа как есть, `served_model` — версия,
         которая реально ответила. Кэша нет: ответ зависит от состояния. Цепочка —
-        уровень `decide` (или `level`/`chain`), только модели провайдера kind=openrouter.
+        из routing (или `chain`), только модели провайдеров с protocol=openrouter.
         """
-        task = Task(level=level or DECIDE_LEVEL, **task_kw)
+        task = Task(**task_kw)
         started = time.perf_counter()
-        chain = chain_mod.resolve(self.config, chain=task.chain, level=task.level)
-        for ref in chain:
+        routing, chain = self._chain(task)
+        for index, ref in enumerate(chain):
             provider, _ = providers_mod.split_ref(ref)
-            if self.config.provider(provider).kind != "openrouter":
-                raise ConfigError(f"decide: модель {ref!r} не у OpenRouter — эндпоинт решений есть только там")
+            if routing.provider(provider).protocol != "openrouter":
+                raise RoutingInvalid(
+                    f"/chain/{index}", f"decide: модель {ref!r} не у OpenRouter — эндпоинт решений есть только там"
+                )
         timeout = self.config.defaults.timeout if task.timeout is None else task.timeout
         tags = {**self.tags, **task.tags}
 
         async def invoke(call: providers_mod.ModelCall) -> _Outcome:
             return await self._call_decisions(call, state, questions, timeout)
 
-        level_name = None if task.chain else task.level
-        return await self._through_chain(task, chain, tags, level_name, started, [], [], invoke)
+        return await self._through_chain(task, routing, chain, tags, None, started, [], [], invoke)
+
+    def _chain(self, task: Task) -> tuple[Routing, list[str]]:
+        """Цепочка задачи: Task.chain или routing.chain; провайдеры — всегда из routing."""
+        if self.routing is None:
+            raise RoutingMissing()
+        chain = task.chain or self.routing.chain
+        if not chain:
+            raise RoutingInvalid("/chain", "нет цепочки моделей: передайте chain в routing или в задаче")
+        routing = self.routing if chain == self.routing.chain else self.routing.model_copy(update={"chain": chain})
+        if routing is not self.routing:
+            routing_mod.parse(routing)  # проверить ссылки цепочки задачи
+        return routing, list(chain)
 
     async def _through_chain(
         self,
         task: Task,
+        routing: Routing,
         chain: list[str],
         tags: dict[str, str],
         level: str | None,
@@ -351,12 +380,16 @@ class LlmKit:
     ) -> Answer:
         """Сетевые попытки по цепочке: ретраи, журнал, бюджет; всё упало — default или AllModelsFailed."""
         budget = await self._budget_tracker(tags)
+        missing_keys: list[str] = []
         for position, ref in enumerate(chain):
             try:
-                call = providers_mod.build(ref, self.config)
+                call = providers_mod.build(ref, routing)
             except KeyMissing as exc:
+                if exc.env_var and exc.env_var not in missing_keys:
+                    missing_keys.append(exc.env_var)
                 await self._fail(task, tags, level, ref, ref.partition("/")[0], exc, "auth", attempts, 0)
                 continue
+            warnings.extend(w for w in call.warnings if w not in warnings)
             secret = call.params.get("api_key")
 
             retry_index = 0
@@ -393,7 +426,9 @@ class LlmKit:
                     break
 
                 latency = int((time.perf_counter() - begin) * 1000)
-                budget.add(outcome.cost_usd)
+                budget.add(outcome.cost_usd or 0.0)
+                if outcome.cost_usd is None:
+                    warnings.append(f"price unknown for {call.ref}")
                 attempts.append(
                     Attempt(
                         model=call.ref,
@@ -401,7 +436,7 @@ class LlmKit:
                         latency_ms=latency,
                         prompt_tokens=outcome.prompt_tokens,
                         completion_tokens=outcome.completion_tokens,
-                        cost_usd=outcome.cost_usd,
+                        cost_usd=outcome.cost_usd or 0.0,
                     )
                 )
                 await self.usage.arecord(
@@ -414,10 +449,10 @@ class LlmKit:
                     attempt=retry_index,
                     prompt_tokens=outcome.prompt_tokens,
                     completion_tokens=outcome.completion_tokens,
-                    cost_usd=outcome.cost_usd,
-                    cost_known=outcome.cost_known,
+                    cost_usd=outcome.cost_usd or 0.0,
+                    cost_known=outcome.cost_source != "unknown",
                     latency_ms=latency,
-                    served_model=outcome.served_model or None,
+                    served_model=outcome.served_model or call.ref,
                 )
                 answer = Answer(
                     data=outcome.data,
@@ -428,10 +463,11 @@ class LlmKit:
                     prompt_tokens=outcome.prompt_tokens,
                     completion_tokens=outcome.completion_tokens,
                     cost_usd=outcome.cost_usd,
-                    cost_known=outcome.cost_known,
+                    cost_source=outcome.cost_source,
                     warnings=warnings,
                     task_id=task.id,
-                    served_model=outcome.served_model,
+                    served_model=outcome.served_model or call.ref,
+                    chain_position=position,
                 )
                 return self._done(answer, started, position, tags)
 
@@ -445,18 +481,16 @@ class LlmKit:
         )
         self._done(answer, started, max(len(chain) - 1, 0), tags)
         if task.default is None:
-            raise AllModelsFailed(attempts, answer=answer)
+            raise AllModelsFailed(attempts, answer=answer, missing_keys=missing_keys)
         return answer
 
-    async def generate(
-        self, prompt: str, *, system: str | None = None, level: str | None = None, **task_kw: Any
-    ) -> str | None:
+    async def generate(self, prompt: str, *, system: str | None = None, **task_kw: Any) -> str | None:
         """Строковый путь: ошибок не бросает.
 
         Возвращает None, если ответа нет; если у задачи задан `default`,
         возвращается он (приведённый к строке).
         """
-        task = Task(user=prompt, system=system, level=level, **task_kw)
+        task = Task(user=prompt, system=system, **task_kw)
         try:
             answer = await self.ask(task)
         except LlmKitError as exc:
@@ -591,14 +625,16 @@ class LlmKit:
         )
         return answer
 
-    def _cache_keys(self, chain: list[str], messages: list[dict], task: Task, settings: dict) -> dict[str, str]:
+    def _cache_keys(
+        self, routing: Routing, chain: list[str], messages: list[dict], task: Task, settings: dict
+    ) -> dict[str, str]:
         """Ключ кэша для каждой модели цепочки — до резолва ключей провайдеров."""
         keys: dict[str, str] = {}
         for ref in chain:
             try:
-                base = providers_mod.api_base(ref, self.config)
+                base = providers_mod.api_base(ref, routing)
             except ConfigError:
-                continue  # ошибка конфига всплывёт на сетевом шаге
+                continue  # ошибка routing всплывёт на сетевом шаге
             keys[ref] = cache_mod.make_key(
                 model=ref,
                 api_base=base,
@@ -620,7 +656,7 @@ class LlmKit:
         self._stats.fallbacks += max(position, 0)
         self._stats.prompt_tokens += answer.prompt_tokens
         self._stats.completion_tokens += answer.completion_tokens
-        self._stats.cost_usd += answer.cost_usd
+        self._stats.cost_usd += answer.cost_usd or 0.0
         if answer.model:
             self._stats.by_model[answer.model] += 1
 
@@ -759,29 +795,31 @@ class LlmKit:
         usage = getattr(response, "usage", None)
         prompt_tokens = int(getattr(usage, "prompt_tokens", 0) or 0)
         completion_tokens = int(getattr(usage, "completion_tokens", 0) or 0)
-        cost, known = self._cost(call, response, prompt_tokens, completion_tokens)
+        cost, source = self._cost(call, response, prompt_tokens, completion_tokens)
+        served = getattr(response, "model", None)
         return _Outcome(
             data=data,
             cache_value=cache_value,
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
             cost_usd=cost,
-            cost_known=known,
+            cost_source=source,
+            served_model=served if isinstance(served, str) else "",
         )
 
     def _cost(
         self, call: providers_mod.ModelCall, response: Any, prompt_tokens: int, completion_tokens: int
-    ) -> tuple[float, bool]:
-        """Стоимость: подписка → цены из конфига → LiteLLM → неизвестно (один варн на модель).
+    ) -> tuple[float | None, str]:
+        """Стоимость и её источник: подписка → routing.prices → LiteLLM → неизвестно (None).
 
-        Конфиг главнее справочника LiteLLM: у шлюзов (ccode) имя модели совпадает
+        routing главнее справочника LiteLLM: у шлюзов (ccode) имя модели совпадает
         с вендорским, и LiteLLM отдал бы прайс вендора, а не шлюза.
         """
         if call.subscription:
-            return 0.0, True  # оплачено подпиской, отдельного счёта за вызов нет
-        from_config = providers_mod.price_from_config(self.config, call, prompt_tokens, completion_tokens)
-        if from_config is not None:
-            return from_config, True
+            return 0.0, "subscription"  # оплачено подпиской, отдельного счёта за вызов нет
+        from_routing = self._routing_price(call, prompt_tokens, completion_tokens)
+        if from_routing is not None:
+            return from_routing, "routing"
         cost = 0.0
         # litellm импортируем только если он и так в игре: с подменённым
         # `completion` (тесты) модуль тянуть незачем.
@@ -792,18 +830,25 @@ class LlmKit:
             except Exception as exc:  # цену знает не каждая модель
                 log.debug("completion_cost для %s не сработал: %s", call.ref, exc)
         if cost > 0:
-            return cost, True
+            return cost, "litellm"
         return self._unknown_price(call, prompt_tokens, completion_tokens)
 
+    def _routing_price(self, call: providers_mod.ModelCall, prompt_tokens: int, completion_tokens: int) -> float | None:
+        if self.routing is None:
+            return None
+        return providers_mod.price_from_routing(self.routing, call, prompt_tokens, completion_tokens)
+
     @staticmethod
-    def _unknown_price(call: providers_mod.ModelCall, prompt_tokens: int, completion_tokens: int) -> tuple[float, bool]:
-        """Цены нет: без токенов — ноль, иначе «неизвестно» и один варн на модель."""
+    def _unknown_price(
+        call: providers_mod.ModelCall, prompt_tokens: int, completion_tokens: int
+    ) -> tuple[float | None, str]:
+        """Цены нет: без токенов — ноль, иначе None («неизвестно») и один варн в лог на модель."""
         if prompt_tokens == 0 and completion_tokens == 0:
-            return 0.0, True
+            return 0.0, "unknown"
         if call.ref not in _warned_prices:
             _warned_prices.add(call.ref)
             log.warning("цена модели %s неизвестна: расход не учитывается", call.ref)
-        return 0.0, False
+        return None, "unknown"
 
     async def _call_decisions(
         self, call: providers_mod.ModelCall, state: str, questions: dict[str, Any], timeout: float
@@ -818,21 +863,22 @@ class LlmKit:
         usage = body.get("usage") or {}
         prompt_tokens = int(usage.get("input_tokens") or 0)
         completion_tokens = int(usage.get("output_tokens") or 0)
-        # Цену OpenRouter отдаёт в ответе; нет её — цены из конфига.
+        # Цену OpenRouter отдаёт в ответе; нет её — цены из routing.
+        cost: float | None
         if usage.get("cost") is not None:
-            cost, known = float(usage["cost"]), True
+            cost, source = float(usage["cost"]), "provider"
         else:
-            from_config = providers_mod.price_from_config(self.config, call, prompt_tokens, completion_tokens)
-            if from_config is not None:
-                cost, known = from_config, True
+            from_routing = self._routing_price(call, prompt_tokens, completion_tokens)
+            if from_routing is not None:
+                cost, source = from_routing, "routing"
             else:
-                cost, known = self._unknown_price(call, prompt_tokens, completion_tokens)
+                cost, source = self._unknown_price(call, prompt_tokens, completion_tokens)
         return _Outcome(
             data=body["answers"],
             cache_value=None,
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
             cost_usd=cost,
-            cost_known=known,
+            cost_source=source,
             served_model=str(body.get("model") or ""),
         )

@@ -1,59 +1,55 @@
-"""Команда `llm models`: провайдеры, уровни и цепочки из конфига."""
+"""Команда `llm models`: провайдеры и цепочка из routing."""
 
 from typing import Any
 
 import typer
 from rich.table import Table
 
-from .. import config as config_mod
+from . import runtime
 from .app import app
 from .keys import key_source
 from .output import JsonOption, emit, enable_json, guard, out
 
 
 @app.command("models")
-def models(ctx: typer.Context, json_output: bool = JsonOption) -> None:
-    """Показать провайдеров, уровни и их цепочки моделей.
+def models(
+    ctx: typer.Context,
+    routing: str = typer.Option(None, "--routing", help="Routing v1: JSON или файл; иначе LLMKIT_ROUTING_FILE."),
+    json_output: bool = JsonOption,
+) -> None:
+    """Показать провайдеров routing, источник их ключей и цепочку моделей.
 
-    У каждого провайдера видно, откуда берётся ключ (значение не
-    печатается). Цепочки уровней задаются в формате "провайдер/модель".
-    Код выхода 0; 2 — если конфиг не разбирается или уровень ссылается на
-    неописанного провайдера.
+    Значения ключей не печатаются. Встроенных провайдеров нет: всё — из
+    routing. Коды выхода: 0 — готово, 2 — нет routing, или он не по схеме
+    (например, цепочка ссылается на неописанного провайдера).
 
-    Example: llm models --json
+    Example: llm models --routing routing.json --json
     """
     enable_json(ctx, json_output)
     with guard(ctx):
-        config = config_mod.load()
-        config.check_levels()
+        loaded = runtime.load_routing(routing, require_chain=False)
         providers: list[dict[str, Any]] = []
-        for name, cfg in sorted(config.providers.items()):
+        for name, cfg in sorted(loaded.providers.items()):
             source, env_var = key_source(name, cfg)
             providers.append(
                 {
                     "provider": name,
-                    "kind": cfg.kind,
+                    "protocol": cfg.protocol,
                     "base_url": cfg.base_url,
                     "has_key": source != "none",
                     "key_source": source,
                     "env_var": env_var,
                 }
             )
-        levels = {name: list(chain) for name, chain in sorted(config.levels.items())}
+        chain = list(loaded.chain or [])
 
         def render() -> None:
             table = Table(title="Провайдеры")
-            for column in ("Провайдер", "Вид", "base_url", "Ключ"):
+            for column in ("Провайдер", "Протокол", "base_url", "Ключ"):
                 table.add_column(column)
             for row in providers:
-                table.add_row(row["provider"], row["kind"], row["base_url"] or "—", row["key_source"])
+                table.add_row(row["provider"], row["protocol"], row["base_url"] or "—", row["key_source"])
             out.print(table)
-            chains = Table(title="Уровни")
-            chains.add_column("Уровень")
-            chains.add_column("Цепочка моделей")
-            for name, chain in levels.items():
-                mark = " (по умолчанию)" if name == config.defaults.level else ""
-                chains.add_row(name + mark, " → ".join(chain))
-            out.print(chains)
+            out.print("Цепочка: " + (" → ".join(chain) or "нет (задаётся вызовом: -m …)"), highlight=False)
 
-        emit(ctx, {"providers": providers, "levels": levels, "default_level": config.defaults.level}, render)
+        emit(ctx, {"providers": providers, "chain": chain}, render)

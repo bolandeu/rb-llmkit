@@ -12,6 +12,7 @@ from . import auth as auth_mod
 from . import config as config_mod
 from . import db as db_mod
 from . import keys as keys_mod
+from . import routing as routing_mod
 from .app import app
 from .output import configure_logging
 
@@ -19,6 +20,7 @@ app.add_typer(keys_mod.app, name="keys")
 app.add_typer(auth_mod.app, name="auth")
 app.add_typer(config_mod.app, name="config")
 app.add_typer(db_mod.app, name="db")
+app.add_typer(routing_mod.app, name="routing")
 
 
 def _version() -> str:

@@ -54,70 +54,65 @@ src/llmkit/
   serve/           # фаза 4
 ```
 
-## 3. Конфиг
+## 3. Routing и настройки (с 0.8.0)
 
-Порядок слияния (позже перекрывает раньше): дефолты в коде → `~/.config/llmkit/config.toml`
-(`platformdirs.user_config_dir("llmkit")`) → `.llmkit/config.toml` в проекте (поиск вверх
-от cwd) → env `LLMKIT_*` (только для скалярных полей: `LLMKIT_CONFIG` путь к файлу,
-`LLMKIT_CACHE=0`, `LLMKIT_LOG_LEVEL`) → аргументы `LlmKit(...)`.
-Заданный `LLMKIT_CONFIG` **заменяет** поиск файлов: читается только он.
+Встроенных провайдеров и уровней нет; `config.toml` не читается (решение dev и
+пользователя 2026-10-02, T86). Провайдеры, цепочка и цены приходят **данными** —
+routing v1, публичный контракт: `src/llmkit/contracts/routing-v1.schema.json` и
+векторы `routing-v1.vectors.json` (валидные и невалидные routing → ожидаемый
+`error.path`). Секретов в routing нет — только имена переменных с ключами.
 
-```toml
-[providers.openrouter]
-kind = "openrouter"                 # openrouter | openai | anthropic | gemini | ollama | openai_compatible
-# ключ: env OPENROUTER_API_KEY или keychain llmkit:openrouter
-
-[providers.ollama]
-kind = "ollama"
-base_url = "https://ollama.com"     # локальный: http://localhost:11434
-[providers.ollama.prices]           # $/1M токенов; главнее цен LiteLLM
-"gpt-oss:120b" = { input = 0.15, output = 0.60 }
-
-[providers.deepseek]
-kind = "openai_compatible"
-base_url = "https://api.deepseek.com/v1"
-api_key_env = "DEEPSEEK_API_KEY"
-
-[levels]                            # уровень = цепочка "provider/model" по порядку;
-                                    # модели ниже — пример, набор выбирает пользователь
-cheap  = ["ollama/gpt-oss:120b", "openrouter/openai/gpt-4o-mini"]
-judge  = ["openrouter/anthropic/claude-sonnet-4", "openrouter/openai/gpt-4o"]
-strong = ["openrouter/anthropic/claude-opus-4"]
-
-[defaults]
-level = "cheap"
-temperature = 0.0
-timeout = 120                       # секунд на один HTTP-вызов
-max_tokens = 4096
-concurrency = 6                     # параллельных вызовов в ask_many
-
-[cache]
-enabled = true
-ttl_days = 30
-path = "~/.cache/llmkit/cache.sqlite"        # platformdirs user_cache_dir по умолчанию
-
-[usage]
-path = "~/.local/share/llmkit/usage.sqlite"  # platformdirs user_data_dir по умолчанию
-
-[budget]                            # только предупреждения, ничего не прерывает
-daily_usd = 20.0                    # дефолт в коде
-[budget.tags]                       # лимит на значение метки, ключ "метка=значение"
-"tool=intentree" = 2.0
-"niche=ved" = 1.0
-
-[retry]                             # по типам ошибок, см. раздел 6
-timeout = 1
-rate_limit = 2
-server = 2
-invalid_output = 2
+```json
+{
+  "version": 1,
+  "providers": {
+    "openrouter": {"protocol": "openrouter", "key_env": "LLM_OPENROUTER_API_KEY"},
+    "ollama": {"protocol": "ollama", "base_url": "https://ollama.com"},
+    "deepseek": {"protocol": "openai_compatible", "base_url": "https://api.deepseek.com/v1", "key_env": "DEEPSEEK_API_KEY"},
+    "chatgpt": {"protocol": "chatgpt"}
+  },
+  "chain": ["ollama/gpt-oss:120b", "openrouter/openai/gpt-4o-mini"],
+  "prices": {"ollama/gpt-oss:120b": {"input": 0.15, "output": 0.60}}
+}
 ```
 
-Модель-ссылка: строка `provider/model`, где `provider` — ключ из `[providers]`, всё после
+- `protocol` — таблица ниже; `base_url` обязателен для ollama и openai_compatible;
+  `mode` — режим Instructor (TOOLS | JSON | JSON_SCHEMA | MD_JSON).
+- `chain` — цепочка «провайдер/модель»; обязательна для вызова, если цепочка не
+  пришла иначе (`-m …` в CLI, `Task.chain` в библиотеке). `-m` вместе с
+  `routing.chain` — `ROUTING_INVALID` «chain задана дважды».
+- `prices` — $ за 1M токенов по «провайдер/модель»; главнее справочника LiteLLM.
+- Ошибка схемы — `RoutingInvalid` / `ROUTING_INVALID` (код 2) с `path` — JSON
+  Pointer поля; нет routing — `RoutingMissing` / `ROUTING_MISSING` (код 2).
+- Передача в CLI: `--routing '<json>'` или `--routing <файл>`, **не stdin** (stdin —
+  текст или шаблон промпта); без него — `LLMKIT_ROUTING_FILE` (локальный файл на
+  Mac). Библиотека env не читает: `LlmKit(routing=dict)`; без routing первый вызов
+  бросает `RoutingMissing`.
+- Ключ: `key_env`, по умолчанию `LLM_<ПРОВАЙДЕР>_API_KEY` (верхний регистр, не
+  буквы и не цифры → `_`) → старое имя (`OPENROUTER_API_KEY`, `CCODE_API_KEY`,
+  `ANYMODEL_API_KEY`, `OLLAMA_API_KEY`…; один цикл, предупреждение «rename to
+  LLM_…») → связка ключей `llmkit:<провайдер>` → `KeyMissing` / `AUTH_MISSING`
+  (код 3, `error.variable`). Значение ключа не печатается и не пишется в учёт.
+- Перенос старого конфига: `llm routing import <config.toml>` — провайдеры (вместе
+  со встроенными дефолтами 0.7) и цены в routing, уровни — отдельно (`levels`).
+
+Настройки вызовов (не routing): дефолты в коде → env `LLMKIT_CACHE=0`,
+`LLMKIT_LOG_LEVEL` → аргументы `LlmKit(...)` / флаги CLI.
+
+| настройка | дефолт |
+|---|---|
+| temperature / timeout / max_tokens / concurrency | 0.0 / 120 с / 4096 / 6 |
+| cache | включён, ttl 30 дней, `platformdirs.user_cache_dir/cache.sqlite` |
+| usage | `platformdirs.user_data_dir/usage.sqlite` (или `LLMKIT_DATABASE_URL`) |
+| budget.daily_usd | 20.0 — только предупреждение |
+| retry | timeout 1, rate_limit 2, server 2, invalid_output 2 (раздел 6) |
+
+Модель-ссылка: строка `provider/model`, где `provider` — ключ из `routing.providers`, всё после
 первого `/` — имя модели у провайдера (у OpenRouter само содержит `/`).
 
 Отображение на LiteLLM (`providers.py`):
 
-| kind | model для litellm | доп. аргументы |
+| protocol | model для litellm | доп. аргументы |
 |---|---|---|
 | openrouter | `openrouter/<model>` | `api_key` |
 | openai | `<model>` | `api_key` |
@@ -157,8 +152,8 @@ CLI `llm keys` и другие инструменты пользователя �
 ```python
 from llmkit import LlmKit, Task, Answer
 
-kit = LlmKit()                       # конфиг по разделу 3; LlmKit(config=Config(...)) для явного
-kit = LlmKit(tags={"tool": "intentree"})   # метки по умолчанию на все вызовы
+kit = LlmKit(routing=routing)        # routing v1 (раздел 3) — dict или Routing; без него первый вызов → RoutingMissing
+kit = LlmKit(routing=routing, tags={"tool": "intentree"})   # метки по умолчанию на все вызовы
 
 @dataclass(frozen=True)
 class Task:
@@ -166,8 +161,7 @@ class Task:
     system: str | None = None
     messages: list[dict] | None = None       # OpenAI-формат, если нужен диалог
     schema: type[BaseModel] | dict | None = None   # pydantic-класс или JSON Schema; None = текст
-    level: str | None = None                 # имя уровня из конфига; None = defaults.level
-    chain: list[str] | None = None           # явная цепочка "provider/model", перекрывает level
+    chain: list[str] | None = None           # цепочка "provider/model" вместо routing.chain; провайдеры — из routing
     tags: dict[str, str] = field(default_factory=dict)  # tool/task/niche/... — любые
     default: Any = None                      # что вернуть, если все модели упали
     temperature: float | None = None
@@ -191,21 +185,22 @@ class Answer:
     attempts: list[Attempt] = field(default_factory=list)
     prompt_tokens: int = 0
     completion_tokens: int = 0
-    cost_usd: float = 0.0
-    cost_known: bool = True
+    cost_usd: float | None = 0.0   # None — цену не знает ни routing, ни LiteLLM
+    cost_source: str = "routing"   # routing | litellm | provider | subscription | cache | unknown
     latency_ms: int = 0
-    warnings: list[str] = field(default_factory=list)   # бюджет, неизвестная цена
+    warnings: list[str] = field(default_factory=list)   # бюджет, "price unknown for <model>", "rename to LLM_…"
     error: str | None = None    # заполнен, если source == "default"
     task_id: str | None = None
-    served_model: str = ""      # версия, которую назвал провайдер (сейчас — только decide)
+    served_model: str = ""      # версия, которую назвал провайдер; не назвал — model
+    chain_position: int = 0     # 0-based номер ответившей модели
     @property
     def ok(self) -> bool: return self.source in ("llm", "cache")
+    cache_hit: bool (property); cost_known: bool (property, cost_source != "unknown")
 
 # --- async (основной) ---
 async def ask(self, task: Task) -> Answer
     # все модели упали и default is None → raise AllModelsFailed(attempts)
-async def generate(self, prompt: str, *, system: str | None = None,
-                   level: str | None = None, **task_kw) -> str | None
+async def generate(self, prompt: str, *, system: str | None = None, **task_kw) -> str | None
     # строковый путь под antagor/content-optimizer: ошибки НЕ бросает, возвращает None и пишет в лог
 async def ask_many(self, tasks: Sequence[Task], *, concurrency: int | None = None,
                    on_progress: Callable[[int, int, Answer], None] | None = None,
@@ -213,13 +208,12 @@ async def ask_many(self, tasks: Sequence[Task], *, concurrency: int | None = Non
     # порядок результатов = порядок задач; упавшая задача → Answer(source="default", error=...)
     # даже без default (data=None), чтобы пачка не рвалась; raise_on_error=True — бросать AllModelsFailed
     # семафор concurrency; кэш делает возобновление после сбоя бесплатным
-async def decide(self, state: str, questions: dict, *, level: str | None = None,
-                 **task_kw) -> Answer
+async def decide(self, state: str, questions: dict, **task_kw) -> Answer
     # модели решений OpenRouter: data — словарь answers из ответа как есть
     # (noul — вероятность 0..1; choice/score — с probabilities, confidence);
-    # level по умолчанию "decide", только модели kind=openrouter (иначе ConfigError);
+    # цепочка — routing.chain или chain=, только провайдеры protocol=openrouter (иначе RoutingInvalid);
     # task_kw — chain, tags, default, timeout, retry, id; кэша нет — ответ зависит от состояния;
-    # цена — usage.cost ответа, иначе prices конфига; served_model — версия за алиасом
+    # цена — usage.cost ответа (cost_source=provider), иначе routing.prices; served_model — версия за алиасом
 # --- sync-обёртки ---
 def ask_sync(self, task) -> Answer
 def generate_sync(self, prompt, **kw) -> str | None
@@ -254,14 +248,14 @@ async def aclose(self) / def close(self)
 | `auth` | `AuthenticationError`, `KeyMissing` | следующая модель, лог уровня ERROR |
 | `bad_request` | `BadRequestError`, прочие `APIError` | следующая модель |
 
-Цепочка: `task.chain` → иначе `levels[task.level]` → иначе `levels[defaults.level]`.
+Цепочка: `task.chain` → иначе `routing.chain` → иначе `RoutingInvalid` (`/chain`).
 Каждая попытка пишется в `Answer.attempts` и в usage (раздел 8). Все шаги исчерпаны →
 `AllModelsFailed` или `default`. Переход на следующую модель после первой считается
 фолбэком (`stats.fallbacks`).
 
 Структурированный вывод: `instructor.from_litellm(litellm.acompletion, mode=...)`;
 режим `JSON` для ollama/openai_compatible, `TOOLS` для openrouter/openai/anthropic/gemini
-(перекрывается `mode` в конфиге провайдера). Если `schema` — dict (готовая JSON Schema),
+(перекрывается `mode` провайдера в routing). Если `schema` — dict (готовая JSON Schema),
 Instructor не используется: вызов идёт с `response_format={"type":"json_schema",
 "json_schema":{"name":"answer","schema":<dict>,"strict":true}}`, ответ парсится `json.loads`,
 ошибка парсинга → `invalid_output` с `retry.invalid_output` повторами на той же модели.
@@ -288,12 +282,12 @@ TTL из конфига; протухшие записи удаляются пр
 0001 переименовывает её в локальной SQLite вместе со строками):
 
 ```
-id INTEGER PK, ts REAL, task_id TEXT, tags JSON (JSONB в PostgreSQL), level TEXT,
+id INTEGER PK, ts REAL, task_id TEXT, tags JSON (JSONB в PostgreSQL), level TEXT (с 0.8.0 пуста: уровней нет, метка level — в tags),
 model TEXT, provider TEXT, status TEXT ('ok'|'cache'|'failed'),
 error_type TEXT, attempt INTEGER, prompt_tokens INT, completion_tokens INT,
 cost_usd REAL, cost_known INT, latency_ms INT, pid INT, served_model TEXT
 ```
-`served_model` — версия, которую назвал провайдер (нужна за алиасами вида `~…-latest`, чтобы
+`served_model` — версия, которую назвал провайдер (не назвал — элемент цепочки) (нужна за алиасами вида `~…-latest`, чтобы
 видеть смену модели); базам до v0.4.2 колонку добавляет миграция 0001.
 Одна строка на попытку. Индексы: `ts`, `status`. Отчёты группируются по меткам из `tags`.
 Другие инструменты читают представление `llmkit_v1_calls` (без `pid`, `ts` → `called_at`).
@@ -329,13 +323,15 @@ usage.total(since) -> Row
 
 | Команда | Что делает |
 |---|---|
-| `llm ask "текст" [--level L] [--model p/m] [--system S] [--tag k=v ...] [--no-cache]` | текстовый ответ |
-| `llm json "текст" --schema schema.json [те же флаги]` | JSON по схеме, вывод только JSON |
+| `llm ask "текст" [--routing <json\|файл>] [-m p/m ...] [--system S] [--tag k=v ...] [--no-cache]` | текстовый ответ; `--json`: text, model, served_model, chain_position, attempts [{model, error_code}], provider, tokens_in, tokens_out, cost_usd, cost_source, cache_hit, latency_ms, warnings. `--level` удалён (код 2 с подсказкой) |
+| `llm json "текст" --schema schema.json [те же флаги]` | JSON по схеме, вывод только JSON; `--json` — как у ask, поле `data` |
+| `llm routing validate <файл\|json> [--providers-only]` | проверка routing v1 (Windmill, Directus): ok или `ROUTING_INVALID` с `error.path` |
+| `llm routing import <config.toml>` | перенос config.toml < 0.8: routing (providers + prices, key_env по шаблону LLM_<P>_API_KEY, без ключей) и отдельно levels |
 | `llm render --template <файл\|текст\|-> [--vars <json-файл\|json>] [--lenient]` | шаблон промпта mustache без экранирования HTML; строго: нет переменной — код 2 (`TEMPLATE_VARIABLE_MISSING`, поле `variable`). Те же `--template/--vars` у ask/json/decide; в метках учёта — `template` и `template_sha256`, без значений переменных |
 | `llm keys set <provider>` (ввод скрыт) / `llm keys status` / `llm keys rm <provider>` | связка ключей |
-| `llm models` | провайдеры, уровни, цепочки, есть ли ключ |
+| `llm models [--routing …]` | провайдеры routing, цепочка, источник ключа |
 | `llm cost [--by tool,niche] [--since 7d]` | отчёт из usage, таблица rich или JSON |
-| `llm config path` / `show` / `init` | конфиг; `init` пишет шаблон из раздела 3 |
+| `llm config path` / `show` | пути кэша, журнала и LLMKIT_ROUTING_FILE; итоговые настройки |
 | `llm serve [--port 8765]` | фаза 4 |
 
 ## 11. Прокси `llm serve` (фаза 4)
@@ -356,12 +352,12 @@ FastAPI, extra `[serve]`. `POST /v1/chat/completions` (OpenAI-формат, бе
 | 3 | Перевод intentree: адаптер `Task(stage, subject_type, subject_id, …)` → `llmkit.Task(tags={tool:"intentree", stage, subject_type, niche})`, `LlmRunner` поверх `ask_many_sync`, `LlmStats` из `kit.stats`; журнал решений остаётся в intentree | тесты intentree зелёные, `providers/llm.py` и кэш-таблица `llm_cache` удалены |
 | 4 | Прокси (раздел 11) + скилл Claude Code, вызывающий `llm ... --json` | `curl` к прокси возвращает ответ, вызов виден в `llm cost` |
 
-Вне v1: streaming, embeddings (`levels.embed`), батч-API провайдеров, веб-панель.
+Вне v1: streaming, embeddings, батч-API провайдеров, веб-панель.
 
 ##  13. Правка руками
 
-# в VS Code
-code ~/Library/Application\ Support/llmkit/config.toml
+Routing на Mac — свой JSON-файл в `LLMKIT_ROUTING_FILE`; проверка после правки:
 
-# или в редакторе macOS по умолчанию
-open -e ~/Library/Application\ Support/llmkit/config.toml
+```bash
+llm routing validate "$LLMKIT_ROUTING_FILE" --providers-only
+```

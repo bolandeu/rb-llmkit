@@ -28,6 +28,22 @@ class ConfigError(LlmKitError):
     """Конфиг не читается, не разбирается или ссылается на несуществующее."""
 
 
+class RoutingMissing(ConfigError):
+    """Routing не передан: встроенных провайдеров и цепочек нет."""
+
+    def __init__(self, message: str = "routing не передан: встроенных провайдеров и цепочек нет") -> None:
+        super().__init__(message)
+
+
+class RoutingInvalid(ConfigError):
+    """Routing не по схеме v1; `path` — JSON Pointer поля (`/chain/1`, `/providers/x/protocol`)."""
+
+    def __init__(self, path: str, message: str) -> None:
+        self.path = path
+        self.message = message
+        super().__init__(f"routing{' ' + path if path else ''}: {message}")
+
+
 class KeyMissing(LlmKitError):
     """Ключа провайдера нет ни в аргументах, ни в env, ни в связке ключей."""
 
@@ -66,12 +82,17 @@ class AllModelsFailed(LlmKitError):
     `error_type` заполнен, когда все попытки упали по одной причине (все
     без ключа, все по таймауту) — потребителю не нужно разбирать attempts.
     `answer` — уже посчитанный Answer(source="default"), им пользуется
-    `ask_many`, чтобы не собирать его заново.
+    `ask_many`, чтобы не собирать его заново. `missing_keys` — имена
+    переменных ключей, которых не нашлось ни для одной модели цепочки.
     """
 
-    def __init__(self, attempts: list[Attempt], answer: Answer | None = None) -> None:
+    def __init__(
+        self, attempts: list[Attempt], answer: Answer | None = None, missing_keys: list[str] | None = None
+    ) -> None:
         self.attempts = attempts
         self.answer = answer
+        # Переменные ключей, которых не нашлось нигде (env, старое имя, связка) — для AUTH_MISSING.
+        self.missing_keys = list(missing_keys or [])
         types = {attempt.error_type for attempt in attempts}
         self.error_type: str | None = types.pop() if len(types) == 1 else None
         details = "; ".join(f"{a.model}: {a.error_type} {a.error}" for a in attempts) or "попыток не было"

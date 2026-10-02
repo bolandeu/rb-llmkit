@@ -1,4 +1,4 @@
-"""Описание провайдера → аргументы вызова LiteLLM (таблица раздела 3 спеки)."""
+"""Провайдер из routing → аргументы вызова LiteLLM (таблица раздела 3 спеки)."""
 
 from __future__ import annotations
 
@@ -7,10 +7,10 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from . import keys
-from .config import Config, ProviderConfig
-from .errors import ConfigError, LoginMissing
+from .errors import LoginMissing, RoutingInvalid
+from .routing import SUBSCRIPTION_PROTOCOLS, Provider, Routing
 
-# kind → (префикс модели для litellm, нужен ли api_base)
+# protocol → (префикс модели для litellm, нужен ли api_base)
 KINDS = {
     "openrouter": ("openrouter/", False),
     "openai": ("", False),
@@ -23,9 +23,9 @@ KINDS = {
 }
 
 # Провайдеры по подписке: свой транспорт вместо LiteLLM, вход вместо ключа, цена 0.
-SUBSCRIPTION_KINDS = frozenset({"chatgpt", "claude_cli"})
+SUBSCRIPTION_KINDS = SUBSCRIPTION_PROTOCOLS
 
-# Режим Instructor по виду провайдера; `mode` в конфиге перекрывает.
+# Режим Instructor по протоколу; `mode` в routing перекрывает.
 # Подписки отдают схему нативно (text.format / --json-schema) — JSON_SCHEMA.
 _MODE_BY_KIND = {
     "ollama": "JSON",
@@ -39,7 +39,7 @@ _MODE_BY_KIND = {
 class ModelCall:
     """Всё, что нужно для одного вызова модели."""
 
-    ref: str  # "provider/model" из конфига
+    ref: str  # "provider/model" из routing
     provider: str
     model: str  # имя модели у провайдера
     litellm_model: str
@@ -49,48 +49,46 @@ class ModelCall:
     # Свой вызов модели вместо litellm.acompletion (провайдеры по подписке).
     completion: Callable[..., Any] | None = field(default=None, repr=False)
     subscription: bool = False
+    # Предупреждения резолва (ключ из старой переменной) — в ответ задачи.
+    warnings: tuple[str, ...] = ()
 
 
 def split_ref(ref: str) -> tuple[str, str]:
     """`"openrouter/openai/gpt-4o-mini"` → `("openrouter", "openai/gpt-4o-mini")`."""
     provider, _, model = ref.partition("/")
     if not provider or not model:
-        raise ConfigError(f"ссылка на модель должна иметь вид 'provider/model', получено {ref!r}")
+        raise RoutingInvalid("/chain", f"ссылка на модель должна иметь вид 'provider/model', получено {ref!r}")
     return provider, model
 
 
-def instructor_mode(cfg: ProviderConfig) -> str:
+def instructor_mode(cfg: Provider) -> str:
     if cfg.mode:
         return cfg.mode.upper()
-    return _MODE_BY_KIND.get(cfg.kind, "TOOLS")
+    return _MODE_BY_KIND.get(cfg.protocol, "TOOLS")
 
 
-def api_base(ref: str, config: Config) -> str | None:
+def api_base(ref: str, routing: Routing) -> str | None:
     """Адрес провайдера без резолва ключа — нужен для ключа кэша."""
     provider, _ = split_ref(ref)
-    cfg = config.provider(provider)
-    _, needs_base = KINDS.get(cfg.kind, ("", False))
+    cfg = routing.provider(provider)
+    _, needs_base = KINDS[cfg.protocol]
     return cfg.base_url if needs_base else None
 
 
-def build(ref: str, config: Config, *, env: dict[str, str] | None = None) -> ModelCall:
+def build(ref: str, routing: Routing, *, env: dict[str, str] | None = None) -> ModelCall:
     """Собрать вызов по ссылке `provider/model`; может бросить `KeyMissing`."""
     provider, model = split_ref(ref)
-    cfg = config.provider(provider)
-    try:
-        prefix, needs_base = KINDS[cfg.kind]
-    except KeyError:
-        raise ConfigError(f"неизвестный kind провайдера {provider}: {cfg.kind!r}") from None
-    if cfg.kind in SUBSCRIPTION_KINDS:
+    cfg = routing.provider(provider)
+    prefix, needs_base = KINDS[cfg.protocol]
+    if cfg.subscription:
         return _subscription_call(ref, provider, model, cfg, env)
 
     params: dict[str, Any] = {}
-    api_key = keys.resolve(provider, cfg, env=env)
+    warnings: list[str] = []
+    api_key = keys.resolve(provider, cfg, env=env, warnings=warnings)
     if api_key:
         params["api_key"] = api_key
     if needs_base:
-        if not cfg.base_url:
-            raise ConfigError(f"провайдеру {provider} (kind={cfg.kind}) нужен base_url в конфиге")
         params["api_base"] = cfg.base_url
     return ModelCall(
         ref=ref,
@@ -99,15 +97,14 @@ def build(ref: str, config: Config, *, env: dict[str, str] | None = None) -> Mod
         litellm_model=f"{prefix}{model}",
         mode=instructor_mode(cfg),
         params=params,
+        warnings=tuple(warnings),
     )
 
 
-def _subscription_call(
-    ref: str, provider: str, model: str, cfg: ProviderConfig, env: dict[str, str] | None
-) -> ModelCall:
+def _subscription_call(ref: str, provider: str, model: str, cfg: Provider, env: dict[str, str] | None) -> ModelCall:
     """Провайдер по подписке: проверить вход здесь, чтобы не падать в сети."""
     params: dict[str, Any] = {"provider": provider}
-    if cfg.kind == "chatgpt":
+    if cfg.protocol == "chatgpt":
         from .transports import chatgpt, chatgpt_auth
 
         path = chatgpt_auth.default_path()
@@ -135,9 +132,9 @@ def _subscription_call(
     )
 
 
-def price_from_config(config: Config, call: ModelCall, prompt_tokens: int, completion_tokens: int) -> float | None:
-    """Стоимость по `providers.<p>.prices[model]` ($ за 1M токенов)."""
-    price = config.provider(call.provider).prices.get(call.model)
+def price_from_routing(routing: Routing, call: ModelCall, prompt_tokens: int, completion_tokens: int) -> float | None:
+    """Стоимость по `routing.prices["провайдер/модель"]` ($ за 1M токенов)."""
+    price = routing.prices.get(call.ref)
     if price is None:
         return None
     return (prompt_tokens * price.input + completion_tokens * price.output) / 1_000_000

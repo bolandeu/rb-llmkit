@@ -4,9 +4,12 @@
 
 ```
 src/llmkit/
-  config.py     модели конфига, загрузка и слияние слоёв
-  keys.py       ключи: конфиг → env → связка ключей ОС
-  providers.py  провайдер + модель → аргументы LiteLLM
+  routing.py    routing v1: провайдеры, цепочка, цены данными; RoutingInvalid с JSON Pointer
+  contracts/    routing-v1.schema.json + векторы — публичный контракт (в колесе)
+  legacy.py     `llm routing import`: config.toml < 0.8 → routing (встроенные дефолты 0.7 — здесь)
+  config.py     настройки вызовов: дефолты кода → LLMKIT_* → LlmKit(...) (файлов нет)
+  keys.py       ключи: key_env/LLM_<P>_API_KEY → старое имя (warning) → связка ключей ОС
+  providers.py  провайдер routing + модель → аргументы LiteLLM
   chain.py      цепочки, классификация ошибок, ретраи и backoff
   cache.py      SQLite-кэш ответов (локальный, вне слоя БД)
   usage.py      журнал вызовов, отчёты, бюджеты — таблица llmkit_calls
@@ -35,7 +38,7 @@ scripts/smoke.py  реальные вызовы провайдеров (фаза
 
 ## Провайдеры по подписке
 
-`providers.build` для `kind` из `SUBSCRIPTION_KINDS` проверяет вход (файл
+`providers.build` для `protocol` из `SUBSCRIPTION_PROTOCOLS` проверяет вход (файл
 токенов / наличие CLI) и кладёт в `ModelCall.completion` функцию транспорта;
 ядро зовёт её вместо `litellm.acompletion`. Подмена `LlmKit(completion=...)`
 по-прежнему перекрывает всё — тесты сети не касаются.
@@ -66,6 +69,18 @@ litellm на импорте. `classify()` возвращает `None` для ч�
 ## Ключи
 
 Не логируются и не пишутся на диск библиотекой; `.env`-файлы не используются.
+В routing — только имя переменной (`key_env`), значение — никогда; в журнал
+расходов и ответ `--json` ключи и переменные шаблона не попадают.
+
+## Routing
+
+Встроенных провайдеров и уровней нет (0.8.0). `LlmKit(routing=...)` проверяет
+routing при создании (цепочка необязательна: её может дать `Task.chain`); нет
+routing — `RoutingMissing` при первом вызове. Библиотека env не читает; CLI берёт
+`--routing` (JSON или файл) или `LLMKIT_ROUTING_FILE`. Проверка — `routing.parse`:
+pydantic плюс то, что JSON Schema не выражает (ссылки цепочки и цен на описанных
+провайдеров); контрактные векторы гоняет tests/test_routing.py и против llmkit, и
+против JSON Schema.
 
 ## Стиль
 

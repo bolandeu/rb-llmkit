@@ -1,14 +1,14 @@
 """Команды `llm auth`: вход в подписки ChatGPT и Claude, отчёт о здоровье всех доступов."""
 
+import os
 import subprocess
 
 import typer
 from rich.markup import escape
 
-from .. import config as config_mod
 from .. import health
-from ..providers import SUBSCRIPTION_KINDS
 from ..transports import chatgpt_auth, claude_cli
+from . import runtime
 from .output import (
     CliError,
     JsonOption,
@@ -24,14 +24,23 @@ from .output import (
     state,
 )
 
-app = group("auth", "Вход в подписки (kind = chatgpt | claude_cli) и проверка всех доступов: `llm auth status`.")
+app = group("auth", "Вход в подписки (protocol = chatgpt | claude_cli) и проверка всех доступов: `llm auth status`.")
+
+RoutingOption = typer.Option(None, "--routing", help="Routing v1: JSON или файл; иначе LLMKIT_ROUTING_FILE.")
+
+
+def _routing(spec: str | None):
+    """Routing для отчёта — необязателен: без него в отчёте только подписки машины."""
+    if not spec and not os.environ.get(runtime.ROUTING_FILE_ENV):
+        return None
+    return runtime.load_routing(spec, require_chain=False)
 
 
 def _subscription_provider(name: str):
-    config = config_mod.load()
-    cfg = config.providers.get(name)
-    if cfg is None or cfg.kind not in SUBSCRIPTION_KINDS:
-        known = ", ".join(sorted(p for p, c in config.providers.items() if c.kind in SUBSCRIPTION_KINDS)) or "нет"
+    providers = health.providers_of(_routing(None))
+    cfg = providers.get(name)
+    if cfg is None or not cfg.subscription:
+        known = ", ".join(sorted(p for p, c in providers.items() if c.subscription)) or "нет"
         raise bad_arguments(f"{name!r} — не провайдер по подписке; такие провайдеры: {known}")
     return cfg
 
@@ -42,7 +51,8 @@ def status(
     check: bool = typer.Option(
         False, "--check", help="Сделать по одному дешёвому read-only вызову на провайдера (лимит 10 с)."
     ),
-    provider: str = typer.Option(None, "--provider", help="Только этот провайдер из конфига (по умолчанию все)."),
+    provider: str = typer.Option(None, "--provider", help="Только этот провайдер (по умолчанию все)."),
+    routing: str = RoutingOption,
     json_output: bool = JsonOption,
 ) -> None:
     """Показать доступ каждого провайдера: откуда берётся и работает ли. Значения не печатаются.
@@ -52,6 +62,8 @@ def status(
     anthropic, gemini, ollama и OpenAI-совместимые шлюзы — один бесплатный
     запрос с ключом; chatgpt — свежесть токена (с обновлением, если истёк);
     claude — локальный `claude auth status`. Модели не вызываются.
+    Провайдеры — из routing (`--routing` или LLMKIT_ROUTING_FILE) плюс входы
+    в подписки chatgpt и claude на этой машине; без routing — только они.
     Обязательных провайдеров у llmkit нет (`required: false`).
     Коды выхода: 0 — нет неверных и просроченных доступов, 3 — есть
     (`error.code: CREDENTIALS_UNHEALTHY`, отчёт всё равно выводится),
@@ -63,11 +75,11 @@ def status(
     """
     enable_json(ctx, json_output)
     with guard(ctx):
-        config = config_mod.load()
-        known = sorted(name for name, cfg in config.providers.items() if health.has_credentials(cfg))
+        loaded = _routing(routing)
+        known = sorted(health.providers_of(loaded))
         if provider is not None and provider not in known:
             raise bad_arguments(f"провайдер {provider!r} не найден среди провайдеров с доступом: {', '.join(known)}")
-        report = health.report(config, check=check, only=provider)
+        report = health.report(loaded, check=check, only=provider)
         problems = [
             f"{item['provider']}: {item['status']}" for item in report["credentials"] if health.is_problem(item)
         ]
@@ -100,7 +112,7 @@ def _render_status(report: dict) -> None:
 @app.command("login")
 def login(
     ctx: typer.Context,
-    provider: str = typer.Argument(..., help="Провайдер по подписке из конфига, например chatgpt или claude."),
+    provider: str = typer.Argument(..., help="Провайдер по подписке: chatgpt, claude или из routing."),
     browser: bool = typer.Option(False, "--browser", help="ChatGPT: вход через браузер вместо кода устройства."),
     no_open: bool = typer.Option(False, "--no-open", help="ChatGPT --browser: не открывать браузер самому."),
     json_output: bool = JsonOption,
@@ -109,15 +121,17 @@ def login(
 
     ChatGPT: по умолчанию вход по коду устройства (ссылка и код, браузер может
     быть на другой машине); `--browser` — через локальный redirect на порт 1455.
-    Claude: запускается `claude auth login`. Подсказки идут в stderr.
-    Коды выхода: 0 — вход выполнен, 2 — не провайдер по подписке, 3 — вход не удался.
+    Claude: запускается `claude auth login`. Провайдер — chatgpt, claude или
+    провайдер routing (LLMKIT_ROUTING_FILE) с protocol chatgpt | claude_cli.
+    Подсказки идут в stderr. Коды выхода: 0 — вход выполнен, 2 — не провайдер
+    по подписке, 3 — вход не удался.
 
     Example: llm auth login chatgpt
     """
     enable_json(ctx, json_output)
     with guard(ctx):
         cfg = _subscription_provider(provider)
-        if cfg.kind == "chatgpt":
+        if cfg.protocol == "chatgpt":
             path = chatgpt_auth.default_path()
             try:
                 if browser:
@@ -146,19 +160,20 @@ def login(
 @app.command("logout")
 def logout(
     ctx: typer.Context,
-    provider: str = typer.Argument(..., help="Провайдер по подписке из конфига."),
+    provider: str = typer.Argument(..., help="Провайдер по подписке: chatgpt, claude или из routing."),
     json_output: bool = JsonOption,
 ) -> None:
     """Выйти из подписки: ChatGPT — удалить файл токенов, Claude — `claude auth logout`.
 
-    Выход без входа не ошибка. Коды выхода: 0 — готово, 2 — не провайдер по подписке.
+    Провайдер — как у `llm auth login`. Выход без входа не ошибка. Коды
+    выхода: 0 — готово, 2 — не провайдер по подписке.
 
     Example: llm auth logout chatgpt
     """
     enable_json(ctx, json_output)
     with guard(ctx):
         cfg = _subscription_provider(provider)
-        if cfg.kind == "chatgpt":
+        if cfg.protocol == "chatgpt":
             removed = chatgpt_auth.delete_auth(chatgpt_auth.default_path())
         else:
             command = claude_cli.command()
