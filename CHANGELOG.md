@@ -8,6 +8,13 @@
 
 <!-- towncrier release notes start -->
 
+## [0.6.1] - 2026-10-02
+
+### Changed
+
+- Шаблон cli-generator v1.5.5: корневой агент — `tools`, никто из агентов инструмента не пушит (релиз отчитывается `tools`, пушит dev после «да» пользователя); `x-rb-template-version` в `llm describe --json` — v1.5.5.
+
+
 ## [0.6.0] - 2026-10-02
 
 ### Added
