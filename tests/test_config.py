@@ -75,3 +75,29 @@ def test_bad_budget_tag_and_log_level():
         config_mod.load(overrides={"budget": {"tags": {"плохая метка": 1.0}}}, env={})
     with pytest.raises(ConfigError):
         config_mod.load(env={"LLMKIT_LOG_LEVEL": "ОЧЕНЬ_ПОДРОБНО"})
+
+
+# Дефолты кода в момент импорта — до подмены в conftest (`isolated`).
+CODE_DEFAULTS = config_mod.DEFAULTS
+
+
+def test_code_defaults_are_former_mac_config_values(monkeypatch):
+    """T86/0.8.1: значения config.toml с Mac стали дефолтами кода (решение tools и dev 2026-10-02)."""
+    monkeypatch.setattr(config_mod, "DEFAULTS", CODE_DEFAULTS)
+    config = config_mod.load(env={})
+    assert config.defaults.max_tokens == 16000
+    assert (config.retry.timeout, config.retry.rate_limit, config.retry.server, config.retry.invalid_output) == (
+        0,
+        6,
+        6,
+        2,
+    )
+    assert config.cache.ttl_days == 30 and config.budget.daily_usd == 20.0
+    assert config.defaults.temperature == 0.0 and config.defaults.timeout == 120.0
+
+
+def test_model_defaults_match_code_defaults(monkeypatch):
+    """Без DEFAULTS (LlmKit(config=Config())) значения те же."""
+    config = config_mod.Config()
+    assert config.defaults.max_tokens == 16000
+    assert (config.retry.timeout, config.retry.rate_limit, config.retry.server) == (0, 6, 6)
