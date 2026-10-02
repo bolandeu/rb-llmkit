@@ -13,7 +13,7 @@ src/llmkit/
   db/           слой БД: PostgreSQL из LLMKIT_DATABASE_URL или SQLite, миграции Alembic
   core.py       LlmKit: ask / generate / ask_many и sync-обёртки
   errors.py     исключения; EXIT_CODES — коды выхода CLI
-  opencli.py    `llm describe --json`: документ OpenCLI (из шаблона cli-generator v1.5.1)
+  opencli.py    `llm describe --json`: документ OpenCLI (из шаблона cli-generator v1.5.5)
   data_files.py файлы в каталогах данных и кэша — для describe
   _sync.py      запуск корутины из синхронного кода
   transports/   провайдеры по подписке: свой acompletion вместо LiteLLM
