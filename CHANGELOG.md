@@ -8,6 +8,13 @@
 
 <!-- towncrier release notes start -->
 
+## [0.8.1] - 2026-10-02
+
+### Changed
+
+- Дефолты кода — бывшие значения `config.toml` с Mac: `max_tokens` 16000 (было 4096), повторы `retry` timeout 0 / rate_limit 6 / server 6 / invalid_output 2 (было 1/2/2/2); кэш 30 дней и дневной бюджет $20 — как прежде. С 0.8.0 `config.toml` не читается, его содержимое переехало так: провайдеры и цены — в routing v1 (`llm routing import <config.toml>`), уровни — в цепочки (`routing.chain` или `-m`; `import` отдаёт их в `levels`), `[defaults]`/`[retry]`/`[cache]`/`[budget]` — дефолты кода, переопределение — флаги CLI (`--max-tokens`, `--timeout`, `--temperature`, `--no-retry`, `--no-cache`), аргументы `LlmKit(...)`/`LlmKit(config=...)` и env `LLMKIT_CACHE`, `LLMKIT_LOG_LEVEL`.
+
+
 ## [0.8.0] - 2026-10-02
 
 ### Added
