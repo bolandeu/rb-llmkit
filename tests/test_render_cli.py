@@ -7,8 +7,8 @@ import json
 import sqlite3
 
 import pytest
-from conftest import FakeCompletion, response
-from test_decide import QUESTIONS, FakeDecisions
+from conftest import ROUTING, FakeCompletion, response
+from test_decide import DECIDE_ROUTING, QUESTIONS, FakeDecisions
 from typer.testing import CliRunner
 
 from llmkit import LlmKit
@@ -24,6 +24,13 @@ SECRET = "секрет-клиента-42"
 @pytest.fixture(autouse=True)
 def no_keychain(monkeypatch):
     monkeypatch.setattr(keys_mod, "from_keychain", lambda provider: None)
+
+
+@pytest.fixture(autouse=True)
+def routing_file(tmp_path, monkeypatch):
+    path = tmp_path / "routing.json"
+    path.write_text(json.dumps(ROUTING), encoding="utf-8")
+    monkeypatch.setenv("LLMKIT_ROUTING_FILE", str(path))
 
 
 @pytest.fixture
@@ -225,13 +232,22 @@ def test_json_command_renders_template(fake_kit, template_file, tmp_path):
 
 
 def test_decide_renders_template(monkeypatch, template_file, tmp_path):
-    monkeypatch.setenv("OPENROUTER_API_KEY", "ключ-or")
+    monkeypatch.setenv("LLM_OPENROUTER_API_KEY", "ключ-or")
     fake = FakeDecisions()
     monkeypatch.setattr(runtime, "build_kit", lambda **kwargs: LlmKit(decisions=fake, **kwargs))
     questions = tmp_path / "q.json"
     questions.write_text(json.dumps(QUESTIONS), encoding="utf-8")
     result = run(
-        "decide", "--questions", str(questions), "--template", str(template_file), "--vars", '{"name": "Мир"}', "--json"
+        "decide",
+        "--questions",
+        str(questions),
+        "--template",
+        str(template_file),
+        "--vars",
+        '{"name": "Мир"}',
+        "--routing",
+        json.dumps(DECIDE_ROUTING),
+        "--json",
     )
     assert result.exit_code == 0, result.output
     assert fake.calls[0]["state"] == "Привет, Мир!"

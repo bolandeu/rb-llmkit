@@ -1,44 +1,53 @@
-"""Отображение провайдера и модели на аргументы LiteLLM (таблица раздела 3)."""
+"""Провайдер из routing и модель → аргументы LiteLLM (таблица раздела 3)."""
 
 from __future__ import annotations
 
 import pytest
 
-from llmkit import config as config_mod
 from llmkit import providers
-from llmkit.config import Config
-from llmkit.errors import ConfigError, KeyMissing
+from llmkit import routing as routing_mod
+from llmkit.errors import KeyMissing, RoutingInvalid
 
-CONFIG = Config.model_validate(
+ROUTING = routing_mod.parse(
     {
         "providers": {
-            "openrouter": {"kind": "openrouter"},
-            "openai": {"kind": "openai"},
-            "anthropic": {"kind": "anthropic"},
-            "gemini": {"kind": "gemini"},
-            "ollama": {"kind": "ollama", "base_url": "https://ollama.com"},
-            "local": {"kind": "ollama", "base_url": "http://localhost:11434", "requires_key": False},
-            "ccode": config_mod.DEFAULTS["providers"]["ccode"],
-            "anymodel": config_mod.DEFAULTS["providers"]["anymodel"],
+            "openrouter": {"protocol": "openrouter", "key_env": "LLM_OPENROUTER_API_KEY"},
+            "openai": {"protocol": "openai", "key_env": "LLM_OPENAI_API_KEY"},
+            "anthropic": {"protocol": "anthropic", "key_env": "LLM_ANTHROPIC_API_KEY"},
+            "gemini": {"protocol": "gemini", "key_env": "LLM_GEMINI_API_KEY"},
+            "ollama": {"protocol": "ollama", "base_url": "https://ollama.com", "key_env": "LLM_OLLAMA_API_KEY"},
+            "ccode": {
+                "protocol": "openai_compatible",
+                "base_url": "https://all-api.ccode.dev/v1",
+                "key_env": "LLM_CCODE_API_KEY",
+                "mode": "TOOLS",
+            },
+            "anymodel": {
+                "protocol": "openai_compatible",
+                "base_url": "https://anymodel.org/v1",
+                "key_env": "LLM_ANYMODEL_API_KEY",
+                "mode": "TOOLS",
+            },
             "deepseek": {
-                "kind": "openai_compatible",
+                "protocol": "openai_compatible",
                 "base_url": "https://api.deepseek.com/v1",
-                "api_key_env": "DEEPSEEK_API_KEY",
+                "key_env": "DEEPSEEK_API_KEY",
             },
         },
-        "levels": {},
+        "chain": ["openrouter/openai/gpt-4o-mini"],
+        "prices": {"ollama/m": {"input": 1.0, "output": 2.0}},
     }
 )
 
 ENV = {
-    "OPENROUTER_API_KEY": "k-or",
-    "OPENAI_API_KEY": "k-oa",
-    "ANTHROPIC_API_KEY": "k-an",
-    "GEMINI_API_KEY": "k-ge",
-    "OLLAMA_API_KEY": "k-ol",
+    "LLM_OPENROUTER_API_KEY": "k-or",
+    "LLM_OPENAI_API_KEY": "k-oa",
+    "LLM_ANTHROPIC_API_KEY": "k-an",
+    "LLM_GEMINI_API_KEY": "k-ge",
+    "LLM_OLLAMA_API_KEY": "k-ol",
     "DEEPSEEK_API_KEY": "k-ds",
-    "CCODE_API_KEY": "k-cc",
-    "ANYMODEL_API_KEY": "k-am",
+    "LLM_CCODE_API_KEY": "k-cc",
+    "LLM_ANYMODEL_API_KEY": "k-am",
 }
 
 CASES = [
@@ -55,60 +64,38 @@ CASES = [
 
 @pytest.mark.parametrize(("ref", "litellm_model", "api_base", "api_key", "mode"), CASES)
 def test_build_maps_provider_to_litellm(ref, litellm_model, api_base, api_key, mode):
-    call = providers.build(ref, CONFIG, env=ENV)
+    call = providers.build(ref, ROUTING, env=ENV)
     assert call.litellm_model == litellm_model
     assert call.params.get("api_base") == api_base
     assert call.params.get("api_key") == api_key
     assert call.mode == mode
-    assert providers.api_base(ref, CONFIG) == api_base
+    assert providers.api_base(ref, ROUTING) == api_base
 
 
 def test_api_key_is_not_in_repr():
-    call = providers.build("openrouter/openai/gpt-4o-mini", CONFIG, env=ENV)
+    call = providers.build("openrouter/openai/gpt-4o-mini", ROUTING, env=ENV)
     assert "k-or" not in repr(call)
 
 
-def test_provider_without_key_requirement():
-    call = providers.build("local/llama3", CONFIG, env={})
-    assert call.params == {"api_base": "http://localhost:11434"}
+def test_missing_key_raises_with_env_name():
+    with pytest.raises(KeyMissing) as caught:
+        providers.build("openai/gpt-4o", ROUTING, env={})
+    assert caught.value.env_var == "LLM_OPENAI_API_KEY"
 
 
-def test_missing_key_raises():
-    with pytest.raises(KeyMissing):
-        providers.build("openai/gpt-4o", CONFIG, env={})
-
-
-def test_mode_can_be_overridden_by_config():
-    config = Config.model_validate(
-        {"providers": {"x": {"kind": "ollama", "base_url": "http://x", "mode": "tools"}}, "levels": {}}
-    )
-    assert providers.build("x/m", config, env={"OLLAMA_API_KEY": "k"}).mode == "TOOLS"
-
-
-def test_bad_reference_and_unknown_kind():
-    with pytest.raises(ConfigError):
+def test_bad_reference():
+    with pytest.raises(RoutingInvalid):
         providers.split_ref("простотекст")
-    config = Config.model_validate({"providers": {"x": {"kind": "неизвестно"}}, "levels": {}})
-    with pytest.raises(ConfigError):
-        providers.build("x/m", config, env={})
 
 
-def test_openai_compatible_without_base_url():
-    config = Config.model_validate({"providers": {"x": {"kind": "openai_compatible"}}, "levels": {}})
-    with pytest.raises(ConfigError):
-        providers.build("x/m", config, env={"X_API_KEY": "k"})
+def test_openai_compatible_without_base_url_is_invalid_routing():
+    with pytest.raises(RoutingInvalid) as caught:
+        routing_mod.parse({"providers": {"x": {"protocol": "openai_compatible"}}, "chain": ["x/m"]})
+    assert caught.value.path == "/providers/x/base_url"
 
 
-def test_price_from_config():
-    config = Config.model_validate(
-        {
-            "providers": {
-                "o": {"kind": "ollama", "base_url": "http://x", "prices": {"m": {"input": 1.0, "output": 2.0}}}
-            },
-            "levels": {},
-        }
-    )
-    call = providers.build("o/m", config, env={"OLLAMA_API_KEY": "k"})
-    assert providers.price_from_config(config, call, 1_000_000, 1_000_000) == pytest.approx(3.0)
-    other = providers.build("o/другая", config, env={"OLLAMA_API_KEY": "k"})
-    assert providers.price_from_config(config, other, 10, 10) is None
+def test_price_from_routing():
+    call = providers.build("ollama/m", ROUTING, env=ENV)
+    assert providers.price_from_routing(ROUTING, call, 1_000_000, 1_000_000) == pytest.approx(3.0)
+    other = providers.build("ollama/другая", ROUTING, env=ENV)
+    assert providers.price_from_routing(ROUTING, other, 10, 10) is None

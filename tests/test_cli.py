@@ -10,7 +10,7 @@ from pathlib import Path
 
 import conftest as fakes_module
 import pytest
-from conftest import FakeCompletion, response
+from conftest import ROUTING, FakeCompletion, response
 from typer.testing import CliRunner
 
 from llmkit import LlmKit
@@ -26,6 +26,15 @@ runner = CliRunner()
 def no_keychain(monkeypatch):
     """Связку ключей ОС тесты не трогают."""
     monkeypatch.setattr(keys_mod, "from_keychain", lambda provider: None)
+
+
+@pytest.fixture(autouse=True)
+def routing_file(tmp_path, monkeypatch):
+    """Routing из файла пользователя (LLMKIT_ROUTING_FILE), как у CLI на Mac."""
+    path = tmp_path / "routing.json"
+    path.write_text(json.dumps(ROUTING), encoding="utf-8")
+    monkeypatch.setenv("LLMKIT_ROUTING_FILE", str(path))
+    return path
 
 
 @pytest.fixture
@@ -83,46 +92,26 @@ def test_cost_rejects_bad_period():
     assert payload(result)["error"]["code"] == "INVALID_ARGUMENTS"
 
 
-def test_config_init_show_and_force(tmp_path, monkeypatch):
-    target = tmp_path / "new" / "config.toml"
-    monkeypatch.setenv("LLMKIT_CONFIG", str(target))
-    created = run("config", "init", "--json")
-    assert created.exit_code == 0 and target.is_file()
-    assert payload(created)["path"] == str(target)
-    again = run("config", "init", "--json")
-    assert again.exit_code == 2 and payload(again)["error"]["code"] == "INVALID_ARGUMENTS"
-    assert run("config", "init", "--force", "--json").exit_code == 0
-    shown = run("config", "show", "--json")
-    assert shown.exit_code == 0
-    config = payload(shown)["config"]
-    assert config["defaults"]["level"] == "cheap"
-    assert "openrouter" in config["providers"]
-
-
-def test_config_show_hides_api_key(tmp_path, monkeypatch):
-    target = tmp_path / "secret.toml"
-    target.write_text('[providers.x]\nkind = "openai"\napi_key = "секрет"\n', encoding="utf-8")
-    monkeypatch.setenv("LLMKIT_CONFIG", str(target))
-    result = run("config", "show", "--json")
-    assert result.exit_code == 0
-    assert payload(result)["config"]["providers"]["x"]["api_key"] == "***"
-    assert "секрет" not in result.stdout
-
-
 def test_config_path_lists_files():
     body = payload(run("config", "path", "--json"))
     assert body["ok"] is True and body["cache"].endswith("cache.sqlite")
+    assert body["routing_file"].endswith("routing.json")
 
 
-def test_models_json_lists_providers_and_levels():
+def test_config_init_is_removed():
+    # config.toml больше не читается — шаблон для него не пишется.
+    assert run("config", "init", "--json").exit_code == 2
+
+
+def test_models_json_lists_providers_and_chain():
     body = payload(run("models", "--json"))
-    # Провайдеры из тестового конфига плюс дефолтные из кода.
+    # Только провайдеры routing: встроенных нет.
     providers = {row["provider"]: row for row in body["providers"]}
-    assert providers["a"]["kind"] == "openai_compatible"
+    assert set(providers) == {"a", "b"}
+    assert providers["a"]["protocol"] == "openai_compatible"
     assert providers["a"]["base_url"] == "http://localhost:11111/v1"
     assert providers["a"]["has_key"] is True and providers["a"]["key_source"] == "env"
-    assert body["levels"]["cheap"] == ["a/m1", "b/m2"]
-    assert body["default_level"] == "cheap"
+    assert body["chain"] == ["a/m1", "b/m2"]
 
 
 def test_ask_json_envelope(fake_kit):
@@ -130,9 +119,9 @@ def test_ask_json_envelope(fake_kit):
     result = run("ask", "вопрос", "--tag", "tool=cli", "--json")
     assert result.exit_code == 0
     body = payload(result)
-    assert body["ok"] is True and body["data"] == "ответ модели"
-    assert body["model"] == "a/m1" and body["source"] == "llm"
-    assert body["prompt_tokens"] == 10 and body["cost_usd"] > 0
+    assert body["ok"] is True and body["text"] == "ответ модели"
+    assert body["model"] == "a/m1" and body["cache_hit"] is False
+    assert body["tokens_in"] == 10 and body["cost_usd"] > 0
     # Вызов попал в журнал и виден в отчёте по метке.
     report = payload(run("cost", "--by", "tool", "--json"))
     assert report["rows"][0]["keys"] == {"tool": "cli"} and report["rows"][0]["calls"] == 1
@@ -164,7 +153,8 @@ def test_ask_rejects_bad_tag(fake_kit):
     assert result.exit_code == 2 and payload(result)["error"]["code"] == "INVALID_ARGUMENTS"
 
 
-def test_ask_model_flag_overrides_level(fake_kit):
+def test_ask_model_flag_sets_chain(fake_kit, routing_file):
+    routing_file.write_text(json.dumps({"providers": ROUTING["providers"]}), encoding="utf-8")
     completion = fake_kit()
     assert run("ask", "вопрос", "--model", "b/m2", "--no-cache").exit_code == 0
     assert completion.calls[0]["model"] == "openai/m2"
@@ -188,9 +178,10 @@ def test_ask_reports_missing_key(monkeypatch):
     monkeypatch.delenv("TEST_A_KEY")
     monkeypatch.delenv("TEST_B_KEY")
     result = run("ask", "вопрос", "--json")
-    assert result.exit_code == 3  # AUTH_REQUIRED по conventions.md
+    assert result.exit_code == 3  # нет ключа — код 3 по conventions.md
     error = payload(result)["error"]
-    assert error["code"] == "AUTH_REQUIRED" and "llm keys set" in error["action"]
+    assert error["code"] == "AUTH_MISSING" and "llm keys set" in error["action"]
+    assert error["variable"] == "TEST_A_KEY"
 
 
 def test_json_command_prints_only_the_object(fake_kit, tmp_path):
@@ -201,7 +192,7 @@ def test_json_command_prints_only_the_object(fake_kit, tmp_path):
     assert result.exit_code == 0 and json.loads(result.stdout) == {"x": 1}
     enveloped = run("json", "вопрос", "--schema", str(schema), "--json")
     body = payload(enveloped)
-    assert body["ok"] is True and body["data"] == {"x": 1} and body["source"] == "cache"
+    assert body["ok"] is True and body["data"] == {"x": 1} and body["cache_hit"] is True
 
 
 def test_json_command_rejects_broken_schema(fake_kit, tmp_path):
@@ -245,24 +236,12 @@ def test_serve_is_not_implemented_yet():
     assert payload(result)["error"]["code"] == "NOT_IMPLEMENTED"
 
 
-def test_models_explains_unknown_provider_in_level(tmp_path, monkeypatch):
-    broken = tmp_path / "broken-levels.toml"
-    broken.write_text('[levels]\ncheap = ["нет-такого/m1"]\n', encoding="utf-8")
-    monkeypatch.setenv("LLMKIT_CONFIG", str(broken))
+def test_models_explains_unknown_provider_in_chain(routing_file):
+    routing_file.write_text(json.dumps({**ROUTING, "chain": ["нет-такого/m1"]}), encoding="utf-8")
     result = run("models", "--json")
     assert result.exit_code == 2
     error = payload(result)["error"]
-    assert error["code"] == "INVALID_ARGUMENTS" and "нет-такого" in error["message"]
-
-
-def test_config_init_template_has_default_budget(tmp_path, monkeypatch):
-    target = tmp_path / "шаблон.toml"
-    monkeypatch.setenv("LLMKIT_CONFIG", str(target))
-    assert run("config", "init", "--json").exit_code == 0
-    body = target.read_text(encoding="utf-8")
-    assert "daily_usd = 20.0" in body and "# [budget.tags]" in body
-    # Шаблон должен читаться обратно без ошибок.
-    assert run("config", "show", "--json").exit_code == 0
+    assert error["code"] == "ROUTING_INVALID" and "нет-такого" in error["message"]
 
 
 def test_provider_failure_exit_code(fake_kit):

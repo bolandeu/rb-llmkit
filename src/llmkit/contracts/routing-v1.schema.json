@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/bolandeu/llmkit/routing-v1.schema.json",
+  "title": "llmkit routing v1",
+  "description": "Провайдеры, цепочка моделей и цены для одного вызова llmkit (`llm ask|json|decide --routing`, `LlmKit(routing=...)`). Секретов нет: только имена переменных с ключами. Ссылки цепочки и цен на описанных провайдеров проверяет `llm routing validate` (JSON Schema этого не выражает).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["providers"],
+  "properties": {
+    "version": {
+      "description": "Версия формата; по умолчанию 1.",
+      "const": 1
+    },
+    "providers": {
+      "description": "Провайдеры по имени; имя — первая часть ссылки 'провайдер/модель'.",
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {"pattern": "^[A-Za-z0-9_.-]+$"},
+      "additionalProperties": {"$ref": "#/$defs/provider"}
+    },
+    "chain": {
+      "description": "Цепочка моделей 'провайдер/модель' по порядку: упала — отвечает следующая. Обязательна для вызова, если цепочка не задана в CLI (-m ...).",
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/model_ref"}
+    },
+    "prices": {
+      "description": "Цены моделей в $ за 1M токенов; главнее справочника LiteLLM. Ключ — 'провайдер/модель'.",
+      "type": "object",
+      "propertyNames": {"$ref": "#/$defs/model_ref"},
+      "additionalProperties": {"$ref": "#/$defs/price"}
+    }
+  },
+  "$defs": {
+    "model_ref": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]+/.+$"
+    },
+    "price": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["input", "output"],
+      "properties": {
+        "input": {"type": "number", "minimum": 0},
+        "output": {"type": "number", "minimum": 0}
+      }
+    },
+    "provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol"],
+      "properties": {
+        "protocol": {
+          "description": "Как говорить с провайдером. chatgpt и claude_cli — подписки: вход `llm auth login`, ключ не нужен.",
+          "enum": ["openrouter", "openai", "anthropic", "gemini", "ollama", "openai_compatible", "chatgpt", "claude_cli"]
+        },
+        "base_url": {
+          "description": "Адрес API; обязателен для ollama и openai_compatible.",
+          "type": "string",
+          "minLength": 1
+        },
+        "key_env": {
+          "description": "Имя переменной окружения с ключом; по умолчанию LLM_<ПРОВАЙДЕР>_API_KEY (верхний регистр, не буквы и не цифры → _). Значение ключа в routing не кладётся никогда.",
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+        },
+        "mode": {
+          "description": "Режим структурного вывода Instructor; по умолчанию по протоколу.",
+          "enum": ["TOOLS", "JSON", "JSON_SCHEMA", "MD_JSON"]
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"protocol": {"enum": ["ollama", "openai_compatible"]}}},
+          "then": {"required": ["base_url"]}
+        }
+      ]
+    }
+  }
+}

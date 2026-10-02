@@ -1,0 +1,116 @@
+{
+  "description": "Векторы routing v1: valid — проходят `llm routing validate`; invalid — ROUTING_INVALID с error.path (JSON Pointer поля). schema=false — форму JSON Schema принимает, отвергает только llmkit (ссылки на провайдеров, обязательная для вызова цепочка). require_chain=false — файл провайдеров без цепочки (цепочка из CLI: -m ..., `llm routing validate --providers-only`).",
+  "valid": [
+    {
+      "name": "openrouter_two_models",
+      "routing": {
+        "providers": {"openrouter": {"protocol": "openrouter", "key_env": "LLM_OPENROUTER_API_KEY"}},
+        "chain": ["openrouter/openai/gpt-4o-mini", "openrouter/google/gemini-2.5-flash-lite"]
+      }
+    },
+    {
+      "name": "gateway_with_prices_and_version",
+      "routing": {
+        "version": 1,
+        "providers": {
+          "ccode": {"protocol": "openai_compatible", "base_url": "https://all-api.ccode.dev/v1", "key_env": "LLM_CCODE_API_KEY", "mode": "TOOLS"},
+          "openrouter": {"protocol": "openrouter"}
+        },
+        "chain": ["ccode/gpt-5.6-terra", "openrouter/z-ai/glm-5.3-flash"],
+        "prices": {"ccode/gpt-5.6-terra": {"input": 0.09, "output": 0.54}}
+      }
+    },
+    {
+      "name": "subscriptions_without_key_env",
+      "routing": {
+        "providers": {"chatgpt": {"protocol": "chatgpt"}, "claude": {"protocol": "claude_cli"}},
+        "chain": ["chatgpt/gpt-5.5", "claude/sonnet"]
+      }
+    },
+    {
+      "name": "providers_only_for_cli_models",
+      "require_chain": false,
+      "routing": {"providers": {"ollama": {"protocol": "ollama", "base_url": "https://ollama.com"}}}
+    }
+  ],
+  "invalid": [
+    {
+      "name": "no_chain",
+      "schema": false,
+      "routing": {"providers": {"openrouter": {"protocol": "openrouter"}}},
+      "error_path": "/chain"
+    },
+    {
+      "name": "empty_chain",
+      "routing": {"providers": {"openrouter": {"protocol": "openrouter"}}, "chain": []},
+      "error_path": "/chain"
+    },
+    {
+      "name": "model_without_provider",
+      "routing": {"providers": {"openrouter": {"protocol": "openrouter"}}, "chain": ["gpt-4o"]},
+      "error_path": "/chain/0"
+    },
+    {
+      "name": "chain_provider_not_described",
+      "schema": false,
+      "routing": {"providers": {"openrouter": {"protocol": "openrouter"}}, "chain": ["openrouter/a", "ccode/b"]},
+      "error_path": "/chain/1"
+    },
+    {
+      "name": "unknown_protocol",
+      "routing": {"providers": {"x": {"protocol": "telepathy"}}, "chain": ["x/m"]},
+      "error_path": "/providers/x/protocol"
+    },
+    {
+      "name": "no_providers",
+      "routing": {"chain": ["openrouter/a"]},
+      "error_path": "/providers"
+    },
+    {
+      "name": "empty_providers",
+      "routing": {"providers": {}, "chain": ["openrouter/a"]},
+      "error_path": "/providers"
+    },
+    {
+      "name": "gateway_without_base_url",
+      "routing": {"providers": {"gw": {"protocol": "openai_compatible"}}, "chain": ["gw/m"]},
+      "error_path": "/providers/gw/base_url"
+    },
+    {
+      "name": "key_value_instead_of_env_name",
+      "routing": {"providers": {"openrouter": {"protocol": "openrouter", "api_key": "sk-..."}}, "chain": ["openrouter/a"]},
+      "error_path": "/providers/openrouter/api_key"
+    },
+    {
+      "name": "bad_key_env_name",
+      "routing": {"providers": {"openrouter": {"protocol": "openrouter", "key_env": "sk-or-v1-abc"}}, "chain": ["openrouter/a"]},
+      "error_path": "/providers/openrouter/key_env"
+    },
+    {
+      "name": "levels_are_gone",
+      "routing": {"providers": {"openrouter": {"protocol": "openrouter"}}, "chain": ["openrouter/a"], "levels": {"cheap": ["openrouter/a"]}},
+      "error_path": "/levels"
+    },
+    {
+      "name": "negative_price",
+      "routing": {"providers": {"openrouter": {"protocol": "openrouter"}}, "chain": ["openrouter/a"], "prices": {"openrouter/a": {"input": -1, "output": 0}}},
+      "error_path": "/prices/openrouter~1a/input"
+    },
+    {
+      "name": "price_for_undescribed_provider",
+      "schema": false,
+      "routing": {"providers": {"openrouter": {"protocol": "openrouter"}}, "chain": ["openrouter/a"], "prices": {"ccode/a": {"input": 1, "output": 1}}},
+      "error_path": "/prices/ccode~1a"
+    },
+    {
+      "name": "unknown_version",
+      "routing": {"version": 2, "providers": {"openrouter": {"protocol": "openrouter"}}, "chain": ["openrouter/a"]},
+      "error_path": "/version"
+    },
+    {
+      "name": "not_an_object",
+      "routing": ["openrouter/a"],
+      "error_path": ""
+    }
+  ]
+}

@@ -9,7 +9,7 @@ import time
 
 import conftest as fakes
 import pytest
-from conftest import FakeCompletion, response
+from conftest import ROUTING, FakeCompletion, response
 from pydantic import BaseModel
 
 from llmkit import AllModelsFailed, LlmKit, Task
@@ -18,6 +18,7 @@ from llmkit import keys as keys_mod
 
 def kit(script=None, **kwargs) -> tuple[LlmKit, FakeCompletion]:
     completion = script if isinstance(script, FakeCompletion) else FakeCompletion(script)
+    kwargs.setdefault("routing", ROUTING)
     return LlmKit(completion=completion, **kwargs), completion
 
 
@@ -208,8 +209,8 @@ async def test_budget_warning_logged_once_per_process(caplog):
 
 async def test_unknown_price_marks_cost_unknown():
     instance, _ = kit([response()])
-    answer = await instance.ask(Task(user="вопрос", chain=["b/m2"]))  # цен для b в конфиге нет
-    assert answer.cost_usd == 0.0 and answer.cost_known is False
+    answer = await instance.ask(Task(user="вопрос", chain=["b/m2"]))  # цен для b в routing нет
+    assert answer.cost_usd is None and answer.cost_known is False and answer.cost_source == "unknown"
 
 
 class _FakeLitellm:
@@ -273,12 +274,6 @@ async def test_explicit_chain_overrides_level():
     assert fake.models() == ["openai/m2"]
 
 
-async def test_kit_level_override_applies():
-    instance, fake = kit([response()], level="solo")
-    answer = await instance.ask(Task(user="вопрос"))
-    assert answer.model == "a/m1" and fake.models() == ["openai/m1"]
-
-
 async def test_sync_wrappers_work_from_running_loop():
     """ask_sync вызван внутри работающего loop — работа уходит в отдельный поток."""
     instance, _ = kit([response("синхронно")])
@@ -320,7 +315,7 @@ class FakeInstructorClient:
 
 def structured_kit(steps):
     client = FakeInstructorClient(steps)
-    instance = LlmKit(completion=FakeCompletion(), instructor_factory=lambda completion, mode: client)
+    instance = LlmKit(routing=ROUTING, completion=FakeCompletion(), instructor_factory=lambda completion, mode: client)
     return instance, client
 
 
@@ -425,7 +420,7 @@ async def test_raise_on_error_cancels_remaining_tasks():
         finished.append(content)
         return response("ок")
 
-    instance = LlmKit(completion=completion, concurrency=4)
+    instance = LlmKit(routing=ROUTING, completion=completion, concurrency=4)
     tasks = [Task(user="плохой"), *[Task(user=f"хороший-{i}") for i in range(3)]]
     started = time.perf_counter()
     with pytest.raises(AllModelsFailed):

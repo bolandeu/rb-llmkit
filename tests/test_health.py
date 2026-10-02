@@ -9,12 +9,12 @@ import json
 
 import httpx
 import pytest
+from conftest import ROUTING
 from typer.testing import CliRunner
 
 from llmkit import health
 from llmkit import keys as keys_mod
 from llmkit.cli.main import app
-from llmkit.config import ProviderConfig
 from llmkit.providers import KINDS, SUBSCRIPTION_KINDS
 from llmkit.transports import chatgpt_auth
 
@@ -37,6 +37,14 @@ STATUSES = {"ok", "missing", "invalid", "expired", "quota_exhausted", "unreachab
 @pytest.fixture(autouse=True)
 def no_keychain(monkeypatch):
     monkeypatch.setattr(keys_mod, "from_keychain", lambda provider: None)
+
+
+@pytest.fixture(autouse=True)
+def routing_file(tmp_path, monkeypatch):
+    """Провайдеры с ключами — из routing пользователя (LLMKIT_ROUTING_FILE)."""
+    path = tmp_path / "routing.json"
+    path.write_text(json.dumps(ROUTING), encoding="utf-8")
+    monkeypatch.setenv("LLMKIT_ROUTING_FILE", str(path))
 
 
 def status(*args: str):
@@ -109,8 +117,11 @@ def test_every_key_kind_has_a_check():
     assert key_kinds <= set(health._KEY_CHECKS), f"нет проверки для: {sorted(key_kinds - set(health._KEY_CHECKS))}"
 
 
-def test_local_provider_without_key_is_not_listed():
-    assert not health.has_credentials(ProviderConfig(kind="ollama", requires_key=False))
+def test_without_routing_only_subscriptions_are_listed(monkeypatch):
+    monkeypatch.delenv("LLMKIT_ROUTING_FILE")
+    result, body = status()
+    assert result.exit_code == 0
+    assert set(by_provider(body)) == {"chatgpt", "claude"}
 
 
 @pytest.mark.parametrize(

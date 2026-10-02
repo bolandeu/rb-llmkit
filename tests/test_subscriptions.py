@@ -10,12 +10,13 @@ from pydantic import BaseModel
 from typer.testing import CliRunner
 
 from llmkit import LlmKit, Task, providers
+from llmkit import routing as routing_mod
 from llmkit.cli.main import app
-from llmkit.config import Config
 from llmkit.errors import LoginMissing
 from llmkit.transports import chatgpt, chatgpt_auth, claude_cli
 
-CONFIG = Config.model_validate({"providers": {"gpt": {"kind": "chatgpt"}, "cl": {"kind": "claude_cli"}}, "levels": {}})
+ROUTING = {"providers": {"gpt": {"protocol": "chatgpt"}, "cl": {"protocol": "claude_cli"}}, "chain": ["gpt/gpt-5.5"]}
+CONFIG = routing_mod.parse(ROUTING)
 
 
 def logged_in() -> None:
@@ -66,15 +67,14 @@ def transport(monkeypatch):
 
 
 def kit() -> LlmKit:
-    base = LlmKit()
-    return LlmKit(config=Config.model_validate({**base.config.model_dump(), "providers": CONFIG.providers}))
+    return LlmKit(routing=ROUTING)
 
 
 async def test_subscription_answer_costs_nothing(transport):
     calls = transport(reply("понг"))
     answer = await kit().ask(Task(user="пинг", chain=["gpt/gpt-5.5"]))
     assert answer.data == "понг" and answer.source == "llm"
-    assert (answer.cost_usd, answer.cost_known, answer.prompt_tokens) == (0.0, True, 7)
+    assert (answer.cost_usd, answer.cost_source, answer.prompt_tokens) == (0.0, "subscription", 7)
     assert calls[0]["model"] == "gpt-5.5" and calls[0]["provider"] == "gpt"
 
 
@@ -116,7 +116,8 @@ def test_cli_auth_status_reports_both_subscriptions():
 
 
 def test_cli_ask_without_login_exits_3_with_login_hint():
-    result = runner.invoke(app, ["ask", "привет", "-m", "chatgpt/gpt-5.5", "--json"])
+    routing = json.dumps({"providers": {"chatgpt": {"protocol": "chatgpt"}}, "chain": ["chatgpt/gpt-5.5"]})
+    result = runner.invoke(app, ["ask", "привет", "--routing", routing, "--json"])
     assert result.exit_code == 3
     assert "llm auth login chatgpt" in json.loads(result.stdout)["error"]["action"]
 

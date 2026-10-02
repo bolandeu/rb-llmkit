@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import os
 from types import SimpleNamespace
 
 import pytest
@@ -11,45 +12,26 @@ import pytest
 from llmkit import LlmKit
 from llmkit import core as core_mod
 
-CONFIG_TEMPLATE = """
-[providers.a]
-kind = "openai_compatible"
-base_url = "http://localhost:11111/v1"
-api_key_env = "TEST_A_KEY"
+# Routing тестов: провайдеры и цепочка приходят данными (routing v1), встроенных нет.
+ROUTING: dict = {
+    "providers": {
+        "a": {"protocol": "openai_compatible", "base_url": "http://localhost:11111/v1", "key_env": "TEST_A_KEY"},
+        "b": {"protocol": "openai_compatible", "base_url": "http://localhost:22222/v1", "key_env": "TEST_B_KEY"},
+    },
+    "chain": ["a/m1", "b/m2"],
+    "prices": {"a/m1": {"input": 1.0, "output": 2.0}},
+}
 
-[providers.b]
-kind = "openai_compatible"
-base_url = "http://localhost:22222/v1"
-api_key_env = "TEST_B_KEY"
 
-[providers.a.prices]
-"m1" = {{ input = 1.0, output = 2.0 }}
-
-[levels]
-cheap = ["a/m1", "b/m2"]
-solo = ["a/m1"]
-
-[defaults]
-level = "cheap"
-temperature = 0.0
-timeout = 5
-max_tokens = 100
-concurrency = 2
-
-[cache]
-enabled = true
-ttl_days = 30
-path = "{cache}"
-
-[usage]
-path = "{usage}"
-
-[retry]
-timeout = 1
-rate_limit = 2
-server = 2
-invalid_output = 2
-"""
+def settings(tmp_path) -> dict:
+    """Настройки вызовов тестов вместо дефолтов кода (config.toml больше не читается)."""
+    return {
+        "defaults": {"temperature": 0.0, "timeout": 5, "max_tokens": 100, "concurrency": 2},
+        "cache": {"enabled": True, "ttl_days": 30, "path": str(tmp_path / "cache.sqlite")},
+        "usage": {"path": str(tmp_path / "usage.sqlite")},
+        "budget": {"daily_usd": 20.0},
+        "retry": {"timeout": 1, "rate_limit": 2, "server": 2, "invalid_output": 2},
+    }
 
 
 # Ошибки провайдеров: классификация идёт по имени класса, поэтому эти
@@ -137,12 +119,14 @@ class FakeCompletion:
 
 @pytest.fixture(autouse=True)
 def isolated(tmp_path, monkeypatch):
-    """Конфиг, кэш и журнал — только во временном каталоге."""
-    path = tmp_path / "config.toml"
-    path.write_text(
-        CONFIG_TEMPLATE.format(cache=tmp_path / "cache.sqlite", usage=tmp_path / "usage.sqlite"), encoding="utf-8"
-    )
-    monkeypatch.setenv("LLMKIT_CONFIG", str(path))
+    """Настройки, кэш и журнал — только во временном каталоге; routing — только явно."""
+    from llmkit import config as config_mod
+
+    monkeypatch.setattr(config_mod, "DEFAULTS", settings(tmp_path))
+    monkeypatch.delenv("LLMKIT_ROUTING_FILE", raising=False)
+    for name in list(os.environ):  # ключи машины не должны влиять на тесты
+        if name.endswith("_API_KEY"):
+            monkeypatch.delenv(name)
     monkeypatch.setenv("TEST_A_KEY", "ключ-a")
     monkeypatch.setenv("TEST_B_KEY", "ключ-b")
     monkeypatch.delenv("LLMKIT_CACHE", raising=False)
@@ -156,7 +140,7 @@ def isolated(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAUDE_COMMAND", "llmkit-no-such-claude")
     core_mod._warned_budgets.clear()
     core_mod._warned_prices.clear()
-    return path
+    return tmp_path
 
 
 @pytest.fixture
@@ -176,6 +160,7 @@ def make_kit():
     """Фабрика `LlmKit` с подменённым вызовом модели."""
 
     def factory(completion, **kwargs):
+        kwargs.setdefault("routing", ROUTING)
         return LlmKit(completion=completion, **kwargs)
 
     return factory

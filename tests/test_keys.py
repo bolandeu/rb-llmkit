@@ -1,4 +1,4 @@
-"""Резолв ключей: аргумент конфига → env → связка ключей."""
+"""Резолв ключей: key_env (LLM_<P>_API_KEY) → старое имя с предупреждением → связка ключей."""
 
 from __future__ import annotations
 
@@ -8,8 +8,8 @@ import logging
 import pytest
 
 from llmkit import keys
-from llmkit.config import ProviderConfig
 from llmkit.errors import KeyMissing
+from llmkit.routing import Provider
 
 
 class FakeKeyring:
@@ -52,32 +52,41 @@ def fake_keyring(monkeypatch):
 
 def test_env_wins_over_keychain(fake_keyring):
     fake_keyring({("llmkit:openrouter", "openrouter"): json.dumps({"api_key": "из-связки"})})
-    cfg = ProviderConfig(kind="openrouter")
-    assert keys.resolve("openrouter", cfg, env={"OPENROUTER_API_KEY": "из-env"}) == "из-env"
+    cfg = Provider(protocol="openrouter", key_env="LLM_OPENROUTER_API_KEY")
+    assert keys.resolve("openrouter", cfg, env={"LLM_OPENROUTER_API_KEY": "из-env"}) == "из-env"
 
 
 def test_keychain_used_when_env_empty(fake_keyring):
     fake_keyring({("llmkit:openrouter", "openrouter"): json.dumps({"api_key": "из-связки"})})
-    assert keys.resolve("openrouter", ProviderConfig(kind="openrouter"), env={}) == "из-связки"
+    assert keys.resolve("openrouter", Provider(protocol="openrouter"), env={}) == "из-связки"
 
 
-def test_config_api_key_wins_over_everything(fake_keyring):
+def test_default_env_name_from_provider_name():
+    assert keys.default_env("openrouter") == "LLM_OPENROUTER_API_KEY"
+    assert keys.default_env("my-gate.v2") == "LLM_MY_GATE_V2_API_KEY"
+    assert keys.env_var("x", Provider(protocol="openrouter", key_env="CUSTOM_KEY")) == "CUSTOM_KEY"
+    assert keys.env_var("x", Provider(protocol="openrouter")) == "LLM_X_API_KEY"
+
+
+def test_key_env_overrides_standard_name(fake_keyring):
     fake_keyring()
-    cfg = ProviderConfig(kind="openrouter", api_key="из-конфига")
-    assert keys.resolve("openrouter", cfg, env={"OPENROUTER_API_KEY": "из-env"}) == "из-конфига"
-
-
-def test_api_key_env_overrides_standard_name(fake_keyring):
-    fake_keyring()
-    cfg = ProviderConfig(kind="openai_compatible", base_url="http://x/v1", api_key_env="DEEPSEEK_API_KEY")
+    cfg = Provider(protocol="openai_compatible", base_url="http://x/v1", key_env="DEEPSEEK_API_KEY")
     assert keys.resolve("deepseek", cfg, env={"DEEPSEEK_API_KEY": "ключ"}) == "ключ"
+
+
+def test_legacy_name_is_used_with_warning(fake_keyring):
+    fake_keyring()
+    warnings: list[str] = []
+    cfg = Provider(protocol="openrouter", key_env="LLM_OPENROUTER_API_KEY")
+    assert keys.resolve("openrouter", cfg, env={"OPENROUTER_API_KEY": "старый"}, warnings=warnings) == "старый"
+    assert warnings == ["key from OPENROUTER_API_KEY: rename to LLM_OPENROUTER_API_KEY"]
 
 
 def test_broken_keychain_warns_once_and_falls_back_to_env(fake_keyring, caplog):
     fake_keyring(broken=True)
-    cfg = ProviderConfig(kind="openrouter")
+    cfg = Provider(protocol="openrouter")
     with caplog.at_level(logging.WARNING, logger="llmkit.keys"):
-        assert keys.resolve("openrouter", cfg, env={"OPENROUTER_API_KEY": "из-env"}) == "из-env"
+        assert keys.resolve("openrouter", cfg, env={"LLM_OPENROUTER_API_KEY": "из-env"}) == "из-env"
         assert keys.from_keychain("openrouter") is None
         assert keys.from_keychain("openrouter") is None
     assert len([r for r in caplog.records if "связка" in r.getMessage()]) == 1
@@ -86,14 +95,9 @@ def test_broken_keychain_warns_once_and_falls_back_to_env(fake_keyring, caplog):
 def test_missing_key_raises_with_hint(fake_keyring):
     fake_keyring()
     with pytest.raises(KeyMissing) as info:
-        keys.resolve("openrouter", ProviderConfig(kind="openrouter"), env={})
-    assert "OPENROUTER_API_KEY" in str(info.value) and "llm keys set openrouter" in str(info.value)
-
-
-def test_provider_without_key_returns_none(fake_keyring):
-    fake_keyring()
-    cfg = ProviderConfig(kind="ollama", base_url="http://localhost:11434", requires_key=False)
-    assert keys.resolve("ollama", cfg, env={}) is None
+        keys.resolve("openrouter", Provider(protocol="openrouter"), env={})
+    assert info.value.env_var == "LLM_OPENROUTER_API_KEY"
+    assert "LLM_OPENROUTER_API_KEY" in str(info.value) and "llm keys set openrouter" in str(info.value)
 
 
 def test_store_and_delete_roundtrip(fake_keyring):

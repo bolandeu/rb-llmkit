@@ -1,0 +1,74 @@
+# Копия config.toml пользователя с Mac (2026-10-02, ключей в нём нет) — вход для `llm routing import` (R10).
+# Конфиг llmkit. Слои: дефолты в коде → этот файл →
+# .llmkit/config.toml проекта → LLMKIT_* → аргументы LlmKit(...).
+
+[providers.openrouter]
+kind = "openrouter"                 # openrouter | openai | anthropic | gemini | ollama | openai_compatible
+# ключ: переменная OPENROUTER_API_KEY или связка ключей (llm keys set openrouter)
+[providers.openrouter.prices]       # запасной вариант, если LiteLLM цену модели не знает
+"google/gemini-2.5-flash-lite" = { input = 0.10, output = 0.40 }
+
+[providers.ccode.prices]            # $ за 1M токенов; без них LiteLLM берёт свои
+# Модели gpt-5.6-*/gpt-6-* ходят через
+# шлюз ccode, и без этой секции их стоимость считалась примерно в 20 раз выше
+# (замер antagor 2026-09-24: у terra выходило ~1.83/9.13 вместо 0.09/0.54).
+"gpt-5.6-sol"   = { input = 0.18, output = 0.9 }
+"gpt-6-sol"     = { input = 0.09, output = 0.45 }
+"gpt-5.6-terra" = { input = 0.09, output = 0.54 }
+"gpt-5.5"       = { input = 0.23, output = 1.35 }
+"gpt-6-astra"   = { input = 0.45, output = 2.25 }
+
+[providers.anymodel.prices]         # $ за 1M токенов = коэффициент шлюза x $0.05 (1 токен баланса = $0.05/1M; коэф. 1.5 = $0.075, пользователь 2026-09-29)
+# коэффициенты - GET https://anymodel.org/v1/models/info?id=...; шлюз в ответе цены не отдаёт
+"cx/gpt-6-luna" = { input = 0.075, output = 0.075 }
+"cx/gpt-6-sol" = { input = 0.2, output = 0.2 }
+"cx/gpt-5.6-luna" = { input = 0.075, output = 0.075 }
+"cx/gpt-5.6-sol" = { input = 0.2, output = 0.2 }
+"cx/gpt-5.6-terra" = { input = 0.15, output = 0.15 }
+"cx/gpt-5.5" = { input = 0.15, output = 0.15 }
+"ag/claude-sonnet-4-6" = { input = 0.12, output = 0.12 }
+"ag/gemini-2.5-flash-lite" = { input = 0.03, output = 0.03 }
+"ag/gemini-3-flash" = { input = 0.03, output = 0.03 }
+"ag/gemini-3.1-flash-lite-preview" = { input = 0.03, output = 0.03 }
+"ag/gemini-3.1-pro-low" = { input = 0.085, output = 0.085 }
+"ag/gemini-3.6-flash-low" = { input = 0.03, output = 0.03 }
+"ag/gemini-3.6-flash-medium" = { input = 0.03, output = 0.03 }
+"ag/gemini-3.6-flash-high" = { input = 0.03, output = 0.03 }
+"ag/gemini-3.7-flash-low" = { input = 0.03, output = 0.03 }
+"ag/gemini-3.7-flash-medium" = { input = 0.03, output = 0.03 }
+"ag/gemini-3.7-flash-high" = { input = 0.03, output = 0.03 }
+"ag/gemini-pro-agent" = { input = 0.085, output = 0.085 }
+"ag/gpt-oss-120b-medium" = { input = 0.025, output = 0.025 }
+"glm/glm-5.3-flash" = { input = 0.025, output = 0.025 }
+"ds/deepseek-v4-pro" = { input = 0.0075, output = 0.0075 }
+
+[levels]
+# Уровень = цепочка "провайдер/модель" по порядку: упала первая — отвечает следующая.
+# Ниже пример; модели выбирайте сами. "провайдер" — ключ из [providers] выше,
+# всё после первого "/" — имя модели у этого провайдера.
+cheap  = ["ccode/gpt-5.6-terra", "openrouter/z-ai/glm-5.3-flash", "openrouter/deepseek/deepseek-v4.1-flash", "openrouter/google/gemini-2.5-flash-lite"]
+judge  = ["ccode/gpt-5.6-sol", "openrouter/anthropic/claude-sonnet-5", "openrouter/openai/gpt-6-luna", "openrouter/x-ai/grok-4.7"]
+strong = ["ccode/gpt-6-astra", "openrouter/anthropic/claude-opus-5.5", "openrouter/openai/gpt-6-sol"]
+
+[defaults]
+level = "cheap"
+temperature = 0.0
+timeout = 120                       # секунд на один HTTP-вызов
+max_tokens = 16000
+concurrency = 6                     # параллельных вызовов в ask_many
+
+[cache]
+enabled = true
+ttl_days = 30
+
+[budget]                            # только предупреждения, ничего не прерывает
+daily_usd = 20.0
+# Лимит на значение метки — раскомментируйте нужные:
+# [budget.tags]
+# "tool=intentree" = 2.0
+
+[retry]                             # повторы по типам ошибок
+timeout = 0                         # 0 - без повтора на той же модели: сразу следующий шаг цепочки (не ждать 2x timeout на застрявшем провайдере)
+rate_limit = 6                      # шлюзы (anymodel) отвечают «временно недоступен, повтор через 60 с» - пауза до 30 с, 6 раз ≈ 3 мин
+server = 6
+invalid_output = 2

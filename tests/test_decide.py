@@ -53,9 +53,19 @@ class FakeDecisions:
         return step
 
 
+# Цепочка decide — из routing: уровня `decide` больше нет.
+DECIDE_ROUTING = {
+    "providers": {
+        "openrouter": {"protocol": "openrouter", "key_env": "LLM_OPENROUTER_API_KEY"},
+        "a": {"protocol": "openai_compatible", "base_url": "http://localhost:11111/v1", "key_env": "TEST_A_KEY"},
+    },
+    "chain": ["openrouter/~typesafe/jev-latest"],
+}
+
+
 @pytest.fixture(autouse=True)
 def openrouter_key(monkeypatch):
-    monkeypatch.setenv("OPENROUTER_API_KEY", "ключ-or")
+    monkeypatch.setenv("LLM_OPENROUTER_API_KEY", "ключ-or")
 
 
 def usage_rows(kit: LlmKit) -> list[tuple]:
@@ -68,7 +78,7 @@ def usage_rows(kit: LlmKit) -> list[tuple]:
 
 async def test_decide_returns_answers_cost_and_served_model():
     fake = FakeDecisions()
-    kit = LlmKit(decisions=fake, tags={"tool": "stand"})
+    kit = LlmKit(routing=DECIDE_ROUTING, decisions=fake, tags={"tool": "stand"})
 
     answer = await kit.decide("Help! Payouts failing.", QUESTIONS)
 
@@ -85,7 +95,7 @@ async def test_decide_returns_answers_cost_and_served_model():
         (
             "openrouter/~typesafe/jev-latest",
             "ok",
-            "decide",
+            None,  # уровней нет: колонка level больше не заполняется
             0,
             427,
             73,
@@ -97,7 +107,7 @@ async def test_decide_returns_answers_cost_and_served_model():
 
 async def test_decide_retries_503_on_same_model(slept):
     fake = FakeDecisions(SubscriptionServerError("HTTP 503: busy"), body())
-    kit = LlmKit(decisions=fake)
+    kit = LlmKit(routing=DECIDE_ROUTING, decisions=fake)
 
     answer = await kit.decide("s", QUESTIONS)
 
@@ -108,7 +118,7 @@ async def test_decide_retries_503_on_same_model(slept):
 
 
 async def test_decide_all_failed_raises_or_default(slept):
-    kit = LlmKit(decisions=FakeDecisions(SubscriptionServerError("HTTP 503")))
+    kit = LlmKit(routing=DECIDE_ROUTING, decisions=FakeDecisions(SubscriptionServerError("HTTP 503")))
     with pytest.raises(AllModelsFailed):
         await kit.decide("s", QUESTIONS)
 
@@ -117,28 +127,24 @@ async def test_decide_all_failed_raises_or_default(slept):
     assert answer.data == {}
 
 
-async def test_decide_cost_from_config_when_response_has_none(isolated):
-    isolated.write_text(
-        isolated.read_text(encoding="utf-8")
-        + '\n[providers.openrouter.prices]\n"~typesafe/jev-latest" = { input = 0.042, output = 0 }\n',
-        encoding="utf-8",
-    )
-    kit = LlmKit(decisions=FakeDecisions(body(cost=None)))
+async def test_decide_cost_from_routing_when_response_has_none():
+    routing = {**DECIDE_ROUTING, "prices": {"openrouter/~typesafe/jev-latest": {"input": 0.042, "output": 0}}}
+    kit = LlmKit(routing=routing, decisions=FakeDecisions(body(cost=None)))
 
     answer = await kit.decide("s", QUESTIONS)
 
-    assert answer.cost_known
+    assert answer.cost_known and answer.cost_source == "routing"
     assert answer.cost_usd == pytest.approx(427 * 0.042 / 1_000_000)
 
 
 async def test_decide_rejects_non_openrouter_models():
-    kit = LlmKit(decisions=FakeDecisions())
+    kit = LlmKit(routing=DECIDE_ROUTING, decisions=FakeDecisions())
     with pytest.raises(ConfigError, match="OpenRouter"):
         await kit.decide("s", QUESTIONS, chain=["a/m1"])
 
 
 def test_decide_sync():
-    kit = LlmKit(decisions=FakeDecisions())
+    kit = LlmKit(routing=DECIDE_ROUTING, decisions=FakeDecisions())
     assert kit.decide_sync("s", QUESTIONS).data == ANSWERS
 
 
@@ -150,10 +156,13 @@ def test_cli_decide_json(monkeypatch, tmp_path):
 
     fake = FakeDecisions()
     monkeypatch.setattr(runtime, "build_kit", lambda **kwargs: LlmKit(decisions=fake, **kwargs))
+    routing = json.dumps(DECIDE_ROUTING)
     questions = tmp_path / "q.json"
     questions.write_text(json.dumps(QUESTIONS), encoding="utf-8")
 
-    result = CliRunner().invoke(app, ["decide", "Payouts failing", "--questions", str(questions), "--json"])
+    result = CliRunner().invoke(
+        app, ["decide", "Payouts failing", "--questions", str(questions), "--routing", routing, "--json"]
+    )
 
     assert result.exit_code == 0, result.output
     envelope = json.loads(result.stdout)
@@ -172,7 +181,10 @@ def test_cli_decide_rejects_non_openrouter_model(monkeypatch, tmp_path):
     questions = tmp_path / "q.json"
     questions.write_text(json.dumps(QUESTIONS), encoding="utf-8")
 
-    result = CliRunner().invoke(app, ["decide", "s", "-q", str(questions), "--model", "a/m1"])
+    providers_only = json.dumps({"providers": DECIDE_ROUTING["providers"]})
+    result = CliRunner().invoke(
+        app, ["decide", "s", "-q", str(questions), "--routing", providers_only, "--model", "a/m1"]
+    )
 
     assert result.exit_code == 2
 
