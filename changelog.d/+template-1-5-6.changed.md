@@ -1,1 +1,0 @@
-Шаблон cli-generator v1.5.6: TDD обязателен — новый шаг гейта `existing tests` (изменённые с последнего тега тесты), mutmut в группе `mutation`; `x-rb-template-version` в `llm describe --json` — v1.5.6.

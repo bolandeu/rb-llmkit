@@ -8,6 +8,17 @@
 
 <!-- towncrier release notes start -->
 
+## [0.7.0] - 2026-10-02
+
+### Added
+
+- Шаблоны промптов mustache (combustache): `llm render --template <файл|текст|-> --vars <json-файл|json> [--lenient] [--json]`, те же `--template/--vars/--lenient` у `llm ask`, `llm json`, `llm decide`; библиотечно — `llmkit.render(template, vars, strict=True)`. Экранирования HTML нет; по умолчанию строго: отсутствующая переменная — `TemplateVariableMissing` / код выхода 2 с `error.code = TEMPLATE_VARIABLE_MISSING` и `error.variable`. В метки учёта расходов идут `template` (имя файла, `inline` или `stdin`) и `template_sha256` (12 знаков), значения переменных — нет.
+
+### Changed
+
+- Шаблон cli-generator v1.5.6: TDD обязателен — новый шаг гейта `existing tests` (изменённые с последнего тега тесты), mutmut в группе `mutation`; `x-rb-template-version` в `llm describe --json` — v1.5.6.
+
+
 ## [0.6.1] - 2026-10-02
 
 ### Changed
