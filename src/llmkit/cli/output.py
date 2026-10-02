@@ -84,7 +84,7 @@ def _classify(exc: Exception) -> CliError:
     if isinstance(exc, DatabaseError):
         return CliError(exc.code, exc.message, exc.action, exc.exit_code)
     if isinstance(exc, LoginMissing):
-        return CliError("AUTH_REQUIRED", f"нет входа в подписку для провайдера {exc.provider}", exc.action, 3)
+        return CliError("AUTH_REQUIRED", f"нет входа в подписку для провайдера {exc.provider}", exc.action, exit_code=3)
     if isinstance(exc, KeyMissing):
         return CliError(
             "AUTH_REQUIRED",

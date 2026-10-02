@@ -108,6 +108,26 @@ def test_every_table_has_a_single_column_primary_key() -> None:
         assert len(columns) == 1, f"{name}: PRIMARY KEY должен быть из одной колонки, а он {columns}"
 
 
+def test_every_table_says_whether_it_is_data_or_cache() -> None:
+    for table in tables.metadata.sorted_tables:
+        assert table.info.get("kind") in ("data", "cache"), f'{table.name}: нужен info={{"kind": "data" | "cache"}}'
+
+
+def test_declared_views_exist_with_their_columns() -> None:
+    """Каждое представление из tables.views создают миграции — ровно с объявленными колонками."""
+    _assert_views_match(db.open_db())
+
+
+def _assert_views_match(engine: sa.Engine) -> None:
+    inspector = sa.inspect(engine)
+    existing = set(inspector.get_view_names())
+    for view in tables.views.sorted_tables:
+        assert view.name.startswith(f"{db.PREFIX}v"), f"{view.name}: имя представления — <tool>_v<N>_<имя>"
+        assert view.name in existing, f"{view.name} объявлено в tables.views, но миграции его не создают"
+        columns = [column["name"] for column in inspector.get_columns(view.name)]
+        assert columns == [column.name for column in view.columns], f"{view.name}: колонки расходятся с tables.views"
+
+
 def test_tables_match_the_migrations() -> None:
     """tables.py и migrations/versions/ описывают одну схему."""
     engine = db.open_db()
@@ -280,6 +300,7 @@ def test_postgres_round_trip(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) ->
         db.open_db()
     assert db.upgrade(engine).up_to_date
     db.check_schema(engine)
+    _assert_views_match(engine)
 
     _legacy(tmp_path / "old.db")
     assert db.import_sqlite(tmp_path / "old.db", engine) == {"llmkit_calls": 2}

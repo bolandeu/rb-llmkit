@@ -4,6 +4,10 @@
 инструментов (и Directus) лежат в одной схеме `public`. Меняя таблицу здесь,
 добавьте миграцию руками — tests/test_db.py падает, если схема после миграций
 и эти метаданные расходятся.
+
+У каждой таблицы `info={"kind": "data"}` (результат инструмента, при удалении
+теряется) или `"cache"` (копия того, что можно получить заново); без него
+tests/test_db.py падает. `llm describe --json` публикует это (x-rb-data).
 """
 
 from __future__ import annotations
@@ -49,4 +53,35 @@ calls = sa.Table(
     sa.Column("latency_ms", sa.Integer),
     sa.Column("pid", sa.Integer),
     sa.Column("served_model", sa.Text),
+    info={"kind": "data"},
+)
+
+# Представления `llmkit_v1_*`, которые читают другие инструменты, Directus и
+# платформа вместо таблиц, — контракт данных, его публикует `llm describe --json`
+# (x-rb-data.views). Создаёт их миграция (`CREATE VIEW`), здесь — объявление;
+# tests/test_db.py падает, если представления нет в базе после миграций или
+# колонки расходятся. Колонки не меняются: другая форма — новое `_v2_` рядом.
+# Отдельные метаданные: `metadata` — зеркало только таблиц.
+views = sa.MetaData()
+
+v1_calls = sa.Table(
+    f"{PREFIX}v1_calls",
+    views,
+    sa.Column("id", sa.Integer, comment="Номер попытки в журнале"),
+    sa.Column("called_at", sa.DateTime(timezone=True), comment="Когда сделан вызов (UTC)"),
+    sa.Column("task_id", sa.Text, comment="Id задачи: попытки одного вызова по цепочке моделей"),
+    sa.Column("tags", sa.JSON, comment='Метки вызывающего для учёта расходов: {"метка": "значение"}'),
+    sa.Column("level", sa.Text, comment="Уровень цепочки моделей из конфига (cheap, judge…)"),
+    sa.Column("model", sa.Text, comment="Запрошенная модель: провайдер/модель"),
+    sa.Column("served_model", sa.Text, comment="Модель, которую назвал провайдер в ответе"),
+    sa.Column("provider", sa.Text, comment="Провайдер из конфига"),
+    sa.Column("status", sa.Text, comment="Итог попытки: ok, failed или cache (ответ из кэша)"),
+    sa.Column("error_type", sa.Text, comment="Класс ошибки, если попытка упала"),
+    sa.Column("attempt", sa.Integer, comment="Номер повтора на этой модели (0 — первая попытка или кэш)"),
+    sa.Column("prompt_tokens", sa.Integer, comment="Токены запроса"),
+    sa.Column("completion_tokens", sa.Integer, comment="Токены ответа"),
+    sa.Column("cost_usd", sa.Float, comment="Стоимость, USD"),
+    sa.Column("cost_known", sa.Integer, comment="1 — стоимость известна, 0 — цены нет"),
+    sa.Column("latency_ms", sa.Integer, comment="Длительность вызова, мс"),
+    comment="Журнал вызовов LLM: одна строка на попытку",
 )

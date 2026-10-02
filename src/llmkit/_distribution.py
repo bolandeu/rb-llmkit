@@ -10,3 +10,6 @@ DIST_NAME_LEGACY: str | None = "llmkit"
 # Имя инструмента для общей базы (cli-generator architecture.md §12): префикс таблиц
 # `llmkit_`, переменная `LLMKIT_DATABASE_URL`. Записано, а не выводится из имени CLI (`llm`).
 TOOL = "llmkit"
+# Релиз cli-generator, с которым сверен перенесённый вручную код (слой БД,
+# describe; AGENTS.md) — для `llm describe --json`. copier у llmkit нет.
+TEMPLATE_VERSION: str | None = "v1.5.0"

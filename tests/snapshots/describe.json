@@ -1,0 +1,1555 @@
+{
+  "opencli": "0.1",
+  "info": {
+    "title": "llm",
+    "version": "<version>",
+    "summary": "Общий LLM-слой: цепочки моделей, кэш, учёт расходов"
+  },
+  "command": {
+    "name": "llm",
+    "description": "llmkit: вызовы LLM с цепочками моделей, кэшем и учётом расходов.\n\nУ всех команд есть `--json` (конверт в stdout), диагностика идёт в stderr.\nКоды выхода: 0 — успех, 1 — непредвиденная ошибка, 2 — неверные аргументы,\n3 — нет ключа или входа в подписку, 5 — все модели упали или база недоступна,\n6 — базу расходов смигрировал более новый релиз (`llm db`).\n\nОсновные параметры `llm ask` и `llm json`:\n\n  -m, --model ПРОВАЙДЕР/МОДЕЛЬ   одна модель вместо уровня: ccode/gpt-5.6-sol\n\n  -l, --level УРОВЕНЬ            цепочка моделей из конфига: cheap, judge…\n\n  -s, --system ТЕКСТ             системное сообщение\n\n  --schema ФАЙЛ                  JSON Schema ответа (только llm json)\n\n  --temperature, --max-tokens, --timeout   перекрыть значения из конфига\n\n  --tag k=v                      метка для учёта расходов, можно несколько\n\n  --no-cache, --no-retry         без кэша; без повторов на сбойной модели\n\nСписок провайдеров, уровней и моделей: `llm models`. Все параметры\nкоманды: `llm <команда> --help`, например `llm ask --help`.\n\nПримеры:\n\n  llm ask \"Столица Франции?\" --level cheap\n\n  llm ask \"Привет\" -m ccode/gpt-5.6-sol\n\n  llm json \"Разбери запрос\" --schema schema.json\n\n  llm models · llm cost --since 7d · llm auth status · llm db status",
+    "options": [
+      {
+        "name": "--json",
+        "description": "Машинный вывод: JSON-конверт в stdout.",
+        "metadata": [
+          {
+            "name": "x-rb-type",
+            "value": "boolean"
+          },
+          {
+            "name": "x-rb-default",
+            "value": false
+          }
+        ]
+      },
+      {
+        "name": "--quiet",
+        "description": "Не печатать необязательный человеческий вывод.",
+        "metadata": [
+          {
+            "name": "x-rb-type",
+            "value": "boolean"
+          },
+          {
+            "name": "x-rb-default",
+            "value": false
+          }
+        ]
+      },
+      {
+        "name": "--verbose",
+        "description": "Подробная диагностика в stderr.",
+        "metadata": [
+          {
+            "name": "x-rb-type",
+            "value": "boolean"
+          },
+          {
+            "name": "x-rb-default",
+            "value": false
+          }
+        ]
+      },
+      {
+        "name": "--version",
+        "description": "Показать версию и выйти.",
+        "metadata": [
+          {
+            "name": "x-rb-type",
+            "value": "boolean"
+          },
+          {
+            "name": "x-rb-default",
+            "value": false
+          }
+        ]
+      }
+    ],
+    "commands": [
+      {
+        "name": "ask",
+        "description": "Задать вопрос модели и напечатать текстовый ответ.\n\nЦепочка моделей берётся из уровня конфига; упавшая модель уступает\nследующей. Коды выхода: 0 — ответ получен, 2 — неверные аргументы,\n3 — нет ключа провайдера, 5 — все модели упали.\n\nExample: llm ask \"Столица Франции?\" --level cheap",
+        "options": [
+          {
+            "name": "--system",
+            "aliases": [
+              "-s"
+            ],
+            "arguments": [
+              {
+                "name": "SYSTEM",
+                "required": true
+              }
+            ],
+            "description": "Системное сообщение.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "str"
+              }
+            ]
+          },
+          {
+            "name": "--level",
+            "aliases": [
+              "-l"
+            ],
+            "arguments": [
+              {
+                "name": "LEVEL",
+                "required": true
+              }
+            ],
+            "description": "Уровень из конфига: cheap, judge, strong…",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "str"
+              }
+            ]
+          },
+          {
+            "name": "--model",
+            "aliases": [
+              "-m"
+            ],
+            "arguments": [
+              {
+                "name": "MODEL",
+                "required": true
+              }
+            ],
+            "description": "Конкретная модель 'провайдер/модель' вместо уровня.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "str"
+              }
+            ]
+          },
+          {
+            "name": "--tag",
+            "arguments": [
+              {
+                "name": "TAG",
+                "required": true
+              }
+            ],
+            "description": "Метка k=v для учёта расходов; можно несколько.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "str"
+              },
+              {
+                "name": "x-rb-multiple",
+                "value": true
+              }
+            ]
+          },
+          {
+            "name": "--no-cache",
+            "description": "Не читать и не писать кэш ответов.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "boolean"
+              },
+              {
+                "name": "x-rb-default",
+                "value": false
+              }
+            ]
+          },
+          {
+            "name": "--temperature",
+            "arguments": [
+              {
+                "name": "TEMPERATURE",
+                "required": true
+              }
+            ],
+            "description": "Температура; по умолчанию из конфига.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "float"
+              }
+            ]
+          },
+          {
+            "name": "--max-tokens",
+            "arguments": [
+              {
+                "name": "MAX_TOKENS",
+                "required": true
+              }
+            ],
+            "description": "Лимит токенов ответа.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "int"
+              }
+            ]
+          },
+          {
+            "name": "--timeout",
+            "arguments": [
+              {
+                "name": "TIMEOUT",
+                "required": true
+              }
+            ],
+            "description": "Таймаут вызова в секундах; по умолчанию из конфига.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "float"
+              }
+            ]
+          },
+          {
+            "name": "--no-retry",
+            "description": "Не повторять на сбойной модели, сразу к следующей.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "boolean"
+              },
+              {
+                "name": "x-rb-default",
+                "value": false
+              }
+            ]
+          },
+          {
+            "name": "--json",
+            "description": "Машинный вывод: JSON-конверт в stdout.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "boolean"
+              },
+              {
+                "name": "x-rb-default",
+                "value": false
+              }
+            ]
+          }
+        ],
+        "arguments": [
+          {
+            "name": "text",
+            "required": false,
+            "arity": {
+              "minimum": 0,
+              "maximum": 1
+            },
+            "description": "Текст запроса; без него читается stdin.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "str"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "json",
+        "description": "Получить ответ модели как JSON по схеме.\n\nВ обычном режиме в stdout попадает только сам объект ответа, в режиме\n`--json` — конверт с полем `data` и метаданными вызова. Валидацию по\nсхеме выполняет потребитель. Коды выхода: 0 — ответ получен,\n2 — неверные аргументы, 3 — нет ключа провайдера, 5 — все модели упали\nили ответ не разобрался.\n\nExample: llm json \"Разбери запрос\" --schema schema.json --json",
+        "options": [
+          {
+            "name": "--schema",
+            "required": true,
+            "arguments": [
+              {
+                "name": "SCHEMA",
+                "required": true
+              }
+            ],
+            "description": "Файл с JSON Schema ответа.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "path"
+              }
+            ]
+          },
+          {
+            "name": "--system",
+            "aliases": [
+              "-s"
+            ],
+            "arguments": [
+              {
+                "name": "SYSTEM",
+                "required": true
+              }
+            ],
+            "description": "Системное сообщение.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "str"
+              }
+            ]
+          },
+          {
+            "name": "--level",
+            "aliases": [
+              "-l"
+            ],
+            "arguments": [
+              {
+                "name": "LEVEL",
+                "required": true
+              }
+            ],
+            "description": "Уровень из конфига: cheap, judge, strong…",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "str"
+              }
+            ]
+          },
+          {
+            "name": "--model",
+            "aliases": [
+              "-m"
+            ],
+            "arguments": [
+              {
+                "name": "MODEL",
+                "required": true
+              }
+            ],
+            "description": "Конкретная модель 'провайдер/модель' вместо уровня.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "str"
+              }
+            ]
+          },
+          {
+            "name": "--tag",
+            "arguments": [
+              {
+                "name": "TAG",
+                "required": true
+              }
+            ],
+            "description": "Метка k=v для учёта расходов; можно несколько.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "str"
+              },
+              {
+                "name": "x-rb-multiple",
+                "value": true
+              }
+            ]
+          },
+          {
+            "name": "--no-cache",
+            "description": "Не читать и не писать кэш ответов.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "boolean"
+              },
+              {
+                "name": "x-rb-default",
+                "value": false
+              }
+            ]
+          },
+          {
+            "name": "--temperature",
+            "arguments": [
+              {
+                "name": "TEMPERATURE",
+                "required": true
+              }
+            ],
+            "description": "Температура; по умолчанию из конфига.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "float"
+              }
+            ]
+          },
+          {
+            "name": "--max-tokens",
+            "arguments": [
+              {
+                "name": "MAX_TOKENS",
+                "required": true
+              }
+            ],
+            "description": "Лимит токенов ответа.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "int"
+              }
+            ]
+          },
+          {
+            "name": "--timeout",
+            "arguments": [
+              {
+                "name": "TIMEOUT",
+                "required": true
+              }
+            ],
+            "description": "Таймаут вызова в секундах; по умолчанию из конфига.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "float"
+              }
+            ]
+          },
+          {
+            "name": "--no-retry",
+            "description": "Не повторять на сбойной модели, сразу к следующей.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "boolean"
+              },
+              {
+                "name": "x-rb-default",
+                "value": false
+              }
+            ]
+          },
+          {
+            "name": "--json",
+            "description": "Машинный вывод: JSON-конверт в stdout.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "boolean"
+              },
+              {
+                "name": "x-rb-default",
+                "value": false
+              }
+            ]
+          }
+        ],
+        "arguments": [
+          {
+            "name": "text",
+            "required": false,
+            "arity": {
+              "minimum": 0,
+              "maximum": 1
+            },
+            "description": "Текст запроса; без него читается stdin.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "str"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "decide",
+        "description": "Спросить модель решений OpenRouter: вероятности вместо текста.\n\nВопросы типов noul (да/нет), choice и score описываются в JSON-файле, как\nв API `/api/alpha/decisions`. В stdout — словарь answers; в режиме\n`--json` — конверт с `data`, ценой и `served_model` (версия за алиасом).\nКоды выхода: 0 — ответ получен, 2 — неверные аргументы или модель не\nOpenRouter, 3 — нет ключа, 5 — все модели упали.\n\nExample: llm decide \"Payouts failing for 3 days\" --questions q.json --json",
+        "options": [
+          {
+            "name": "--questions",
+            "aliases": [
+              "-q"
+            ],
+            "required": true,
+            "arguments": [
+              {
+                "name": "QUESTIONS",
+                "required": true
+              }
+            ],
+            "description": "JSON-файл вопросов: имя → type/instructions/criteria.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "path"
+              }
+            ]
+          },
+          {
+            "name": "--level",
+            "aliases": [
+              "-l"
+            ],
+            "arguments": [
+              {
+                "name": "LEVEL",
+                "required": true
+              }
+            ],
+            "description": "Уровень из конфига; по умолчанию decide.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "str"
+              }
+            ]
+          },
+          {
+            "name": "--model",
+            "aliases": [
+              "-m"
+            ],
+            "arguments": [
+              {
+                "name": "MODEL",
+                "required": true
+              }
+            ],
+            "description": "Модель 'openrouter/…' вместо уровня.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "str"
+              }
+            ]
+          },
+          {
+            "name": "--tag",
+            "arguments": [
+              {
+                "name": "TAG",
+                "required": true
+              }
+            ],
+            "description": "Метка k=v для учёта расходов; можно несколько.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "str"
+              },
+              {
+                "name": "x-rb-multiple",
+                "value": true
+              }
+            ]
+          },
+          {
+            "name": "--timeout",
+            "arguments": [
+              {
+                "name": "TIMEOUT",
+                "required": true
+              }
+            ],
+            "description": "Таймаут вызова в секундах; по умолчанию из конфига.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "float"
+              }
+            ]
+          },
+          {
+            "name": "--no-retry",
+            "description": "Не повторять на сбойной модели, сразу к следующей.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "boolean"
+              },
+              {
+                "name": "x-rb-default",
+                "value": false
+              }
+            ]
+          },
+          {
+            "name": "--json",
+            "description": "Машинный вывод: JSON-конверт в stdout.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "boolean"
+              },
+              {
+                "name": "x-rb-default",
+                "value": false
+              }
+            ]
+          }
+        ],
+        "arguments": [
+          {
+            "name": "text",
+            "required": false,
+            "arity": {
+              "minimum": 0,
+              "maximum": 1
+            },
+            "description": "Состояние, о котором спрашиваем; без него читается stdin.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "str"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "models",
+        "description": "Показать провайдеров, уровни и их цепочки моделей.\n\nУ каждого провайдера видно, откуда берётся ключ (значение не\nпечатается). Цепочки уровней задаются в формате \"провайдер/модель\".\nКод выхода 0; 2 — если конфиг не разбирается или уровень ссылается на\nнеописанного провайдера.\n\nExample: llm models --json",
+        "options": [
+          {
+            "name": "--json",
+            "description": "Машинный вывод: JSON-конверт в stdout.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "boolean"
+              },
+              {
+                "name": "x-rb-default",
+                "value": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "cost",
+        "description": "Показать расходы из журнала вызовов.\n\nБез `--by` печатается одна итоговая строка. На пустом журнале — пустая\nтаблица и код выхода 0; 2 — неверный период.\n\nExample: llm cost --by tool --since 7d",
+        "options": [
+          {
+            "name": "--by",
+            "arguments": [
+              {
+                "name": "BY",
+                "required": true
+              }
+            ],
+            "description": "Метки для группировки через запятую, например tool,niche.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "str"
+              }
+            ]
+          },
+          {
+            "name": "--since",
+            "arguments": [
+              {
+                "name": "SINCE",
+                "required": true
+              }
+            ],
+            "description": "Начало периода: 7d, 12h, 2w или ГГГГ-ММ-ДД.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "str"
+              }
+            ]
+          },
+          {
+            "name": "--until",
+            "arguments": [
+              {
+                "name": "UNTIL",
+                "required": true
+              }
+            ],
+            "description": "Конец периода в том же формате.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "str"
+              }
+            ]
+          },
+          {
+            "name": "--json",
+            "description": "Машинный вывод: JSON-конверт в stdout.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "boolean"
+              },
+              {
+                "name": "x-rb-default",
+                "value": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "serve",
+        "description": "Запустить локальный HTTP-прокси (фаза 4, ещё не реализовано).\n\nКод выхода 2 — команда пока не работает.\n\nExample: llm serve --port 8765",
+        "options": [
+          {
+            "name": "--port",
+            "arguments": [
+              {
+                "name": "PORT",
+                "required": true
+              }
+            ],
+            "description": "Порт локального прокси.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "int"
+              },
+              {
+                "name": "x-rb-default",
+                "value": 8765
+              }
+            ]
+          },
+          {
+            "name": "--json",
+            "description": "Машинный вывод: JSON-конверт в stdout.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "boolean"
+              },
+              {
+                "name": "x-rb-default",
+                "value": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "describe",
+        "description": "Показать машиночитаемый контракт CLI: документ OpenCLI (opencli.org).\n\nКоманды, опции, аргументы, коды выхода и метаданные `x-rb-*`: env, таблицы,\nпредставления v1, файлы данных и кэша, внешние программы. С --json — сам\nдокумент одной строкой (без конверта {\"ok\": ...}), без него — тот же с отступами.\n\nExample: llm describe --json",
+        "options": [
+          {
+            "name": "--json",
+            "description": "Документ одной строкой, без конверта {\"ok\": ...}.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "boolean"
+              },
+              {
+                "name": "x-rb-default",
+                "value": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "keys",
+        "description": "Ключи провайдеров: связка ключей ОС и переменные окружения.",
+        "commands": [
+          {
+            "name": "set",
+            "description": "Положить ключ провайдера в связку ключей ОС.\n\nКлюч нигде не печатается. Коды выхода: 0 — сохранён, 1 — связка ключей\nнедоступна, 2 — неизвестный провайдер или пустой ключ.\n\nExample: echo \"$KEY\" | llm keys set openrouter --stdin",
+            "options": [
+              {
+                "name": "--stdin",
+                "description": "Прочитать ключ из stdin вместо скрытого ввода.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              },
+              {
+                "name": "--json",
+                "description": "Машинный вывод: JSON-конверт в stdout.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ],
+            "arguments": [
+              {
+                "name": "provider",
+                "required": true,
+                "arity": {
+                  "minimum": 1,
+                  "maximum": 1
+                },
+                "description": "Имя провайдера из конфига, например openrouter.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "status",
+            "description": "Показать, откуда берётся ключ каждого провайдера.\n\nЗначения ключей не печатаются — только источник: config, env, keychain\nили none. Код выхода 0, даже если ключей нет.\n\nExample: llm keys status --json",
+            "options": [
+              {
+                "name": "--json",
+                "description": "Машинный вывод: JSON-конверт в stdout.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "rm",
+            "description": "Удалить ключ провайдера из связки ключей.\n\nУдаление отсутствующего ключа не ошибка. Коды выхода: 0 — готово,\n2 — неизвестный провайдер.\n\nExample: llm keys rm openrouter",
+            "options": [
+              {
+                "name": "--json",
+                "description": "Машинный вывод: JSON-конверт в stdout.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ],
+            "arguments": [
+              {
+                "name": "provider",
+                "required": true,
+                "arity": {
+                  "minimum": 1,
+                  "maximum": 1
+                },
+                "description": "Имя провайдера из конфига.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "auth",
+        "description": "Вход в подписки (kind = chatgpt | claude_cli) и проверка всех доступов: `llm auth status`.",
+        "commands": [
+          {
+            "name": "status",
+            "description": "Показать доступ каждого провайдера: откуда берётся и работает ли. Значения не печатаются.\n\nКлючи API и подписки (chatgpt, claude_cli) — в одном отчёте. Без `--check`\nтолько наличие (`unchecked` / `missing`); с ним: openrouter, openai,\nanthropic, gemini, ollama и OpenAI-совместимые шлюзы — один бесплатный\nзапрос с ключом; chatgpt — свежесть токена (с обновлением, если истёк);\nclaude — локальный `claude auth status`. Модели не вызываются.\nОбязательных провайдеров у llmkit нет (`required: false`).\nКоды выхода: 0 — нет неверных и просроченных доступов, 3 — есть\n(`error.code: CREDENTIALS_UNHEALTHY`, отчёт всё равно выводится),\n2 — неизвестный `--provider`. Форма `--json` — общий контракт инструментов:\n`tool`, `version`, `checked_at`, `credentials[]` с `provider`, `required`,\n`fields`, `source`, `source_ref`, `status`, `expires_at`, `quota`, `message`.\n\nExample: llm auth status --check --json",
+            "options": [
+              {
+                "name": "--check",
+                "description": "Сделать по одному дешёвому read-only вызову на провайдера (лимит 10 с).",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              },
+              {
+                "name": "--provider",
+                "arguments": [
+                  {
+                    "name": "PROVIDER",
+                    "required": true
+                  }
+                ],
+                "description": "Только этот провайдер из конфига (по умолчанию все).",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--json",
+                "description": "Машинный вывод: JSON-конверт в stdout.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "login",
+            "description": "Войти в подписку.\n\nChatGPT: по умолчанию вход по коду устройства (ссылка и код, браузер может\nбыть на другой машине); `--browser` — через локальный redirect на порт 1455.\nClaude: запускается `claude auth login`. Подсказки идут в stderr.\nКоды выхода: 0 — вход выполнен, 2 — не провайдер по подписке, 3 — вход не удался.\n\nExample: llm auth login chatgpt",
+            "options": [
+              {
+                "name": "--browser",
+                "description": "ChatGPT: вход через браузер вместо кода устройства.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              },
+              {
+                "name": "--no-open",
+                "description": "ChatGPT --browser: не открывать браузер самому.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              },
+              {
+                "name": "--json",
+                "description": "Машинный вывод: JSON-конверт в stdout.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ],
+            "arguments": [
+              {
+                "name": "provider",
+                "required": true,
+                "arity": {
+                  "minimum": 1,
+                  "maximum": 1
+                },
+                "description": "Провайдер по подписке из конфига, например chatgpt или claude.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "logout",
+            "description": "Выйти из подписки: ChatGPT — удалить файл токенов, Claude — `claude auth logout`.\n\nВыход без входа не ошибка. Коды выхода: 0 — готово, 2 — не провайдер по подписке.\n\nExample: llm auth logout chatgpt",
+            "options": [
+              {
+                "name": "--json",
+                "description": "Машинный вывод: JSON-конверт в stdout.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ],
+            "arguments": [
+              {
+                "name": "provider",
+                "required": true,
+                "arity": {
+                  "minimum": 1,
+                  "maximum": 1
+                },
+                "description": "Провайдер по подписке из конфига.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "config",
+        "description": "Конфиг llmkit: где лежит, что получилось, как начать.",
+        "commands": [
+          {
+            "name": "path",
+            "description": "Показать пути конфига, кэша и журнала вызовов.\n\nКод выхода всегда 0.\n\nExample: llm config path",
+            "options": [
+              {
+                "name": "--json",
+                "description": "Машинный вывод: JSON-конверт в stdout.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "show",
+            "description": "Показать итоговый конфиг после слияния всех слоёв.\n\nЗначения ключей не печатаются. Коды выхода: 0 — готово, 2 — конфиг не\nразбирается.\n\nExample: llm config show --json",
+            "options": [
+              {
+                "name": "--json",
+                "description": "Машинный вывод: JSON-конверт в stdout.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "init",
+            "description": "Записать шаблон конфига.\n\nСуществующий файл без `--force` не трогается. Коды выхода: 0 — файл\nсоздан, 2 — файл уже есть.\n\nExample: llm config init",
+            "options": [
+              {
+                "name": "--force",
+                "description": "Перезаписать существующий файл.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              },
+              {
+                "name": "--json",
+                "description": "Машинный вывод: JSON-конверт в stdout.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "db",
+        "description": "База журнала расходов: общая PostgreSQL (LLMKIT_DATABASE_URL) или локальная SQLite.",
+        "commands": [
+          {
+            "name": "status",
+            "description": "Показать, какая база используется и её ревизию схемы против ревизии этой версии.\n\nКоды выхода: 0 — готово, 5 — база из LLMKIT_DATABASE_URL недоступна.\n\nExample: llm db status --json",
+            "options": [
+              {
+                "name": "--json",
+                "description": "Машинный вывод: JSON-конверт в stdout.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "upgrade",
+            "description": "Применить недостающие миграции схемы к базе.\n\nОбщая PostgreSQL неявно не мигрируется: запускайте выпущенной версией после\nобновления, которое несёт миграции. Одновременные запуски ждут друг друга.\nЛокальная SQLite и так мигрируется при каждом открытии. Коды выхода: 0 —\nготово, 5 — база недоступна, 6 — базу смигрировал более новый релиз.\n\nExample: llm db upgrade --dry-run",
+            "options": [
+              {
+                "name": "--dry-run",
+                "description": "Показать, что будет сделано, ничего не меняя.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              },
+              {
+                "name": "--json",
+                "description": "Машинный вывод: JSON-конверт в stdout.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "import-sqlite",
+            "description": "Скопировать локальную SQLite в настроенную базу, один раз.\n\nДля переезда в общую PostgreSQL: задайте LLMKIT_DATABASE_URL и запустите.\nКаждая целевая таблица должна быть пустой; все строки — одной транзакцией.\nКоды выхода: 0 — готово, 1 — база не смигрирована, 2 — нет файла или\nтаблица не пуста, 5 — база недоступна.\n\nExample: llm db import-sqlite --dry-run",
+            "options": [
+              {
+                "name": "--dry-run",
+                "description": "Показать, что будет сделано, ничего не меняя.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              },
+              {
+                "name": "--json",
+                "description": "Машинный вывод: JSON-конверт в stdout.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ],
+            "arguments": [
+              {
+                "name": "path",
+                "required": false,
+                "arity": {
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "description": "Файл SQLite для импорта (по умолчанию — локальный журнал, usage.path).",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "path"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "exitCodes": [
+      {
+        "code": 0,
+        "description": "Успех"
+      },
+      {
+        "code": 1,
+        "description": "Непредвиденная ошибка; база расходов не смигрирована"
+      },
+      {
+        "code": 2,
+        "description": "Неверные аргументы или конфиг"
+      },
+      {
+        "code": 3,
+        "description": "Нет ключа провайдера или входа в подписку"
+      },
+      {
+        "code": 5,
+        "description": "Все модели цепочки упали (сбой провайдера) или база расходов недоступна"
+      },
+      {
+        "code": 6,
+        "description": "Базу расходов смигрировал более новый релиз llmkit"
+      }
+    ],
+    "metadata": [
+      {
+        "name": "x-rb-tool",
+        "value": {
+          "tool": "llmkit",
+          "dist": "rb-llmkit",
+          "package": "llmkit"
+        }
+      },
+      {
+        "name": "x-rb-template-version",
+        "value": "<template-version>"
+      },
+      {
+        "name": "x-rb-env",
+        "value": [
+          {
+            "name": "OPENROUTER_API_KEY",
+            "purpose": "credential",
+            "provider": "openrouter",
+            "field": "api_key",
+            "required": false
+          },
+          {
+            "name": "OLLAMA_API_KEY",
+            "purpose": "credential",
+            "provider": "ollama",
+            "field": "api_key",
+            "required": false
+          },
+          {
+            "name": "CCODE_API_KEY",
+            "purpose": "credential",
+            "provider": "ccode",
+            "field": "api_key",
+            "required": false
+          },
+          {
+            "name": "ANYMODEL_API_KEY",
+            "purpose": "credential",
+            "provider": "anymodel",
+            "field": "api_key",
+            "required": false
+          },
+          {
+            "name": "LLMKIT_CONFIG",
+            "purpose": "config",
+            "description": "Файл конфига вместо поиска ~/.config/llmkit и .llmkit/ проекта",
+            "required": false
+          },
+          {
+            "name": "LLMKIT_CACHE",
+            "purpose": "config",
+            "description": "0/false/no — выключить кэш ответов",
+            "required": false
+          },
+          {
+            "name": "LLMKIT_LOG_LEVEL",
+            "purpose": "config",
+            "description": "Уровень логов библиотеки",
+            "required": false
+          },
+          {
+            "name": "LLMKIT_DATABASE_URL",
+            "purpose": "database",
+            "description": "Общая PostgreSQL для журнала расходов; не задана → локальная SQLite (usage.path)",
+            "required": false
+          },
+          {
+            "name": "CLAUDE_COMMAND",
+            "purpose": "external",
+            "description": "Команда CLI Claude (можно с аргументами) вместо `claude` из PATH",
+            "required": false
+          }
+        ]
+      },
+      {
+        "name": "x-rb-data",
+        "value": {
+          "tables": [
+            {
+              "name": "llmkit_calls",
+              "kind": "data",
+              "columns": [
+                {
+                  "name": "id",
+                  "type": "INTEGER",
+                  "nullable": false,
+                  "primary_key": true
+                },
+                {
+                  "name": "ts",
+                  "type": "FLOAT",
+                  "nullable": true
+                },
+                {
+                  "name": "task_id",
+                  "type": "TEXT",
+                  "nullable": true
+                },
+                {
+                  "name": "tags",
+                  "type": "JSON",
+                  "nullable": true
+                },
+                {
+                  "name": "level",
+                  "type": "TEXT",
+                  "nullable": true
+                },
+                {
+                  "name": "model",
+                  "type": "TEXT",
+                  "nullable": true
+                },
+                {
+                  "name": "provider",
+                  "type": "TEXT",
+                  "nullable": true
+                },
+                {
+                  "name": "status",
+                  "type": "TEXT",
+                  "nullable": true
+                },
+                {
+                  "name": "error_type",
+                  "type": "TEXT",
+                  "nullable": true
+                },
+                {
+                  "name": "attempt",
+                  "type": "INTEGER",
+                  "nullable": true
+                },
+                {
+                  "name": "prompt_tokens",
+                  "type": "INTEGER",
+                  "nullable": true
+                },
+                {
+                  "name": "completion_tokens",
+                  "type": "INTEGER",
+                  "nullable": true
+                },
+                {
+                  "name": "cost_usd",
+                  "type": "FLOAT",
+                  "nullable": true
+                },
+                {
+                  "name": "cost_known",
+                  "type": "INTEGER",
+                  "nullable": true
+                },
+                {
+                  "name": "latency_ms",
+                  "type": "INTEGER",
+                  "nullable": true
+                },
+                {
+                  "name": "pid",
+                  "type": "INTEGER",
+                  "nullable": true
+                },
+                {
+                  "name": "served_model",
+                  "type": "TEXT",
+                  "nullable": true
+                }
+              ]
+            }
+          ],
+          "views": [
+            {
+              "name": "llmkit_v1_calls",
+              "description": "Журнал вызовов LLM: одна строка на попытку",
+              "columns": [
+                {
+                  "name": "id",
+                  "type": "INTEGER",
+                  "description": "Номер попытки в журнале"
+                },
+                {
+                  "name": "called_at",
+                  "type": "DATETIME",
+                  "description": "Когда сделан вызов (UTC)"
+                },
+                {
+                  "name": "task_id",
+                  "type": "TEXT",
+                  "description": "Id задачи: попытки одного вызова по цепочке моделей"
+                },
+                {
+                  "name": "tags",
+                  "type": "JSON",
+                  "description": "Метки вызывающего для учёта расходов: {\"метка\": \"значение\"}"
+                },
+                {
+                  "name": "level",
+                  "type": "TEXT",
+                  "description": "Уровень цепочки моделей из конфига (cheap, judge…)"
+                },
+                {
+                  "name": "model",
+                  "type": "TEXT",
+                  "description": "Запрошенная модель: провайдер/модель"
+                },
+                {
+                  "name": "served_model",
+                  "type": "TEXT",
+                  "description": "Модель, которую назвал провайдер в ответе"
+                },
+                {
+                  "name": "provider",
+                  "type": "TEXT",
+                  "description": "Провайдер из конфига"
+                },
+                {
+                  "name": "status",
+                  "type": "TEXT",
+                  "description": "Итог попытки: ok, failed или cache (ответ из кэша)"
+                },
+                {
+                  "name": "error_type",
+                  "type": "TEXT",
+                  "description": "Класс ошибки, если попытка упала"
+                },
+                {
+                  "name": "attempt",
+                  "type": "INTEGER",
+                  "description": "Номер повтора на этой модели (0 — первая попытка или кэш)"
+                },
+                {
+                  "name": "prompt_tokens",
+                  "type": "INTEGER",
+                  "description": "Токены запроса"
+                },
+                {
+                  "name": "completion_tokens",
+                  "type": "INTEGER",
+                  "description": "Токены ответа"
+                },
+                {
+                  "name": "cost_usd",
+                  "type": "FLOAT",
+                  "description": "Стоимость, USD"
+                },
+                {
+                  "name": "cost_known",
+                  "type": "INTEGER",
+                  "description": "1 — стоимость известна, 0 — цены нет"
+                },
+                {
+                  "name": "latency_ms",
+                  "type": "INTEGER",
+                  "description": "Длительность вызова, мс"
+                }
+              ]
+            }
+          ],
+          "user_data_dir": {
+            "appname": "llmkit",
+            "files": [
+              {
+                "path": "usage.sqlite",
+                "kind": "data",
+                "description": "Локальная SQLite журнала расходов (llmkit_calls), когда LLMKIT_DATABASE_URL не задан; usage.path"
+              },
+              {
+                "path": "chatgpt-auth.json",
+                "kind": "data",
+                "description": "Токены входа в подписку ChatGPT (`llm auth login chatgpt`); без него — вход заново"
+              }
+            ]
+          },
+          "user_cache_dir": {
+            "appname": "llmkit",
+            "files": [
+              {
+                "path": "cache.sqlite",
+                "kind": "cache",
+                "description": "Кэш ответов моделей: повторный запрос с теми же параметрами не идёт к провайдеру; cache.path"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "name": "x-rb-external",
+        "value": [
+          {
+            "name": "claude",
+            "required": false,
+            "why": "провайдер claude-cli (подписка Claude): transports/claude_cli.py, `llm auth login/logout claude`; путь переопределяет CLAUDE_COMMAND",
+            "min_version": null,
+            "check": "claude --version",
+            "detect": true,
+            "dist": null,
+            "url": null
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -83,6 +83,7 @@ llm config init                      # шаблон конфига; path | show
 llm db status                        # база журнала: SQLite или PostgreSQL (LLMKIT_DATABASE_URL), ревизия схемы
 llm db upgrade                       # миграции общей PostgreSQL (неявно она не мигрируется)
 llm db import-sqlite --dry-run       # разовый переезд локального журнала в PostgreSQL
+llm describe --json                  # контракт CLI документом OpenCLI: команды, коды выхода, env, данные
 ```
 
 Полный список команд и флагов — `llm --help` и `llm <команда> --help`; справка

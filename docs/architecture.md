@@ -12,7 +12,9 @@ src/llmkit/
   usage.py      журнал вызовов, отчёты, бюджеты — таблица llmkit_calls
   db/           слой БД: PostgreSQL из LLMKIT_DATABASE_URL или SQLite, миграции Alembic
   core.py       LlmKit: ask / generate / ask_many и sync-обёртки
-  errors.py     исключения
+  errors.py     исключения; EXIT_CODES — коды выхода CLI
+  opencli.py    `llm describe --json`: документ OpenCLI (из шаблона cli-generator v1.5.0)
+  data_files.py файлы в каталогах данных и кэша — для describe
   _sync.py      запуск корутины из синхронного кода
   transports/   провайдеры по подписке: свой acompletion вместо LiteLLM
     _common.py      ошибки Subscription* и сборка litellm.ModelResponse
@@ -54,7 +56,10 @@ litellm на импорте. `classify()` возвращает `None` для ч�
   сначала добавить (nullable/default), переключить код, удалить или переименовать
   старое — в следующем релизе. Переименование — добавить + скопировать + позже удалить.
 - Имена — `llmkit_*` в `public`; другим инструментам — только `llmkit_v1_*`;
-  новая форма — `llmkit_v2_*` рядом. Ключи связи — `db/normalize.py`, колонкой
+  новая форма — `llmkit_v2_*` рядом. Представления объявлены в `db/tables.py`
+  `views` (колонки с типами и `comment=`) — их публикует `llm describe --json`,
+  а tests/test_db.py сверяет с базой после миграций; у таблиц —
+  `info={"kind": "data" | "cache"}`. Ключи связи — `db/normalize.py`, колонкой
   рядом с исходным текстом.
 
 ## Ключи

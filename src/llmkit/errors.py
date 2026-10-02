@@ -7,6 +7,18 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:  # pragma: no cover
     from .core import Answer, Attempt
 
+# Коды выхода CLI `llm` и их смысл (conventions.md cli-builder; 4 — «проект не
+# инициализирован» — у llmkit не бывает) — `exitCodes` в `llm describe --json`.
+# tests/test_describe.py падает, если ошибка здесь или в cli/output.py берёт код не из списка.
+EXIT_CODES: dict[int, str] = {
+    0: "Успех",
+    1: "Непредвиденная ошибка; база расходов не смигрирована",
+    2: "Неверные аргументы или конфиг",
+    3: "Нет ключа провайдера или входа в подписку",
+    5: "Все модели цепочки упали (сбой провайдера) или база расходов недоступна",
+    6: "Базу расходов смигрировал более новый релиз llmkit",
+}
+
 
 class LlmKitError(Exception):
     """Базовая ошибка библиотеки."""

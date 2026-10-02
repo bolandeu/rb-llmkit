@@ -41,6 +41,8 @@ from ..errors import DatabaseNotMigrated, DatabaseTooNew, DatabaseUnavailable, I
 from .tables import PREFIX, metadata
 
 ENV_VAR = f"{TOOL.upper()}_DATABASE_URL"
+# Что значит каждая — `llm describe --json` перечисляет их (x-rb-env).
+ENV_VARS = {ENV_VAR: "Общая PostgreSQL для журнала расходов; не задана → локальная SQLite (usage.path)"}
 VERSION_TABLE = f"alembic_version_{TOOL}"
 CONNECT_TIMEOUT_S = 5
 # Сколько ждать блокировку SQLite: файл пишут несколько процессов (wp-bulk, antagor, `llm`).
@@ -256,6 +258,7 @@ def _reset_sequences(connection: sa.Connection, table: sa.Table) -> None:
 
 __all__ = [
     "ENV_VAR",
+    "ENV_VARS",
     "PREFIX",
     "VERSION_TABLE",
     "SchemaState",

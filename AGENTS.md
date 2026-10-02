@@ -46,6 +46,16 @@ uv run python -X importtime -c "import llmkit" 2>&1 | tail -1   # должно �
   `.githooks/pre-commit`, подключение — `scripts/install_hooks.sh`) и тесты.
 - `llm auth status [--check] --json` — общий контракт инструментов (§8),
   форму фиксирует `tests/test_health.py`; реализация — `src/llmkit/health.py`.
+- `llm describe --json` — контракт CLI документом OpenCLI для каталога tools и
+  Windmill, перенесён вручную из шаблона cli-generator **v1.5.0**
+  (`core/opencli.py` → `opencli.py`, `core/data_files.py` → `data_files.py`,
+  `commands/describe.py` → `cli/describe.py`, `EXIT_CODES` — в `errors.py`,
+  `tests/test_describe.py`, `tests/data/opencli.schema.json`); версия шаблона —
+  `_distribution.TEMPLATE_VERSION`. Отличия: в `x-rb-data` есть
+  `user_cache_dir` (кэш ответов, `DataFile.dir`); `x-rb-env` — ключи встроенных
+  провайдеров, `LLMKIT_*` конфига, база, `CLAUDE_COMMAND`; в `EXIT_CODES` нет 4.
+  После правки команд — `uv run pytest --snapshot-update` и просмотр
+  `tests/snapshots/describe.json`.
 - `scripts/release.py` — копия из cli-generator, не править; единственное
   местное отличие шаблонных скриптов — поиск команд в
   `scripts/check_command_docstrings.py` (`src/*/cli/*.py`, `with guard(ctx):`).
@@ -77,7 +87,9 @@ uv run python -X importtime -c "import llmkit" 2>&1 | tail -1   # должно �
   выпущенной версией; каждая миграция совместима с предыдущим релизом
   (expand/contract).
 - Таблицы и представления — только `llmkit_*` (`db/tables.py` + миграция руками);
-  другие инструменты читают только `llmkit_v1_calls`.
+  другие инструменты читают только `llmkit_v1_calls`. У каждой таблицы
+  `info={"kind": "data" | "cache"}`; каждое представление объявлено в
+  `tables.views` (колонки с типами и `comment=`) — тест сверяет с базой.
 - Кэш ответов (`cache.py`, `cache.sqlite`) — вне слоя БД, локальный `sqlite3`:
   ответы можно получить заново, делить их между машинами незачем (решение пользователя).
 - У каждой таблицы — PRIMARY KEY из одной колонки (суррогатный `id`; другого Directus
