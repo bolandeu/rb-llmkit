@@ -13,6 +13,7 @@ src/llmkit/
   db/           слой БД: PostgreSQL из LLMKIT_DATABASE_URL или SQLite, миграции Alembic
   core.py       LlmKit: ask / generate / ask_many и sync-обёртки
   errors.py     исключения; EXIT_CODES — коды выхода CLI
+  template.py   render(): шаблон промпта mustache (combustache), строгий, без экранирования HTML
   opencli.py    `llm describe --json`: документ OpenCLI (из шаблона cli-generator v1.5.6)
   data_files.py файлы в каталогах данных и кэша — для describe
   _sync.py      запуск корутины из синхронного кода

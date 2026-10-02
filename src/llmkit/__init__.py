@@ -8,7 +8,8 @@ from __future__ import annotations
 from .config import Config
 from .config import load as load_config
 from .core import Answer, Attempt, LlmKit, Stats, Task
-from .errors import AllModelsFailed, ConfigError, KeyMissing, LlmKitError
+from .errors import AllModelsFailed, ConfigError, KeyMissing, LlmKitError, TemplateError, TemplateVariableMissing
+from .template import render
 
 __all__ = [
     "AllModelsFailed",
@@ -21,5 +22,8 @@ __all__ = [
     "LlmKitError",
     "Stats",
     "Task",
+    "TemplateError",
+    "TemplateVariableMissing",
     "load_config",
+    "render",
 ]

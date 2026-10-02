@@ -9,6 +9,7 @@ from ..core import Task
 from . import runtime
 from .app import app
 from .output import JsonOption, bad_arguments, emit, enable_json, guard, out
+from .render import LenientOption, TemplateOption, VarsOption, prompt_text
 
 
 def _answer_payload(answer) -> dict:
@@ -26,7 +27,8 @@ def _answer_payload(answer) -> dict:
     }
 
 
-def _run(text, system, level, model, tags, no_cache, temperature, max_tokens, timeout, no_retry, schema):
+def _run(prompt, system, level, model, tags, no_cache, temperature, max_tokens, timeout, no_retry, schema):
+    text, template_tags = prompt
     kit = runtime.build_kit()
     task = Task(
         user=runtime.read_text(text),
@@ -34,7 +36,7 @@ def _run(text, system, level, model, tags, no_cache, temperature, max_tokens, ti
         schema=schema,
         level=level,
         chain=[model] if model else None,
-        tags=runtime.parse_tags(tags),
+        tags={**runtime.parse_tags(tags), **template_tags},
         temperature=temperature,
         max_tokens=max_tokens,
         timeout=timeout,
@@ -60,19 +62,25 @@ def ask(
     max_tokens: int = typer.Option(None, "--max-tokens", help="Лимит токенов ответа."),
     timeout: float = typer.Option(None, "--timeout", help="Таймаут вызова в секундах; по умолчанию из конфига."),
     no_retry: bool = typer.Option(False, "--no-retry", help="Не повторять на сбойной модели, сразу к следующей."),
+    template: str = TemplateOption,
+    variables: str = VarsOption,
+    lenient: bool = LenientOption,
     json_output: bool = JsonOption,
 ) -> None:
     """Задать вопрос модели и напечатать текстовый ответ.
 
     Цепочка моделей берётся из уровня конфига; упавшая модель уступает
-    следующей. Коды выхода: 0 — ответ получен, 2 — неверные аргументы,
-    3 — нет ключа провайдера, 5 — все модели упали.
+    следующей. Вместо текста — шаблон: `--template` с `--vars` (как у
+    `llm render`; в учёт расходов — имя и хэш шаблона, без значений). Коды
+    выхода: 0 — ответ получен, 2 — неверные аргументы или нет переменной
+    шаблона, 3 — нет ключа провайдера, 5 — все модели упали.
 
     Example: llm ask "Столица Франции?" --level cheap
     """
     enable_json(ctx, json_output)
     with guard(ctx):
-        answer = _run(text, system, level, model, tag, no_cache, temperature, max_tokens, timeout, no_retry, None)
+        prompt = prompt_text(text, template, variables, lenient)
+        answer = _run(prompt, system, level, model, tag, no_cache, temperature, max_tokens, timeout, no_retry, None)
         emit(ctx, _answer_payload(answer), lambda: out.print(answer.data, highlight=False, markup=False))
 
 
@@ -90,13 +98,17 @@ def json_command(
     max_tokens: int = typer.Option(None, "--max-tokens", help="Лимит токенов ответа."),
     timeout: float = typer.Option(None, "--timeout", help="Таймаут вызова в секундах; по умолчанию из конфига."),
     no_retry: bool = typer.Option(False, "--no-retry", help="Не повторять на сбойной модели, сразу к следующей."),
+    template: str = TemplateOption,
+    variables: str = VarsOption,
+    lenient: bool = LenientOption,
     json_output: bool = JsonOption,
 ) -> None:
     """Получить ответ модели как JSON по схеме.
 
     В обычном режиме в stdout попадает только сам объект ответа, в режиме
     `--json` — конверт с полем `data` и метаданными вызова. Валидацию по
-    схеме выполняет потребитель. Коды выхода: 0 — ответ получен,
+    схеме выполняет потребитель. Текст запроса можно собрать шаблоном:
+    `--template` с `--vars`, как у `llm ask`. Коды выхода: 0 — ответ получен,
     2 — неверные аргументы, 3 — нет ключа провайдера, 5 — все модели упали
     или ответ не разобрался.
 
@@ -112,7 +124,8 @@ def json_command(
             raise bad_arguments(f"схема не разбирается как JSON: {exc}") from exc
         if not isinstance(loaded, dict):
             raise bad_arguments("схема должна быть JSON-объектом")
-        answer = _run(text, system, level, model, tag, no_cache, temperature, max_tokens, timeout, no_retry, loaded)
+        prompt = prompt_text(text, template, variables, lenient)
+        answer = _run(prompt, system, level, model, tag, no_cache, temperature, max_tokens, timeout, no_retry, loaded)
         emit(
             ctx,
             _answer_payload(answer),
@@ -132,12 +145,16 @@ def decide(
     tag: list[str] = typer.Option(None, "--tag", help="Метка k=v для учёта расходов; можно несколько."),
     timeout: float = typer.Option(None, "--timeout", help="Таймаут вызова в секундах; по умолчанию из конфига."),
     no_retry: bool = typer.Option(False, "--no-retry", help="Не повторять на сбойной модели, сразу к следующей."),
+    template: str = TemplateOption,
+    variables: str = VarsOption,
+    lenient: bool = LenientOption,
     json_output: bool = JsonOption,
 ) -> None:
     """Спросить модель решений OpenRouter: вероятности вместо текста.
 
     Вопросы типов noul (да/нет), choice и score описываются в JSON-файле, как
-    в API `/api/alpha/decisions`. В stdout — словарь answers; в режиме
+    в API `/api/alpha/decisions`. Состояние можно собрать шаблоном:
+    `--template` с `--vars`, как у `llm ask`. В stdout — словарь answers; в режиме
     `--json` — конверт с `data`, ценой и `served_model` (версия за алиасом).
     Коды выхода: 0 — ответ получен, 2 — неверные аргументы или модель не
     OpenRouter, 3 — нет ключа, 5 — все модели упали.
@@ -154,13 +171,14 @@ def decide(
             raise bad_arguments(f"вопросы не разбираются как JSON: {exc}") from exc
         if not isinstance(loaded, dict) or not loaded:
             raise bad_arguments("вопросы должны быть непустым JSON-объектом")
+        state_text, template_tags = prompt_text(text, template, variables, lenient)
         kit = runtime.build_kit()
         answer = kit.decide_sync(
-            runtime.read_text(text),
+            runtime.read_text(state_text),
             loaded,
             level=level,
             chain=[model] if model else None,
-            tags=runtime.parse_tags(tag),
+            tags={**runtime.parse_tags(tag), **template_tags},
             timeout=timeout,
             retry=not no_retry,
         )

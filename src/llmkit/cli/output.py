@@ -18,7 +18,15 @@ from contextlib import contextmanager
 import typer
 from rich.console import Console
 
-from ..errors import AllModelsFailed, ConfigError, DatabaseError, KeyMissing, LoginMissing
+from ..errors import (
+    AllModelsFailed,
+    ConfigError,
+    DatabaseError,
+    KeyMissing,
+    LoginMissing,
+    TemplateError,
+    TemplateVariableMissing,
+)
 
 # Консоли: данные — в stdout, всё остальное — в stderr.
 out = Console()
@@ -30,12 +38,15 @@ JsonOption = typer.Option(False, "--json", help="Машинный вывод: JS
 class CliError(Exception):
     """Ошибка с кодом для конверта и кодом выхода."""
 
-    def __init__(self, code: str, message: str, action: str | None = None, exit_code: int = 1) -> None:
+    def __init__(
+        self, code: str, message: str, action: str | None = None, exit_code: int = 1, details: dict | None = None
+    ) -> None:
         super().__init__(message)
         self.code = code
         self.message = message
         self.action = action
         self.exit_code = exit_code
+        self.details = details or {}  # дополнительные поля объекта error в конверте
 
 
 def bad_arguments(message: str, action: str | None = None) -> CliError:
@@ -92,6 +103,16 @@ def _classify(exc: Exception) -> CliError:
             f"выполните `llm keys set {exc.provider}`" + (f" или `export {exc.env_var}=...`" if exc.env_var else ""),
             exit_code=3,
         )
+    if isinstance(exc, TemplateVariableMissing):
+        return CliError(
+            "TEMPLATE_VARIABLE_MISSING",
+            str(exc),
+            f"добавьте {exc.name!r} в --vars или повторите с --lenient",
+            exit_code=2,
+            details={"variable": exc.name},
+        )
+    if isinstance(exc, TemplateError):
+        return CliError("INVALID_ARGUMENTS", str(exc), "проверьте шаблон", exit_code=2)
     if isinstance(exc, ConfigError):
         return CliError("INVALID_ARGUMENTS", str(exc), "проверьте конфиг: `llm config show`", exit_code=2)
     if isinstance(exc, AllModelsFailed):
@@ -134,6 +155,7 @@ def _report(ctx: typer.Context, error: CliError) -> None:
     envelope: dict = {"ok": False, "error": {"code": error.code, "message": error.message}}
     if error.action:
         envelope["error"]["action"] = error.action
+    envelope["error"].update(error.details)
     # Данные рядом с ошибкой (отчёт `auth status` при коде 3) — команда кладёт их в `state(ctx)["error_data"]`.
     envelope.update(state(ctx).get("error_data") or {})
     if is_json(ctx):

@@ -48,6 +48,18 @@ class LoginMissing(KeyMissing):
         LlmKitError.__init__(self, f"нет входа в подписку для провайдера {provider}: {action}")
 
 
+class TemplateError(LlmKitError):
+    """Шаблон промпта не разбирается или ссылается на несуществующий partial."""
+
+
+class TemplateVariableMissing(TemplateError):
+    """Строгий режим: переменной шаблона нет в данных; `name` — как в теге (`user.city`)."""
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+        super().__init__(f"в переменных шаблона нет {name!r}")
+
+
 class AllModelsFailed(LlmKitError):
     """Вся цепочка моделей исчерпана, а `default` у задачи не задан.
 

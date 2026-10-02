@@ -331,6 +331,7 @@ usage.total(since) -> Row
 |---|---|
 | `llm ask "текст" [--level L] [--model p/m] [--system S] [--tag k=v ...] [--no-cache]` | текстовый ответ |
 | `llm json "текст" --schema schema.json [те же флаги]` | JSON по схеме, вывод только JSON |
+| `llm render --template <файл\|текст\|-> [--vars <json-файл\|json>] [--lenient]` | шаблон промпта mustache без экранирования HTML; строго: нет переменной — код 2 (`TEMPLATE_VARIABLE_MISSING`, поле `variable`). Те же `--template/--vars` у ask/json/decide; в метках учёта — `template` и `template_sha256`, без значений переменных |
 | `llm keys set <provider>` (ввод скрыт) / `llm keys status` / `llm keys rm <provider>` | связка ключей |
 | `llm models` | провайдеры, уровни, цепочки, есть ли ключ |
 | `llm cost [--by tool,niche] [--since 7d]` | отчёт из usage, таблица rich или JSON |

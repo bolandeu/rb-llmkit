@@ -73,6 +73,8 @@ llm                                  # справка: список команд
 llm ask "Столица Франции?" --level cheap --tag tool=notes
 cat prompt.txt | llm ask --system "Отвечай кратко" --json
 llm json "Разбери запрос" --schema schema.json          # в stdout только JSON-объект
+llm render --template prompt.md --vars vars.json        # шаблон mustache; нет переменной — код 2
+llm ask --template prompt.md --vars '{"city": "Москва"}'  # то же у json и decide; в учёт — имя и хэш шаблона
 llm models                           # провайдеры, уровни, есть ли ключ
 llm keys set openrouter              # ввод скрыт; `--stdin` для автоматизации
 llm keys status                      # источник ключа: config | env | keychain | subscription | none

@@ -68,8 +68,77 @@
     ],
     "commands": [
       {
+        "name": "render",
+        "description": "Отрендерить шаблон промпта mustache и напечатать текст.\n\nЭкранирования HTML нет: `{{x}}` == `{{{x}}}`. Отсутствующая переменная —\nошибка с её именем (`--lenient` — пустая строка). Тот же `--template/--vars`\nесть у `llm ask`, `llm json` и `llm decide`. В режиме `--json` — конверт\nс полем `text`. Коды выхода: 0 — готово, 2 — нет шаблона, битый JSON\nпеременных, ошибка шаблона или нет переменной.\n\nExample: llm render --template prompt.md --vars '{\"city\": \"Москва\"}'",
+        "options": [
+          {
+            "name": "--template",
+            "aliases": [
+              "-t"
+            ],
+            "arguments": [
+              {
+                "name": "TEMPLATE",
+                "required": true
+              }
+            ],
+            "description": "Шаблон mustache: файл, сам текст или '-' (stdin); заменяет текст запроса.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "str"
+              }
+            ]
+          },
+          {
+            "name": "--vars",
+            "arguments": [
+              {
+                "name": "VARIABLES",
+                "required": true
+              }
+            ],
+            "description": "Переменные шаблона: JSON-файл или JSON-строка с объектом.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "str"
+              }
+            ]
+          },
+          {
+            "name": "--lenient",
+            "description": "Отсутствующая переменная — пустая строка, а не ошибка (для отладки).",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "boolean"
+              },
+              {
+                "name": "x-rb-default",
+                "value": false
+              }
+            ]
+          },
+          {
+            "name": "--json",
+            "description": "Машинный вывод: JSON-конверт в stdout.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "boolean"
+              },
+              {
+                "name": "x-rb-default",
+                "value": false
+              }
+            ]
+          }
+        ]
+      },
+      {
         "name": "ask",
-        "description": "Задать вопрос модели и напечатать текстовый ответ.\n\nЦепочка моделей берётся из уровня конфига; упавшая модель уступает\nследующей. Коды выхода: 0 — ответ получен, 2 — неверные аргументы,\n3 — нет ключа провайдера, 5 — все модели упали.\n\nExample: llm ask \"Столица Франции?\" --level cheap",
+        "description": "Задать вопрос модели и напечатать текстовый ответ.\n\nЦепочка моделей берётся из уровня конфига; упавшая модель уступает\nследующей. Вместо текста — шаблон: `--template` с `--vars` (как у\n`llm render`; в учёт расходов — имя и хэш шаблона, без значений). Коды\nвыхода: 0 — ответ получен, 2 — неверные аргументы или нет переменной\nшаблона, 3 — нет ключа провайдера, 5 — все модели упали.\n\nExample: llm ask \"Столица Франции?\" --level cheap",
         "options": [
           {
             "name": "--system",
@@ -225,6 +294,55 @@
             ]
           },
           {
+            "name": "--template",
+            "aliases": [
+              "-t"
+            ],
+            "arguments": [
+              {
+                "name": "TEMPLATE",
+                "required": true
+              }
+            ],
+            "description": "Шаблон mustache: файл, сам текст или '-' (stdin); заменяет текст запроса.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "str"
+              }
+            ]
+          },
+          {
+            "name": "--vars",
+            "arguments": [
+              {
+                "name": "VARIABLES",
+                "required": true
+              }
+            ],
+            "description": "Переменные шаблона: JSON-файл или JSON-строка с объектом.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "str"
+              }
+            ]
+          },
+          {
+            "name": "--lenient",
+            "description": "Отсутствующая переменная — пустая строка, а не ошибка (для отладки).",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "boolean"
+              },
+              {
+                "name": "x-rb-default",
+                "value": false
+              }
+            ]
+          },
+          {
             "name": "--json",
             "description": "Машинный вывод: JSON-конверт в stdout.",
             "metadata": [
@@ -259,7 +377,7 @@
       },
       {
         "name": "json",
-        "description": "Получить ответ модели как JSON по схеме.\n\nВ обычном режиме в stdout попадает только сам объект ответа, в режиме\n`--json` — конверт с полем `data` и метаданными вызова. Валидацию по\nсхеме выполняет потребитель. Коды выхода: 0 — ответ получен,\n2 — неверные аргументы, 3 — нет ключа провайдера, 5 — все модели упали\nили ответ не разобрался.\n\nExample: llm json \"Разбери запрос\" --schema schema.json --json",
+        "description": "Получить ответ модели как JSON по схеме.\n\nВ обычном режиме в stdout попадает только сам объект ответа, в режиме\n`--json` — конверт с полем `data` и метаданными вызова. Валидацию по\nсхеме выполняет потребитель. Текст запроса можно собрать шаблоном:\n`--template` с `--vars`, как у `llm ask`. Коды выхода: 0 — ответ получен,\n2 — неверные аргументы, 3 — нет ключа провайдера, 5 — все модели упали\nили ответ не разобрался.\n\nExample: llm json \"Разбери запрос\" --schema schema.json --json",
         "options": [
           {
             "name": "--schema",
@@ -432,6 +550,55 @@
             ]
           },
           {
+            "name": "--template",
+            "aliases": [
+              "-t"
+            ],
+            "arguments": [
+              {
+                "name": "TEMPLATE",
+                "required": true
+              }
+            ],
+            "description": "Шаблон mustache: файл, сам текст или '-' (stdin); заменяет текст запроса.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "str"
+              }
+            ]
+          },
+          {
+            "name": "--vars",
+            "arguments": [
+              {
+                "name": "VARIABLES",
+                "required": true
+              }
+            ],
+            "description": "Переменные шаблона: JSON-файл или JSON-строка с объектом.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "str"
+              }
+            ]
+          },
+          {
+            "name": "--lenient",
+            "description": "Отсутствующая переменная — пустая строка, а не ошибка (для отладки).",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "boolean"
+              },
+              {
+                "name": "x-rb-default",
+                "value": false
+              }
+            ]
+          },
+          {
             "name": "--json",
             "description": "Машинный вывод: JSON-конверт в stdout.",
             "metadata": [
@@ -466,7 +633,7 @@
       },
       {
         "name": "decide",
-        "description": "Спросить модель решений OpenRouter: вероятности вместо текста.\n\nВопросы типов noul (да/нет), choice и score описываются в JSON-файле, как\nв API `/api/alpha/decisions`. В stdout — словарь answers; в режиме\n`--json` — конверт с `data`, ценой и `served_model` (версия за алиасом).\nКоды выхода: 0 — ответ получен, 2 — неверные аргументы или модель не\nOpenRouter, 3 — нет ключа, 5 — все модели упали.\n\nExample: llm decide \"Payouts failing for 3 days\" --questions q.json --json",
+        "description": "Спросить модель решений OpenRouter: вероятности вместо текста.\n\nВопросы типов noul (да/нет), choice и score описываются в JSON-файле, как\nв API `/api/alpha/decisions`. Состояние можно собрать шаблоном:\n`--template` с `--vars`, как у `llm ask`. В stdout — словарь answers; в режиме\n`--json` — конверт с `data`, ценой и `served_model` (версия за алиасом).\nКоды выхода: 0 — ответ получен, 2 — неверные аргументы или модель не\nOpenRouter, 3 — нет ключа, 5 — все модели упали.\n\nExample: llm decide \"Payouts failing for 3 days\" --questions q.json --json",
         "options": [
           {
             "name": "--questions",
@@ -565,6 +732,55 @@
           {
             "name": "--no-retry",
             "description": "Не повторять на сбойной модели, сразу к следующей.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "boolean"
+              },
+              {
+                "name": "x-rb-default",
+                "value": false
+              }
+            ]
+          },
+          {
+            "name": "--template",
+            "aliases": [
+              "-t"
+            ],
+            "arguments": [
+              {
+                "name": "TEMPLATE",
+                "required": true
+              }
+            ],
+            "description": "Шаблон mustache: файл, сам текст или '-' (stdin); заменяет текст запроса.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "str"
+              }
+            ]
+          },
+          {
+            "name": "--vars",
+            "arguments": [
+              {
+                "name": "VARIABLES",
+                "required": true
+              }
+            ],
+            "description": "Переменные шаблона: JSON-файл или JSON-строка с объектом.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "str"
+              }
+            ]
+          },
+          {
+            "name": "--lenient",
+            "description": "Отсутствующая переменная — пустая строка, а не ошибка (для отладки).",
             "metadata": [
               {
                 "name": "x-rb-type",
