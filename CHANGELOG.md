@@ -8,6 +8,17 @@
 
 <!-- towncrier release notes start -->
 
+## [0.8.0] - 2026-10-02
+
+### Added
+
+- Routing v1: провайдеры, цепочка и цены приходят данными — `llm ask|json|decide --routing '<json>'|<файл>` (иначе `LLMKIT_ROUTING_FILE`), `LlmKit(routing=dict)`. Публичный контракт — `llmkit/contracts/routing-v1.schema.json` и векторы `routing-v1.vectors.json`. Ошибки: `ROUTING_MISSING` / `ROUTING_INVALID` (код 2, `error.path` — JSON Pointer поля); в библиотеке `RoutingMissing` (при первом вызове) и `RoutingInvalid`. Повторяемый `-m` — цепочка из CLI; вместе с `routing.chain` — «chain задана дважды». Ключи: `LLM_<ПРОВАЙДЕР>_API_KEY` (или `key_env`) → старое имя с предупреждением «rename to LLM_…» (один цикл) → связка `llmkit:<провайдер>`. Ответ `--json`: `model`, `served_model`, `chain_position`, `attempts[{model, error_code}]`, `provider`, `tokens_in`, `tokens_out`, `cost_usd` (null — цена неизвестна, предупреждение `price unknown for <model>`), `cost_source` (routing | litellm | provider | subscription | cache | unknown), `cache_hit`, `warnings`; у кода 5 — `error.attempts`. Новые команды: `llm routing validate <файл|json> [--providers-only]`, `llm routing import <config.toml>` (провайдеры и цены старого конфига вместе с бывшими встроенными, уровни отдельно в `levels`, ключи не переносятся). `--routing` у `llm models`, `llm keys status`, `llm auth status`.
+
+### Removed
+
+- **Ломающее (0.x → 0.8.0).** Встроенных провайдеров и уровней больше нет: `config.DEFAULTS` без providers/levels, `[levels]`, `defaults.level`, `Task.level`, `LlmKit(level=...)`, `generate/decide(level=...)`, `llm ask|json|decide --level` (код 2 с подсказкой «передайте цепочку: -m … или routing.chain»), `llmkit.load_config`. Файлы `config.toml` (пользовательский, проектный, `LLMKIT_CONFIG`) не читаются; `llm config init` удалён. Ключ в файле (`api_key`), `api_key_env`, `requires_key` ушли вместе с конфигом. Ответ `--json` ask/json/decide: вместо `source`, `prompt_tokens`, `completion_tokens`, `cost_known` — `cache_hit`, `tokens_in`, `tokens_out`, `cost_source`; у ask текст в `text` (было `data`). Нет ключа — `AUTH_MISSING` (было `AUTH_REQUIRED`) с `error.variable`. Потребители на <0.6 (wp-bulk, antagor) не затронуты до своего перехода.
+
+
 ## [0.7.0] - 2026-10-02
 
 ### Added
