@@ -47,7 +47,7 @@ uv run python -X importtime -c "import llmkit" 2>&1 | tail -1   # должно �
 - `llm auth status [--check] --json` — общий контракт инструментов (§8),
   форму фиксирует `tests/test_health.py`; реализация — `src/llmkit/health.py`.
 - `llm describe --json` — контракт CLI документом OpenCLI для каталога tools и
-  Windmill, перенесён вручную из шаблона cli-generator **v1.5.0**
+  Windmill, перенесён вручную из шаблона cli-generator **v1.5.1**
   (`core/opencli.py` → `opencli.py`, `core/data_files.py` → `data_files.py`,
   `commands/describe.py` → `cli/describe.py`, `EXIT_CODES` — в `errors.py`,
   `tests/test_describe.py`, `tests/data/opencli.schema.json`); версия шаблона —
@@ -115,7 +115,7 @@ changelog закончено только после релиза: влить в
 `~/Work/tools/docs/standard-release.md` §13.
 
 - **Push и вопросы — через корневого агента**, не пользователю в этом окне.
-  Релиз или ветка готовы → `herdr agent prompt tools-root "<репо, ветка, теги,
+  Релиз или ветка готовы → `herdr agent prompt tools "<репо, ветка, теги,
   что внутри, результат гейта>"`; он спрашивает пользователя и после его «да»
   сам делает `git push --follow-tags` и сообщает. Самому не пушить;
   force-push и `commit --amend` — никогда. Вопрос или решение для пользователя —

@@ -1,4 +1,4 @@
-"""The `describe --json` contract (from cli-generator v1.5.0 tests/test_describe.py): a valid OpenCLI document that matches the real CLI.
+"""The `describe --json` contract (from cli-generator v1.5.1 tests/test_describe.py): a valid OpenCLI document that matches the real CLI.
 
 - valid against the OpenCLI JSON Schema, vendored at tests/data/opencli.schema.json
   (github.com/spectreconsole/open-cli, schema.json at 2118553e; spec 0.1);
