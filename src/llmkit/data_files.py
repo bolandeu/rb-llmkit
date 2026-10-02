@@ -1,6 +1,6 @@
 """Файлы llmkit в каталогах пользователя — для `llm describe --json` (x-rb-data).
 
-Шаблон cli-generator v1.5.5 (`core/data_files.py`); отличие — поле `dir`: кэш
+Шаблон cli-generator v1.5.6 (`core/data_files.py`); отличие — поле `dir`: кэш
 ответов у llmkit лежит не в каталоге данных, а в каталоге кэша
 (`platformdirs.user_cache_dir("llmkit")`). Пути — по умолчанию, конфиг
 (`cache.path`, `usage.path`) может их перенести. Новый файл, который пишет

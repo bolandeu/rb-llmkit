@@ -8,6 +8,8 @@ dist/
 .ruff_cache/
 .coverage
 htmlcov/
+# рабочая копия и результаты mutmut (uv run --group mutation mutmut run)
+mutants/
 
 # uv / окружение
 .venv/
