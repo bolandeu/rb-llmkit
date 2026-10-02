@@ -8,6 +8,13 @@
 
 <!-- towncrier release notes start -->
 
+## [0.6.0] - 2026-10-02
+
+### Added
+
+- `llm describe --json` — контракт CLI документом OpenCLI (шаблон cli-generator v1.5.0): команды и флаги, коды выхода, env, таблицы и представление `llmkit_v1_calls`, файлы данных и кэша, внешние программы.
+
+
 ## [0.5.0] - 2026-10-01
 
 ### Changed
