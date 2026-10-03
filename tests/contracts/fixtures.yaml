@@ -6,6 +6,16 @@
 #   recorded responses, a filled cache, fake keys — for every case unless it says
 #   `offline_cache: false`; those get `no_cache` (if set) and must fail before
 #   reaching the provider.
-placeholders: {}
-offline_cache: null
+#
+# llmkit: офлайн-данные — tests/contracts/data/ (пути от корня репо: гейт и pytest
+# запускаются оттуда). Провайдер `contract` в routing — фейк из фикстуры
+# `contract_offline`: модели contract/broken* отвечают 503, остальные — ответом.
+placeholders:
+  fixture_routing: tests/contracts/data/routing.json
+  fixture_routing_first_broken: tests/contracts/data/routing_first_broken.json
+  fixture_routing_all_broken: tests/contracts/data/routing_all_broken.json
+  fixture_judge_schema: tests/contracts/data/judge_schema.json
+  fixture_template: tests/contracts/data/template.md
+  fixture_template_needs_x: tests/contracts/data/template_needs_x.md
+offline_cache: contract_offline
 no_cache: null

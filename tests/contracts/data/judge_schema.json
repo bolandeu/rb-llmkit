@@ -1,0 +1,6 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["verdict", "remarks"],
+  "properties": {"verdict": {"type": "string"}, "remarks": {"type": "array", "items": {"type": "string"}}}
+}

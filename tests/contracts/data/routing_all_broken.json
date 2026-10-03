@@ -1,0 +1,6 @@
+{
+  "providers": {
+    "contract": {"protocol": "openai_compatible", "base_url": "http://127.0.0.1:9/v1", "key_env": "LLM_CONTRACT_API_KEY"}
+  },
+  "chain": ["contract/broken", "contract/broken-2"]
+}

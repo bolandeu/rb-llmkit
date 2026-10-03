@@ -164,3 +164,27 @@ def make_kit():
         return LlmKit(completion=completion, **kwargs)
 
     return factory
+
+
+@pytest.fixture
+def contract_offline(monkeypatch):
+    """Офлайн-провайдер для контрактов потребителей (tests/contracts/fixtures.yaml).
+
+    Routing фикстур описывает провайдера `contract`; вызов модели подменён: модели
+    contract/broken* падают с 503 (ретраи без пауз), остальные отвечают — текстом
+    или JSON {verdict, remarks}, если запрос по схеме. Ключ — фейковый.
+    """
+    from llmkit.cli import runtime
+
+    def reply(**kwargs):
+        if kwargs["model"].startswith("openai/broken"):
+            return ServiceUnavailableError("503: contract fixture")
+        if "response_format" in kwargs:
+            return response('{"verdict": "ok", "remarks": []}')
+        return response("ответ офлайн-провайдера")
+
+    completion = FakeCompletion([reply])
+    monkeypatch.setenv("LLM_CONTRACT_API_KEY", "contract-fake-key")
+    monkeypatch.setattr(core_mod, "_sleep", lambda seconds: asyncio.sleep(0))
+    monkeypatch.setattr(runtime, "build_kit", lambda **kwargs: LlmKit(completion=completion, **kwargs))
+    return completion

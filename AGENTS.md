@@ -76,7 +76,14 @@ uv run python -X importtime -c "import llmkit" 2>&1 | tail -1   # должно �
   умолчанию — без `_sqlite_file()` шаблона v1.5.5 (у llmkit нет `<TOOL>_DB_PATH`).
   После правки команд — `uv run pytest --snapshot-update` и просмотр
   `tests/snapshots/describe.json`.
-- `scripts/release.py` — копия из cli-generator, не править; единственное
+- Контракты потребителей — `tests/contracts/<потребитель>/llmkit.yaml` (копии из
+  репо потребителя, не править), механика перенесена из шаблона cli-generator
+  **v1.8.1**: `tests/test_contracts.py`, `tests/test_contract_runner.py`,
+  `tests/contracts/schema.json`, шаг гейта `contracts`. Офлайн-данные для `run` —
+  `tests/contracts/fixtures.yaml` (плейсхолдеры → `tests/contracts/data/`) и фикстура
+  `contract_offline` в `tests/conftest.py` (фейковый провайдер `contract`). Кейс не
+  проходит из-за поведения CLI — не подгонять контракт, сообщить tools.
+- `scripts/release.py` — копия из cli-generator (сейчас v1.8.1), не править; единственное
   местное отличие шаблонных скриптов — поиск команд в
   `scripts/check_command_docstrings.py` (`src/*/cli/*.py`, `with guard(ctx):`).
 
