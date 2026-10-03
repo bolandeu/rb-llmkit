@@ -124,6 +124,12 @@ def isolated(tmp_path, monkeypatch):
 
     monkeypatch.setattr(config_mod, "DEFAULTS", settings(tmp_path))
     monkeypatch.delenv("LLMKIT_ROUTING_FILE", raising=False)
+    # Файл routing по умолчанию — в каталоге конфигурации пользователя; настоящий не должен влиять.
+    import platformdirs
+
+    monkeypatch.setattr(
+        platformdirs, "user_config_dir", lambda appname=None, *a, **k: str(tmp_path / "user-config" / appname)
+    )
     for name in list(os.environ):  # ключи машины не должны влиять на тесты
         if name.endswith("_API_KEY"):
             monkeypatch.delenv(name)
