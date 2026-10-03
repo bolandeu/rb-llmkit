@@ -8,8 +8,14 @@
  в `llm config path`); встроенных нет. Упавшая модель уступает следующей.
  Вместо текста — шаблон: `--template` с `--vars` (в учёт расходов — имя и
  хэш шаблона, без значений). В `--json`: text, task_id (= task_id в учёте),
- model, served_model, chain_position, attempts, tokens_in/out, cost_usd,
- cost_source, cache_hit.
+ model, served_model, chain_position, attempts, tokens_in/out, cache_hit и
+ стоимость: cost (ответившей попытки), cost_currency "USD", cost_source —
+ provider (списано, из ответа OpenRouter), price_table (цена × токены:
+ routing.prices, затем справочник LiteLLM), subscription, cache (0) или
+ null (цена неизвестна: cost null, предупреждение); billable_requests —
+ платные вызовы провайдера (ответ получен, в т.ч. неразобранный; отказы
+ 429/5xx/4xx не списываются); cost_total — по всем платным попыткам.
+ cost_usd = cost, устарело (уйдёт в 0.11).
  Коды выхода: 0 — ответ получен, 2 — нет routing, routing не по схеме или
  неверные аргументы, 3 — нет ключа провайдера, 5 — все модели упали.
 

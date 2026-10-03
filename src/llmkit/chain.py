@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from .config import RetryConfig
 
 # Классификация по имени класса исключения, а не по самому классу: так модуль
@@ -44,15 +46,21 @@ BACKOFF_TYPES = ("rate_limit", "server")
 MAX_BACKOFF = 30.0
 
 
-class EmptyResponse(Exception):
+class AnswerRejected(Exception):
+    """Ответ провайдера пришёл, но не годится; `billed` — его токены и цена (ядро заполняет)."""
+
+    billed: Any = None
+
+
+class EmptyResponse(AnswerRejected):
     """Модель вернула пустой ответ — считаем невалидным выводом."""
 
 
-class JsonParseFailed(Exception):
+class JsonParseFailed(AnswerRejected):
     """Ответ по готовой JSON Schema не разобрался — повторяем на той же модели."""
 
 
-class ContentFiltered(Exception):
+class ContentFiltered(AnswerRejected):
     """Провайдер отказал по контент-фильтру (finish_reason=content_filter)."""
 
 

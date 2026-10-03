@@ -91,7 +91,7 @@ def test_r1_ask_goes_to_first_model_of_chain(fake_kit, monkeypatch):
     assert body["provider"] == "openrouter"
     assert (body["tokens_in"], body["tokens_out"]) == (10, 5)
     assert body["cost_usd"] == pytest.approx((10 * 1.0 + 5 * 2.0) / 1_000_000)
-    assert body["cost_source"] == "routing"
+    assert body["cost_source"] == "price_table"
     assert body["cache_hit"] is False
     assert body["chain_position"] == 0 and body["attempts"] == [] and body["warnings"] == []
     assert fake.calls[0]["model"] == "openrouter/a"

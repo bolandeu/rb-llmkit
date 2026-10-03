@@ -159,12 +159,19 @@ def _classify(exc: Exception) -> CliError:
                 exit_code=3,
                 details={"attempts": attempts},
             )
+        spent = exc.answer
         return CliError(
             "PROVIDER_ERROR",
             str(exc),
             "попробуйте другую цепочку: -m провайдер/модель … или routing.chain",
             exit_code=5,
-            details={"attempts": attempts},
+            details={
+                "attempts": attempts,
+                # Упавшая цепочка тоже стоит денег: неразобранные ответы провайдер списал.
+                "billable_requests": spent.billable_requests if spent else 0,
+                "cost_total": spent.cost_total if spent else 0.0,
+                "cost_currency": "USD",
+            },
         )
     return CliError("UNEXPECTED", f"{type(exc).__name__}: {exc}", "повторите с `--verbose`")
 

@@ -53,6 +53,9 @@ calls = sa.Table(
     sa.Column("latency_ms", sa.Integer),
     sa.Column("pid", sa.Integer),
     sa.Column("served_model", sa.Text),
+    # T175: provider | price_table | subscription | cache | NULL (цена неизвестна, ошибка без ответа, строки до 0002).
+    sa.Column("cost_source", sa.Text),
+    sa.Column("billable", sa.Integer),  # 1 — провайдер списал вызов; NULL — строки до 0002
     info={"kind": "data"},
 )
 
@@ -60,7 +63,8 @@ calls = sa.Table(
 # платформа вместо таблиц, — контракт данных, его публикует `llm describe --json`
 # (x-rb-data.views). Создаёт их миграция (`CREATE VIEW`), здесь — объявление;
 # tests/test_db.py падает, если представления нет в базе после миграций или
-# колонки расходятся. Колонки не меняются: другая форма — новое `_v2_` рядом.
+# колонки расходятся. Прежние колонки не меняются (новые — только в конец,
+# миграцией): другая форма — новое `_v2_` рядом.
 # Отдельные метаданные: `metadata` — зеркало только таблиц.
 views = sa.MetaData()
 
@@ -83,5 +87,17 @@ v1_calls = sa.Table(
     sa.Column("cost_usd", sa.Float, comment="Стоимость, USD"),
     sa.Column("cost_known", sa.Integer, comment="1 — стоимость известна, 0 — цены нет"),
     sa.Column("latency_ms", sa.Integer, comment="Длительность вызова, мс"),
+    sa.Column(
+        "cost_source",
+        sa.Text,
+        comment="Откуда стоимость: provider (списано, из ответа), price_table (цена × токены), subscription, "
+        "cache; NULL — неизвестна или ответа не было (и все строки до llmkit 0.10)",
+    ),
+    sa.Column(
+        "billable",
+        sa.Integer,
+        comment="1 — провайдер списал вызов (ответ получен, в т.ч. неразобранный; подписка), 0 — нет; "
+        "NULL — строки до llmkit 0.10",
+    ),
     comment="Журнал вызовов LLM: одна строка на попытку",
 )

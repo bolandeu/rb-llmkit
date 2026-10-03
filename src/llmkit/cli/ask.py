@@ -35,6 +35,9 @@ def _reject_level(level: str | None) -> None:
         )
 
 
+COST_CURRENCY = "USD"
+
+
 def _answer_payload(answer, data_key: str) -> dict:
     """Ответ `--json` (контракт для Windmill): ключи и переменные шаблона сюда не попадают."""
     return {
@@ -47,8 +50,12 @@ def _answer_payload(answer, data_key: str) -> dict:
         "attempts": [{"model": a.model, "error_code": a.error_type} for a in answer.attempts if a.error_type],
         "tokens_in": answer.prompt_tokens,
         "tokens_out": answer.completion_tokens,
-        "cost_usd": answer.cost_usd,
+        "cost": answer.cost_usd,
+        "cost_currency": COST_CURRENCY,
         "cost_source": answer.cost_source,
+        "billable_requests": answer.billable_requests,
+        "cost_total": answer.cost_total,
+        "cost_usd": answer.cost_usd,  # устарело (= cost): Windmill читает его до перехода на cost
         "cache_hit": answer.cache_hit,
         "latency_ms": answer.latency_ms,
         "warnings": answer.warnings,
@@ -111,8 +118,14 @@ def ask(
     в `llm config path`); встроенных нет. Упавшая модель уступает следующей.
     Вместо текста — шаблон: `--template` с `--vars` (в учёт расходов — имя и
     хэш шаблона, без значений). В `--json`: text, task_id (= task_id в учёте),
-    model, served_model, chain_position, attempts, tokens_in/out, cost_usd,
-    cost_source, cache_hit.
+    model, served_model, chain_position, attempts, tokens_in/out, cache_hit и
+    стоимость: cost (ответившей попытки), cost_currency "USD", cost_source —
+    provider (списано, из ответа OpenRouter), price_table (цена × токены:
+    routing.prices, затем справочник LiteLLM), subscription, cache (0) или
+    null (цена неизвестна: cost null, предупреждение); billable_requests —
+    платные вызовы провайдера (ответ получен, в т.ч. неразобранный; отказы
+    429/5xx/4xx не списываются); cost_total — по всем платным попыткам.
+    cost_usd = cost, устарело (уйдёт в 0.11).
     Коды выхода: 0 — ответ получен, 2 — нет routing, routing не по схеме или
     неверные аргументы, 3 — нет ключа провайдера, 5 — все модели упали.
 
@@ -152,9 +165,10 @@ def json_command(
     В обычном режиме в stdout попадает только сам объект ответа, в режиме
     `--json` — конверт с полем `data` и метаданными вызова, как у `llm ask`.
     Routing, `-m` и `--template/--vars` — как у `llm ask`. Валидацию по
-    схеме выполняет потребитель. Коды выхода: 0 — ответ получен,
+    схеме выполняет потребитель. Неразобранный ответ платный: он в
+    billable_requests и cost_total. Коды выхода: 0 — ответ получен,
     2 — неверные аргументы или routing, 3 — нет ключа провайдера, 5 — все
-    модели упали или ответ не разобрался.
+    модели упали или ответ не разобрался (в error — billable_requests, cost_total).
 
     Example: llm json "Разбери запрос" --schema schema.json --routing routing.json --json
     """
@@ -203,7 +217,8 @@ def decide(
     в API `/api/alpha/decisions`. Цепочка — из routing или `-m`, только
     провайдеры с protocol=openrouter. Состояние можно собрать шаблоном:
     `--template` с `--vars`. В stdout — словарь answers; в режиме `--json` —
-    конверт с `data` и `task_id` (= task_id в учёте), как у `llm ask`. Коды выхода: 0 — ответ получен,
+    конверт с `data`, `task_id` (= task_id в учёте) и стоимостью, как у
+    `llm ask` (cost_source обычно provider). Коды выхода: 0 — ответ получен,
     2 — неверные аргументы, routing или модель не OpenRouter, 3 — нет ключа,
     5 — все модели упали.
 

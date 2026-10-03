@@ -188,8 +188,19 @@ llm ask "Привет" -m claude/sonnet    # routing: {"providers": {"claude": {
   (`OPENROUTER_API_KEY`, `CCODE_API_KEY`…; один цикл, с предупреждением «rename to
   LLM_…») → связка ключей `llmkit:<провайдер>` → код 3, `AUTH_MISSING` с именем
   переменной.
-- Цена: `routing.prices` → справочник LiteLLM → неизвестна (`cost_usd: null`,
-  `cost_source: "unknown"`, предупреждение `price unknown for <модель>`).
+- Цена — стоимость по общей схеме инструментов (T175): `cost_source` — `provider`
+  (списано провайдером, `usage.cost` ответа OpenRouter) → `price_table` (цена × токены:
+  `routing.prices`, затем справочник LiteLLM — оба «таблица цен») → `null` (неизвестна:
+  `cost: null`, предупреждение `price unknown for <модель>`); `cache` и `subscription` —
+  `cost: 0`. Конверт `--json` ask/json/decide: `cost` (ответившей попытки),
+  `cost_currency: "USD"`, `cost_source`, `billable_requests` (платные вызовы провайдера:
+  ответ получен — в том числе пустой с токенами, отфильтрованный, неразобранный JSON;
+  отказы 429/5xx/4xx/нет ключа — нет: OpenRouter их не списывает; подписка — считается,
+  стоимость 0), `cost_total` (сумма по платным попыткам, `null` — цена хоть одной
+  неизвестна). У кода 5 — `error.billable_requests`, `error.cost_total`. `cost_usd` = `cost`,
+  устарело, уходит в 0.11 (Windmill читает его). Неясно: таймаут — OpenRouter может
+  списать запрос, который дошёл до модели, — в `billable_requests` не считается;
+  внутренние повторы Instructor (pydantic-схема в библиотеке) не видны — считается один.
 - Перенос старого конфига: `llm routing import ~/Library/Application\ Support/llmkit/config.toml`
   — провайдеры (с адресами бывших встроенных) и цены в `routing`, уровни — отдельно
   в `levels` подсказкой для своих цепочек.
@@ -250,8 +261,9 @@ print(answer.data.intent, answer.source, answer.model, answer.cost_usd)
 
 `Answer` содержит `data`, `source` (`llm` | `cache` | `default`), `model`
 (элемент цепочки), `served_model` (версия от провайдера), `chain_position`,
-`provider`, `attempts` (по одной записи на попытку), токены, `cost_usd` (None —
-цена неизвестна), `cost_source`, `cache_hit`, `latency_ms`, `warnings` и `ok`.
+`provider`, `attempts` (по одной записи на попытку: `cost_usd`, `cost_source`,
+`billable`), токены, `cost_usd` (None — цена неизвестна), `cost_source`,
+`billable_requests`, `cost_total`, `cache_hit`, `latency_ms`, `warnings` и `ok`.
 Без routing экземпляр создаётся, а первый вызов бросает `RoutingMissing`.
 
 ### Пачка задач: `ask_many`

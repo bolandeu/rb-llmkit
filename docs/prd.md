@@ -177,7 +177,8 @@ class Task:
 @dataclass
 class Attempt:
     model: str; provider: str; error_type: str | None; error: str | None
-    latency_ms: int; prompt_tokens: int; completion_tokens: int; cost_usd: float
+    latency_ms: int; prompt_tokens: int; completion_tokens: int; cost_usd: float | None
+    cost_source: str | None; billable: bool   # провайдер списал попытку
 
 @dataclass
 class Answer:
@@ -188,8 +189,10 @@ class Answer:
     attempts: list[Attempt] = field(default_factory=list)
     prompt_tokens: int = 0
     completion_tokens: int = 0
-    cost_usd: float | None = 0.0   # None — цену не знает ни routing, ни LiteLLM
-    cost_source: str = "routing"   # routing | litellm | provider | subscription | cache | unknown
+    cost_usd: float | None = 0.0   # ответившей попытки; None — цена неизвестна
+    cost_source: str | None = "price_table"   # provider | price_table | subscription | cache | None
+    billable_requests: int = 0     # платные вызовы провайдера за задачу
+    cost_total: float | None = 0.0 # по всем платным попыткам; None — цена хоть одной неизвестна
     latency_ms: int = 0
     warnings: list[str] = field(default_factory=list)   # бюджет, "price unknown for <model>", "rename to LLM_…"
     error: str | None = None    # заполнен, если source == "default"
@@ -198,7 +201,7 @@ class Answer:
     chain_position: int = 0     # 0-based номер ответившей модели
     @property
     def ok(self) -> bool: return self.source in ("llm", "cache")
-    cache_hit: bool (property); cost_known: bool (property, cost_source != "unknown")
+    cache_hit: bool (property); cost_known: bool (property, cost_source is not None)
 
 # --- async (основной) ---
 async def ask(self, task: Task) -> Answer
@@ -288,12 +291,17 @@ TTL из конфига; протухшие записи удаляются пр
 id INTEGER PK, ts REAL, task_id TEXT, tags JSON (JSONB в PostgreSQL), level TEXT (с 0.8.0 пуста: уровней нет, метка level — в tags),
 model TEXT, provider TEXT, status TEXT ('ok'|'cache'|'failed'),
 error_type TEXT, attempt INTEGER, prompt_tokens INT, completion_tokens INT,
-cost_usd REAL, cost_known INT, latency_ms INT, pid INT, served_model TEXT
+cost_usd REAL, cost_known INT, latency_ms INT, pid INT, served_model TEXT,
+cost_source TEXT, billable INT
 ```
+`cost_source` и `billable` (миграция 0002, T175) — те же значения, что в конверте; у строк
+до 0.10 — NULL. Упавшая попытка с пришедшим ответом (неразобранный JSON) — `billable = 1`
+и её стоимость.
 `served_model` — версия, которую назвал провайдер (не назвал — элемент цепочки) (нужна за алиасами вида `~…-latest`, чтобы
 видеть смену модели); базам до v0.4.2 колонку добавляет миграция 0001.
 Одна строка на попытку. Индексы: `ts`, `status`. Отчёты группируются по меткам из `tags`.
-Другие инструменты читают представление `llmkit_v1_calls` (без `pid`, `ts` → `called_at`).
+Другие инструменты читают представление `llmkit_v1_calls` (без `pid`, `ts` → `called_at`);
+новые колонки дописываются в его конец, прежние не меняются.
 
 API:
 ```python
@@ -302,9 +310,21 @@ usage.report(group_by=("tool","niche"), since=datetime|"7d"|None, until=None) ->
 usage.total(since) -> Row
 ```
 
-Стоимость: `litellm.completion_cost(response)`; если LiteLLM цену не знает —
-`providers.<p>.prices[model]`; если и там нет — `cost_usd=0, cost_known=False`, одно
-предупреждение на модель за процесс.
+Стоимость — стоимость по общей схеме инструментов (T175): `cost_source` — `provider`
+(списано провайдером, `usage.cost` ответа OpenRouter) → `price_table` (цена × токены:
+`routing.prices`, затем справочник LiteLLM — оба «таблица цен») → `null` (неизвестна:
+`cost: null`, предупреждение `price unknown for <модель>`); `cache` и `subscription` —
+`cost: 0`. Конверт `--json` ask/json/decide: `cost` (ответившей попытки),
+`cost_currency: "USD"`, `cost_source`, `billable_requests` (платные вызовы провайдера:
+ответ получен — в том числе пустой с токенами, отфильтрованный, неразобранный JSON;
+отказы 429/5xx/4xx/нет ключа — нет: OpenRouter их не списывает; подписка — считается,
+стоимость 0), `cost_total` (сумма по платным попыткам, `null` — цена хоть одной
+неизвестна). У кода 5 — `error.billable_requests`, `error.cost_total`. `cost_usd` = `cost`,
+устарело, уходит в 0.11 (Windmill читает его). Неясно: таймаут — OpenRouter может
+списать запрос, который дошёл до модели, — в `billable_requests` не считается;
+внутренние повторы Instructor (pydantic-схема в библиотеке) не видны — считается один.
+В журнал при неизвестной цене — `cost_usd=0, cost_known=0, cost_source=NULL`, одно
+предупреждение в лог на модель за процесс.
 
 Бюджет: перед каждым сетевым вызовом сумма `cost_usd` за сегодня (UTC) по `daily_usd` и по
 каждому `budget.tags` ключу, чей `метка=значение` совпадает с метками задачи. Превышение →
@@ -326,7 +346,7 @@ usage.total(since) -> Row
 
 | Команда | Что делает |
 |---|---|
-| `llm ask "текст" [--routing <json\|файл>] [-m p/m ...] [--system S] [--tag k=v ...] [--no-cache]` | текстовый ответ; `--json`: text, task_id (= task_id строки llmkit_calls), model, served_model, chain_position, attempts [{model, error_code}], provider, tokens_in, tokens_out, cost_usd, cost_source, cache_hit, latency_ms, warnings. `--level` удалён (код 2 с подсказкой) |
+| `llm ask "текст" [--routing <json\|файл>] [-m p/m ...] [--system S] [--tag k=v ...] [--no-cache]` | текстовый ответ; `--json`: text, task_id (= task_id строки llmkit_calls), model, served_model, chain_position, attempts [{model, error_code}], provider, tokens_in, tokens_out, cost, cost_currency, cost_source, billable_requests, cost_total, cost_usd (устарело), cache_hit, latency_ms, warnings. `--level` удалён (код 2 с подсказкой) |
 | `llm json "текст" --schema schema.json [те же флаги]` | JSON по схеме, вывод только JSON; `--json` — как у ask, поле `data` |
 | `llm routing validate <файл\|json> [--providers-only]` | проверка routing v1 (Windmill, Directus): ok или `ROUTING_INVALID` с `error.path` |
 | `llm routing import <config.toml>` | перенос config.toml < 0.8: routing (providers + prices, key_env по шаблону LLM_<P>_API_KEY, без ключей) и отдельно levels |

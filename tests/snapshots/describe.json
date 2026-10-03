@@ -138,7 +138,7 @@
       },
       {
         "name": "ask",
-        "description": "Задать вопрос модели и напечатать текстовый ответ.\n\nПровайдеры и цепочка — из routing v1 (`--routing` JSON или файл, иначе\nLLMKIT_ROUTING_FILE, иначе routing.json в каталоге конфигурации — путь\nв `llm config path`); встроенных нет. Упавшая модель уступает следующей.\nВместо текста — шаблон: `--template` с `--vars` (в учёт расходов — имя и\nхэш шаблона, без значений). В `--json`: text, task_id (= task_id в учёте),\nmodel, served_model, chain_position, attempts, tokens_in/out, cost_usd,\ncost_source, cache_hit.\nКоды выхода: 0 — ответ получен, 2 — нет routing, routing не по схеме или\nневерные аргументы, 3 — нет ключа провайдера, 5 — все модели упали.\n\nExample: llm ask \"Столица Франции?\" --routing routing.json",
+        "description": "Задать вопрос модели и напечатать текстовый ответ.\n\nПровайдеры и цепочка — из routing v1 (`--routing` JSON или файл, иначе\nLLMKIT_ROUTING_FILE, иначе routing.json в каталоге конфигурации — путь\nв `llm config path`); встроенных нет. Упавшая модель уступает следующей.\nВместо текста — шаблон: `--template` с `--vars` (в учёт расходов — имя и\nхэш шаблона, без значений). В `--json`: text, task_id (= task_id в учёте),\nmodel, served_model, chain_position, attempts, tokens_in/out, cache_hit и\nстоимость: cost (ответившей попытки), cost_currency \"USD\", cost_source —\nprovider (списано, из ответа OpenRouter), price_table (цена × токены:\nrouting.prices, затем справочник LiteLLM), subscription, cache (0) или\nnull (цена неизвестна: cost null, предупреждение); billable_requests —\nплатные вызовы провайдера (ответ получен, в т.ч. неразобранный; отказы\n429/5xx/4xx не списываются); cost_total — по всем платным попыткам.\ncost_usd = cost, устарело (уйдёт в 0.11).\nКоды выхода: 0 — ответ получен, 2 — нет routing, routing не по схеме или\nневерные аргументы, 3 — нет ключа провайдера, 5 — все модели упали.\n\nExample: llm ask \"Столица Франции?\" --routing routing.json",
         "options": [
           {
             "name": "--system",
@@ -398,7 +398,7 @@
       },
       {
         "name": "json",
-        "description": "Получить ответ модели как JSON по схеме.\n\nВ обычном режиме в stdout попадает только сам объект ответа, в режиме\n`--json` — конверт с полем `data` и метаданными вызова, как у `llm ask`.\nRouting, `-m` и `--template/--vars` — как у `llm ask`. Валидацию по\nсхеме выполняет потребитель. Коды выхода: 0 — ответ получен,\n2 — неверные аргументы или routing, 3 — нет ключа провайдера, 5 — все\nмодели упали или ответ не разобрался.\n\nExample: llm json \"Разбери запрос\" --schema schema.json --routing routing.json --json",
+        "description": "Получить ответ модели как JSON по схеме.\n\nВ обычном режиме в stdout попадает только сам объект ответа, в режиме\n`--json` — конверт с полем `data` и метаданными вызова, как у `llm ask`.\nRouting, `-m` и `--template/--vars` — как у `llm ask`. Валидацию по\nсхеме выполняет потребитель. Неразобранный ответ платный: он в\nbillable_requests и cost_total. Коды выхода: 0 — ответ получен,\n2 — неверные аргументы или routing, 3 — нет ключа провайдера, 5 — все\nмодели упали или ответ не разобрался (в error — billable_requests, cost_total).\n\nExample: llm json \"Разбери запрос\" --schema schema.json --routing routing.json --json",
         "options": [
           {
             "name": "--schema",
@@ -675,7 +675,7 @@
       },
       {
         "name": "decide",
-        "description": "Спросить модель решений OpenRouter: вероятности вместо текста.\n\nВопросы типов noul (да/нет), choice и score описываются в JSON-файле, как\nв API `/api/alpha/decisions`. Цепочка — из routing или `-m`, только\nпровайдеры с protocol=openrouter. Состояние можно собрать шаблоном:\n`--template` с `--vars`. В stdout — словарь answers; в режиме `--json` —\nконверт с `data` и `task_id` (= task_id в учёте), как у `llm ask`. Коды выхода: 0 — ответ получен,\n2 — неверные аргументы, routing или модель не OpenRouter, 3 — нет ключа,\n5 — все модели упали.\n\nExample: llm decide \"Payouts failing for 3 days\" --questions q.json --routing routing.json --json",
+        "description": "Спросить модель решений OpenRouter: вероятности вместо текста.\n\nВопросы типов noul (да/нет), choice и score описываются в JSON-файле, как\nв API `/api/alpha/decisions`. Цепочка — из routing или `-m`, только\nпровайдеры с protocol=openrouter. Состояние можно собрать шаблоном:\n`--template` с `--vars`. В stdout — словарь answers; в режиме `--json` —\nконверт с `data`, `task_id` (= task_id в учёте) и стоимостью, как у\n`llm ask` (cost_source обычно provider). Коды выхода: 0 — ответ получен,\n2 — неверные аргументы, routing или модель не OpenRouter, 3 — нет ключа,\n5 — все модели упали.\n\nExample: llm decide \"Payouts failing for 3 days\" --questions q.json --routing routing.json --json",
         "options": [
           {
             "name": "--questions",
@@ -1782,6 +1782,16 @@
                   "name": "served_model",
                   "type": "TEXT",
                   "nullable": true
+                },
+                {
+                  "name": "cost_source",
+                  "type": "TEXT",
+                  "nullable": true
+                },
+                {
+                  "name": "billable",
+                  "type": "INTEGER",
+                  "nullable": true
                 }
               ]
             }
@@ -1870,6 +1880,16 @@
                   "name": "latency_ms",
                   "type": "INTEGER",
                   "description": "Длительность вызова, мс"
+                },
+                {
+                  "name": "cost_source",
+                  "type": "TEXT",
+                  "description": "Откуда стоимость: provider (списано, из ответа), price_table (цена × токены), subscription, cache; NULL — неизвестна или ответа не было (и все строки до llmkit 0.10)"
+                },
+                {
+                  "name": "billable",
+                  "type": "INTEGER",
+                  "description": "1 — провайдер списал вызов (ответ получен, в т.ч. неразобранный; подписка), 0 — нет; NULL — строки до llmkit 0.10"
                 }
               ]
             }

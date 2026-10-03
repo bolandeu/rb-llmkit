@@ -64,7 +64,9 @@ class Attempt:
     latency_ms: int = 0
     prompt_tokens: int = 0
     completion_tokens: int = 0
-    cost_usd: float = 0.0
+    cost_usd: float | None = 0.0  # None — цена неизвестна
+    cost_source: str | None = None  # как у Answer
+    billable: bool = False  # провайдер списал вызов: ответ получен (в т.ч. неразобранный) или подписка
 
 
 @dataclass
@@ -78,9 +80,10 @@ class Answer:
     attempts: list[Attempt] = field(default_factory=list)
     prompt_tokens: int = 0
     completion_tokens: int = 0
-    cost_usd: float | None = 0.0  # None — цену не знает ни routing, ни LiteLLM
-    # routing | litellm | provider (цена в ответе) | subscription | cache | unknown
-    cost_source: str = "routing"
+    cost_usd: float | None = 0.0  # стоимость ответившей попытки; None — цена неизвестна
+    # provider (списано, из ответа) | price_table (цена × токены: routing.prices, затем LiteLLM)
+    # | subscription | cache | None (неизвестно)
+    cost_source: str | None = "price_table"
     latency_ms: int = 0
     warnings: list[str] = field(default_factory=list)
     error: str | None = None
@@ -88,6 +91,8 @@ class Answer:
     # Версия, которую назвал провайдер (за алиасом вида `~…-latest`); не назвал — `model`.
     served_model: str = ""
     chain_position: int = 0  # 0-based номер ответившей модели в цепочке
+    billable_requests: int = 0  # платные вызовы провайдера за задачу: все попытки с `billable`
+    cost_total: float | None = 0.0  # сумма по платным попыткам; None — цена хоть одной неизвестна
 
     @property
     def ok(self) -> bool:
@@ -99,7 +104,7 @@ class Answer:
 
     @property
     def cost_known(self) -> bool:
-        return self.cost_source != "unknown"
+        return self.cost_source is not None
 
 
 @dataclass
@@ -126,8 +131,55 @@ class _Outcome:
     prompt_tokens: int = 0
     completion_tokens: int = 0
     cost_usd: float | None = 0.0
-    cost_source: str = "routing"
+    cost_source: str | None = "price_table"
     served_model: str = ""
+
+    @property
+    def billable(self) -> bool:
+        """Провайдер списал ответ. Ответ без токенов ответа не списывается (zero completion insurance OpenRouter)."""
+        if self.cost_source == "provider":
+            return bool(self.cost_usd)
+        return self.cost_source == "subscription" or self.completion_tokens > 0
+
+
+def _totals(attempts: list[Attempt]) -> tuple[int, float | None]:
+    """billable_requests и cost_total по попыткам задачи."""
+    billable = [attempt for attempt in attempts if attempt.billable]
+    if any(attempt.cost_usd is None for attempt in billable):
+        return len(billable), None
+    return len(billable), sum(attempt.cost_usd or 0.0 for attempt in billable)
+
+
+def _warn_unknown(warnings: list[str], ref: str) -> None:
+    message = f"price unknown for {ref}"
+    if message not in warnings:
+        warnings.append(message)
+
+
+def _parse_json(text: str) -> Any:
+    try:
+        return json.loads(text)
+    except ValueError as exc:
+        raise chain_mod.JsonParseFailed(f"ответ не разобрался как JSON: {exc}") from exc
+
+
+# Сюда LiteLLM кладёт `usage.cost` из ответа OpenRouter (llms/openrouter/chat/transformation.py).
+_LITELLM_COST_HEADER = "llm_provider-x-litellm-response-cost"
+
+
+def _provider_cost(response: Any) -> float | None:
+    """Сколько списал провайдер по его ответу: `usage.cost` (OpenRouter отдаёт всегда) или он же у LiteLLM."""
+    value = getattr(getattr(response, "usage", None), "cost", None)
+    if value is None:
+        hidden = getattr(response, "_hidden_params", None)
+        headers = hidden.get("additional_headers") if isinstance(hidden, dict) else None
+        value = headers.get(_LITELLM_COST_HEADER) if isinstance(headers, dict) else None
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+        return None
+    try:
+        return float(value)
+    except ValueError:
+        return None
 
 
 async def _sleep(seconds: float) -> None:
@@ -306,6 +358,8 @@ class LlmKit:
                     tags=tags,
                     level=level,
                     attempt=0,
+                    cost_source="cache",
+                    billable=False,
                 )
                 answer = Answer(
                     data=self._decode(cached, task.schema),
@@ -313,7 +367,9 @@ class LlmKit:
                     model=ref,
                     provider=provider,
                     attempts=attempts,
+                    cost_usd=0.0,
                     cost_source="cache",
+                    cost_total=0.0,
                     warnings=warnings,
                     task_id=task.id,
                     served_model=ref,
@@ -403,6 +459,11 @@ class LlmKit:
                     if error_type is None:
                         raise  # не ошибка провайдера, а наш баг — не маскируем
                     latency = int((time.perf_counter() - begin) * 1000)
+                    billed = getattr(exc, "billed", None)
+                    if isinstance(billed, _Outcome) and billed.billable:
+                        budget.add(billed.cost_usd or 0.0)
+                        if billed.cost_usd is None:
+                            _warn_unknown(warnings, call.ref)
                     await self._fail(
                         task,
                         tags,
@@ -415,6 +476,7 @@ class LlmKit:
                         retry_index,
                         latency,
                         secret,
+                        billed if isinstance(billed, _Outcome) else None,
                     )
                     allowed = chain_mod.retries_for(error_type, self.config.retry, exc) if task.retry else 0
                     if retry_index < allowed:
@@ -428,7 +490,7 @@ class LlmKit:
                 latency = int((time.perf_counter() - begin) * 1000)
                 budget.add(outcome.cost_usd or 0.0)
                 if outcome.cost_usd is None:
-                    warnings.append(f"price unknown for {call.ref}")
+                    _warn_unknown(warnings, call.ref)
                 attempts.append(
                     Attempt(
                         model=call.ref,
@@ -436,7 +498,9 @@ class LlmKit:
                         latency_ms=latency,
                         prompt_tokens=outcome.prompt_tokens,
                         completion_tokens=outcome.completion_tokens,
-                        cost_usd=outcome.cost_usd or 0.0,
+                        cost_usd=outcome.cost_usd,
+                        cost_source=outcome.cost_source,
+                        billable=True,
                     )
                 )
                 await self.usage.arecord(
@@ -450,10 +514,13 @@ class LlmKit:
                     prompt_tokens=outcome.prompt_tokens,
                     completion_tokens=outcome.completion_tokens,
                     cost_usd=outcome.cost_usd or 0.0,
-                    cost_known=outcome.cost_source != "unknown",
+                    cost_known=outcome.cost_source is not None,
+                    cost_source=outcome.cost_source,
+                    billable=True,
                     latency_ms=latency,
                     served_model=outcome.served_model or call.ref,
                 )
+                billable_requests, cost_total = _totals(attempts)
                 answer = Answer(
                     data=outcome.data,
                     source="llm",
@@ -468,13 +535,20 @@ class LlmKit:
                     task_id=task.id,
                     served_model=outcome.served_model or call.ref,
                     chain_position=position,
+                    billable_requests=billable_requests,
+                    cost_total=cost_total,
                 )
                 return self._done(answer, started, position, tags)
 
+        billable_requests, cost_total = _totals(attempts)
         answer = Answer(
             data=task.default,
             source="default",
             attempts=attempts,
+            cost_usd=0.0,
+            cost_source=None,
+            billable_requests=billable_requests,
+            cost_total=cost_total,
             warnings=warnings,
             error=attempts[-1].error if attempts else "цепочка моделей пуста",
             task_id=task.id,
@@ -619,7 +693,7 @@ class LlmKit:
             answer.source,
             answer.prompt_tokens,
             answer.completion_tokens,
-            answer.cost_usd,
+            answer.cost_usd or 0.0,
             answer.latency_ms,
             tags,
         )
@@ -656,7 +730,7 @@ class LlmKit:
         self._stats.fallbacks += max(position, 0)
         self._stats.prompt_tokens += answer.prompt_tokens
         self._stats.completion_tokens += answer.completion_tokens
-        self._stats.cost_usd += answer.cost_usd or 0.0
+        self._stats.cost_usd += answer.cost_total or 0.0  # с платными упавшими попытками
         if answer.model:
             self._stats.by_model[answer.model] += 1
 
@@ -673,11 +747,28 @@ class LlmKit:
         retry_index: int,
         latency_ms: int = 0,
         secret: str | None = None,
+        billed: _Outcome | None = None,
     ) -> str:
-        """Записать провалившуюся попытку в `attempts`, usage и лог."""
+        """Записать провалившуюся попытку в `attempts`, usage и лог.
+
+        `billed` — ответ, который пришёл, но не годится (пустой, отфильтрован, не JSON):
+        провайдер его списал, если в нём есть токены ответа или цена.
+        """
         message = _mask(f"{type(exc).__name__}: {exc}", secret)[:500]
+        spent = billed if billed is not None and billed.billable else None
         attempts.append(
-            Attempt(model=ref, provider=provider, error_type=error_type, error=message, latency_ms=latency_ms)
+            Attempt(
+                model=ref,
+                provider=provider,
+                error_type=error_type,
+                error=message,
+                latency_ms=latency_ms,
+                prompt_tokens=spent.prompt_tokens if spent else 0,
+                completion_tokens=spent.completion_tokens if spent else 0,
+                cost_usd=spent.cost_usd if spent else 0.0,
+                cost_source=spent.cost_source if spent else None,
+                billable=spent is not None,
+            )
         )
         await self.usage.arecord(
             model=ref,
@@ -689,6 +780,12 @@ class LlmKit:
             attempt=retry_index,
             error_type=error_type,
             latency_ms=latency_ms,
+            prompt_tokens=spent.prompt_tokens if spent else 0,
+            completion_tokens=spent.completion_tokens if spent else 0,
+            cost_usd=(spent.cost_usd or 0.0) if spent else 0.0,
+            cost_known=spent.cost_source is not None if spent else True,
+            cost_source=spent.cost_source if spent else None,
+            billable=spent is not None,
         )
         logger = log.error if error_type == "auth" else log.debug
         logger("%s: %s (%s)", ref, error_type, message)
@@ -737,7 +834,7 @@ class LlmKit:
             kwargs["drop_params"] = True
         if task.schema is None:
             response = await completion(**kwargs)
-            text = self._text_of(response)
+            text = self._billed(call, response, lambda: self._text_of(response))
             return self._outcome(call, response, data=text, cache_value=text)
         if isinstance(task.schema, dict):
             response = await completion(
@@ -747,13 +844,17 @@ class LlmKit:
                 },
                 **kwargs,
             )
-            text = self._text_of(response)
-            try:
-                data = json.loads(text)
-            except ValueError as exc:
-                raise chain_mod.JsonParseFailed(f"ответ не разобрался как JSON: {exc}") from exc
+            data = self._billed(call, response, lambda: _parse_json(self._text_of(response)))
             return self._outcome(call, response, data=data, cache_value=data)
         return await self._call_structured(call, messages, task, kwargs, completion)
+
+    def _billed(self, call: providers_mod.ModelCall, response: Any, read: Callable[[], Any]) -> Any:
+        """Разобрать ответ; не вышло — ошибка уносит `billed` (токены и цену пришедшего ответа)."""
+        try:
+            return read()
+        except chain_mod.AnswerRejected as exc:
+            exc.billed = self._outcome(call, response, data=None, cache_value=None)
+            raise
 
     async def _call_structured(
         self,
@@ -809,17 +910,21 @@ class LlmKit:
 
     def _cost(
         self, call: providers_mod.ModelCall, response: Any, prompt_tokens: int, completion_tokens: int
-    ) -> tuple[float | None, str]:
-        """Стоимость и её источник: подписка → routing.prices → LiteLLM → неизвестно (None).
+    ) -> tuple[float | None, str | None]:
+        """Стоимость и её источник: подписка → списанное провайдером → routing.prices → LiteLLM → None.
 
+        Цена × токены из routing и из справочника LiteLLM — обе `price_table`.
         routing главнее справочника LiteLLM: у шлюзов (ccode) имя модели совпадает
         с вендорским, и LiteLLM отдал бы прайс вендора, а не шлюза.
         """
         if call.subscription:
             return 0.0, "subscription"  # оплачено подпиской, отдельного счёта за вызов нет
+        charged = _provider_cost(response)
+        if charged is not None:
+            return charged, "provider"
         from_routing = self._routing_price(call, prompt_tokens, completion_tokens)
         if from_routing is not None:
-            return from_routing, "routing"
+            return from_routing, "price_table"
         cost = 0.0
         # litellm импортируем только если он и так в игре: с подменённым
         # `completion` (тесты) модуль тянуть незачем.
@@ -830,7 +935,7 @@ class LlmKit:
             except Exception as exc:  # цену знает не каждая модель
                 log.debug("completion_cost для %s не сработал: %s", call.ref, exc)
         if cost > 0:
-            return cost, "litellm"
+            return cost, "price_table"
         return self._unknown_price(call, prompt_tokens, completion_tokens)
 
     def _routing_price(self, call: providers_mod.ModelCall, prompt_tokens: int, completion_tokens: int) -> float | None:
@@ -841,14 +946,14 @@ class LlmKit:
     @staticmethod
     def _unknown_price(
         call: providers_mod.ModelCall, prompt_tokens: int, completion_tokens: int
-    ) -> tuple[float | None, str]:
+    ) -> tuple[float | None, str | None]:
         """Цены нет: без токенов — ноль, иначе None («неизвестно») и один варн в лог на модель."""
         if prompt_tokens == 0 and completion_tokens == 0:
-            return 0.0, "unknown"
+            return 0.0, None
         if call.ref not in _warned_prices:
             _warned_prices.add(call.ref)
             log.warning("цена модели %s неизвестна: расход не учитывается", call.ref)
-        return None, "unknown"
+        return None, None
 
     async def _call_decisions(
         self, call: providers_mod.ModelCall, state: str, questions: dict[str, Any], timeout: float
@@ -865,12 +970,13 @@ class LlmKit:
         completion_tokens = int(usage.get("output_tokens") or 0)
         # Цену OpenRouter отдаёт в ответе; нет её — цены из routing.
         cost: float | None
+        source: str | None
         if usage.get("cost") is not None:
             cost, source = float(usage["cost"]), "provider"
         else:
             from_routing = self._routing_price(call, prompt_tokens, completion_tokens)
             if from_routing is not None:
-                cost, source = from_routing, "routing"
+                cost, source = from_routing, "price_table"
             else:
                 cost, source = self._unknown_price(call, prompt_tokens, completion_tokens)
         return _Outcome(

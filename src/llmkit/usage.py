@@ -91,6 +91,8 @@ class Usage:
         completion_tokens: int = 0,
         cost_usd: float = 0.0,
         cost_known: bool = True,
+        cost_source: str | None = None,
+        billable: bool = False,
         latency_ms: int = 0,
         served_model: str | None = None,
     ) -> None:
@@ -114,6 +116,8 @@ class Usage:
                     completion_tokens=completion_tokens,
                     cost_usd=cost_usd,
                     cost_known=int(cost_known),
+                    cost_source=cost_source,
+                    billable=int(billable),
                     latency_ms=latency_ms,
                     pid=os.getpid(),
                     served_model=served_model,
