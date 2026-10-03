@@ -217,14 +217,14 @@ def test_r4_price_from_routing(fake_kit, litellm_prices):
     fake_kit([named("ответ", "known")])
     routing = {**ROUTING, "chain": ["a/m1"]}
     body = payload(run("ask", "вопрос", "--routing", json.dumps(routing), "--json"))
-    assert body["cost_source"] == "routing"  # routing главнее справочника LiteLLM
+    assert body["cost_source"] == "price_table" and body["cost_usd"] != 0.5  # routing главнее справочника LiteLLM
 
 
 def test_r4_price_from_litellm(fake_kit, litellm_prices):
     fake_kit([named("ответ", "known")])
     routing = {**ROUTING, "chain": ["b/m2"]}
     body = payload(run("ask", "вопрос", "--routing", json.dumps(routing), "--json"))
-    assert body["cost_source"] == "litellm" and body["cost_usd"] == 0.5
+    assert body["cost_source"] == "price_table" and body["cost_usd"] == 0.5
 
 
 def test_r4_unknown_price_is_null_with_warning(fake_kit, litellm_prices, tmp_path):
@@ -233,7 +233,7 @@ def test_r4_unknown_price_is_null_with_warning(fake_kit, litellm_prices, tmp_pat
     result = run("ask", "вопрос", "--routing", json.dumps(routing), "--json")
     assert result.exit_code == 0
     body = payload(result)
-    assert body["cost_usd"] is None and body["cost_source"] == "unknown"
+    assert body["cost_usd"] is None and body["cost_source"] is None
     assert "price unknown for b/m2" in body["warnings"]
     assert usage_rows(tmp_path)[0]["cost_known"] == 0
 
@@ -241,7 +241,7 @@ def test_r4_unknown_price_is_null_with_warning(fake_kit, litellm_prices, tmp_pat
 async def test_r4_library_answer_has_cost_source(make_kit, litellm_prices):
     instance = make_kit(FakeCompletion([named("ответ", "никто-не-знает")]))
     answer = await instance.ask(Task(user="вопрос", chain=["b/m2"]))
-    assert answer.cost_usd is None and answer.cost_source == "unknown"
+    assert answer.cost_usd is None and answer.cost_source is None
     assert "price unknown for b/m2" in answer.warnings
 
 
@@ -607,7 +607,7 @@ def test_r13_library_with_routing_dict():
     fake = FakeCompletion([anonymous("ответ")])
     instance = LlmKit(routing=ROUTING, completion=fake)
     answer = instance.ask_sync(Task(user="вопрос"))
-    assert answer.model == "a/m1" and answer.served_model == "a/m1" and answer.cost_source == "routing"
+    assert answer.model == "a/m1" and answer.served_model == "a/m1" and answer.cost_source == "price_table"
     assert answer.chain_position == 0 and answer.cache_hit is False
 
 
@@ -669,7 +669,7 @@ def test_json_command_answer_fields(fake_kit, tmp_path):
     result = run("json", "вопрос", "--schema", str(_schema(tmp_path)), "--routing", json.dumps(ROUTING), "--json")
     assert result.exit_code == 0, result.output
     body = payload(result)
-    assert body["data"] == {"x": 1} and body["model"] == "a/m1" and body["cost_source"] == "routing"
+    assert body["data"] == {"x": 1} and body["model"] == "a/m1" and body["cost_source"] == "price_table"
     assert {"tokens_in", "tokens_out", "cache_hit", "chain_position", "attempts", "warnings"} <= set(body)
 
 

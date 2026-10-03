@@ -133,7 +133,7 @@ async def test_decide_cost_from_routing_when_response_has_none():
 
     answer = await kit.decide("s", QUESTIONS)
 
-    assert answer.cost_known and answer.cost_source == "routing"
+    assert answer.cost_known and answer.cost_source == "price_table"
     assert answer.cost_usd == pytest.approx(427 * 0.042 / 1_000_000)
 
 

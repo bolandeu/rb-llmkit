@@ -210,7 +210,7 @@ async def test_budget_warning_logged_once_per_process(caplog):
 async def test_unknown_price_marks_cost_unknown():
     instance, _ = kit([response()])
     answer = await instance.ask(Task(user="вопрос", chain=["b/m2"]))  # цен для b в routing нет
-    assert answer.cost_usd is None and answer.cost_known is False and answer.cost_source == "unknown"
+    assert answer.cost_usd is None and answer.cost_known is False and answer.cost_source is None
 
 
 class _FakeLitellm:

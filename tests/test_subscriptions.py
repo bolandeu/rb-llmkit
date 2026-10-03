@@ -78,6 +78,13 @@ async def test_subscription_answer_costs_nothing(transport):
     assert calls[0]["model"] == "gpt-5.5" and calls[0]["provider"] == "gpt"
 
 
+async def test_subscription_call_is_counted_but_free(transport):
+    # Вызов расходует подписку: в billable_requests он есть, стоимость 0.
+    transport(reply("понг"))
+    answer = await kit().ask(Task(user="пинг", chain=["gpt/gpt-5.5"]))
+    assert (answer.billable_requests, answer.cost_total) == (1, 0.0)
+
+
 class Fruit(BaseModel):
     name: str
 
