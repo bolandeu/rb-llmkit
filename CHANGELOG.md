@@ -8,6 +8,13 @@
 
 <!-- towncrier release notes start -->
 
+## [0.9.1] - 2026-10-03
+
+### Added
+
+- CLI ищет routing по умолчанию: без `--routing` и `LLMKIT_ROUTING_FILE` — `routing.json` в `platformdirs.user_config_dir("llmkit")` (macOS `~/Library/Application Support/llmkit/`, Linux `~/.config/llmkit/`); права шире 600 — предупреждение в stderr. `ROUTING_MISSING` называет путь по умолчанию в `action`; `llm config path --json` — новое поле `routing_default`, `routing_file` учитывает файл по умолчанию; `llm describe` — `x-rb-data.user_config_dir`.
+
+
 ## [0.9.0] - 2026-10-03
 
 ### Added
