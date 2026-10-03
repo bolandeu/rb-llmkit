@@ -15,7 +15,7 @@ from .render import LenientOption, TemplateOption, VarsOption, prompt_text
 RoutingOption = typer.Option(
     None,
     "--routing",
-    help="Routing v1: JSON-строка или путь к JSON-файлу; без него — файл из LLMKIT_ROUTING_FILE. Не stdin.",
+    help="Routing v1: JSON-строка или путь к JSON-файлу; без него — LLMKIT_ROUTING_FILE, затем routing.json в каталоге конфигурации (llm config path). Не stdin.",
 )
 ModelsOption = typer.Option(
     None,
@@ -107,7 +107,8 @@ def ask(
     """Задать вопрос модели и напечатать текстовый ответ.
 
     Провайдеры и цепочка — из routing v1 (`--routing` JSON или файл, иначе
-    LLMKIT_ROUTING_FILE); встроенных нет. Упавшая модель уступает следующей.
+    LLMKIT_ROUTING_FILE, иначе routing.json в каталоге конфигурации — путь
+    в `llm config path`); встроенных нет. Упавшая модель уступает следующей.
     Вместо текста — шаблон: `--template` с `--vars` (в учёт расходов — имя и
     хэш шаблона, без значений). В `--json`: text, task_id (= task_id в учёте),
     model, served_model, chain_position, attempts, tokens_in/out, cost_usd,

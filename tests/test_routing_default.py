@@ -125,8 +125,9 @@ def test_config_path_shows_default_file():
 
 def test_describe_mentions_default_file():
     document = json.loads(run("describe", "--json").stdout)
-    env = {item["name"]: item for item in document["x-rb-env"]}
+    meta = {item["name"]: item["value"] for item in document["command"]["metadata"]}
+    env = {item["name"]: item for item in meta["x-rb-env"]}
     assert "routing.json" in env["LLMKIT_ROUTING_FILE"]["description"]
-    config_dir = document["x-rb-data"]["user_config_dir"]
+    config_dir = meta["x-rb-data"]["user_config_dir"]
     assert config_dir["appname"] == "llmkit"
     assert [entry["path"] for entry in config_dir["files"]] == ["routing.json"]

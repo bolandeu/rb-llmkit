@@ -18,7 +18,7 @@ class DataFile:
     path: str  # относительно каталога; для семейства файлов — glob ("exports/*.csv")
     kind: str  # "data": при удалении теряется | "cache": получается заново по запросу
     description: str
-    dir: Literal["data", "cache"] = "data"  # user_data_dir или user_cache_dir
+    dir: Literal["data", "cache", "config"] = "data"  # user_data_dir, user_cache_dir или user_config_dir
 
 
 DATA_FILES: tuple[DataFile, ...] = (
@@ -37,5 +37,11 @@ DATA_FILES: tuple[DataFile, ...] = (
         "cache",
         "Кэш ответов моделей: повторный запрос с теми же параметрами не идёт к провайдеру; cache.path",
         dir="cache",
+    ),
+    DataFile(
+        "routing.json",
+        "data",
+        "Routing v1 по умолчанию для CLI, когда нет --routing и LLMKIT_ROUTING_FILE; права 600 (шире — предупреждение)",
+        dir="config",
     ),
 )

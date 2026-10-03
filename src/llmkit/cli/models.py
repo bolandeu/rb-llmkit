@@ -14,13 +14,16 @@ from .output import JsonOption, emit, enable_json, guard, out
 @app.command("models")
 def models(
     ctx: typer.Context,
-    routing: str = typer.Option(None, "--routing", help="Routing v1: JSON или файл; иначе LLMKIT_ROUTING_FILE."),
+    routing: str = typer.Option(
+        None, "--routing", help="Routing v1: JSON или файл; иначе LLMKIT_ROUTING_FILE, иначе файл по умолчанию."
+    ),
     json_output: bool = JsonOption,
 ) -> None:
     """Показать провайдеров routing, источник их ключей и цепочку моделей.
 
     Значения ключей не печатаются. Встроенных провайдеров нет: всё — из
-    routing. Коды выхода: 0 — готово, 2 — нет routing, или он не по схеме
+    routing (`--routing`, иначе LLMKIT_ROUTING_FILE, иначе routing.json в
+    каталоге конфигурации — `llm config path`). Коды выхода: 0 — готово, 2 — нет routing, или он не по схеме
     (например, цепочка ссылается на неописанного провайдера).
 
     Example: llm models --routing routing.json --json

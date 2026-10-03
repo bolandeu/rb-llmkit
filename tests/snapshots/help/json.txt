@@ -19,7 +19,8 @@
 │ *  --schema               <path>   Файл с JSON Schema ответа. [required]                         │
 │    --system       -s      <str>    Системное сообщение.                                          │
 │    --routing              <str>    Routing v1: JSON-строка или путь к JSON-файлу; без него —     │
-│                                    файл из LLMKIT_ROUTING_FILE. Не stdin.                        │
+│                                    LLMKIT_ROUTING_FILE, затем routing.json в каталоге            │
+│                                    конфигурации (llm config path). Не stdin.                     │
 │    --model        -m      <str>    Модель 'провайдер/модель'; повторяется — цепочка с фолбэком   │
 │                                    по порядку (вместо routing.chain).                            │
 │    --tag                  <str>    Метка k=v для учёта расходов; можно несколько.                │

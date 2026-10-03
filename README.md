@@ -177,8 +177,12 @@ llm ask "Привет" -m claude/sonnet    # routing: {"providers": {"claude": {
 - `protocol`: openrouter | openai | anthropic | gemini | ollama | openai_compatible |
   chatgpt | claude_cli; `base_url` обязателен для ollama и openai_compatible.
 - CLI: `--routing '<json>'` или `--routing <файл>` (не stdin — он для текста и
-  шаблона); без него — файл из `LLMKIT_ROUTING_FILE`; нет ни того ни другого —
-  код 2, `ROUTING_MISSING`. Цепочку можно задать `-m` (повторяемый) при routing
+  шаблона); без него — файл из `LLMKIT_ROUTING_FILE`; без него — файл по
+  умолчанию `routing.json` в каталоге конфигурации (`platformdirs.user_config_dir("llmkit")`:
+  macOS — `~/Library/Application Support/llmkit/routing.json`, Linux —
+  `~/.config/llmkit/routing.json`; путь — `llm config path`). Права шире 600 —
+  предупреждение в stderr (ключей там нет, но файл личный). Нет ничего — код 2,
+  `ROUTING_MISSING` с путём по умолчанию в `action`. Цепочку можно задать `-m` (повторяемый) при routing
   без `chain`; оба сразу — `ROUTING_INVALID` «chain задана дважды».
 - Ключ: `key_env`, по умолчанию `LLM_<ПРОВАЙДЕР>_API_KEY` → старое имя
   (`OPENROUTER_API_KEY`, `CCODE_API_KEY`…; один цикл, с предупреждением «rename to

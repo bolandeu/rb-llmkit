@@ -16,7 +16,7 @@ app = group("config", "Настройки llmkit: где лежат кэш, жу
 
 @app.command("path")
 def path(ctx: typer.Context, json_output: bool = JsonOption) -> None:
-    """Показать пути кэша, журнала вызовов и файла routing (LLMKIT_ROUTING_FILE).
+    """Показать пути кэша, журнала вызовов и файла routing (LLMKIT_ROUTING_FILE или файл по умолчанию).
 
     Код выхода всегда 0.
 
@@ -26,7 +26,9 @@ def path(ctx: typer.Context, json_output: bool = JsonOption) -> None:
     with guard(ctx):
         config = config_mod.load()
         payload = {
-            "routing_file": os.environ.get(runtime.ROUTING_FILE_ENV),
+            "routing_file": os.environ.get(runtime.ROUTING_FILE_ENV)
+            or (str(default) if (default := runtime.default_routing_path()).is_file() else None),
+            "routing_default": str(runtime.default_routing_path()),
             "cache": str(config.cache_path()),
             "usage": str(config.usage_path()),
         }

@@ -176,7 +176,7 @@ def env_vars() -> list[dict]:
         {
             "name": "LLMKIT_ROUTING_FILE",
             "purpose": "config",
-            "description": "JSON-файл routing v1 для CLI, когда --routing не передан",
+            "description": "JSON-файл routing v1 для CLI, когда --routing не передан; без него — routing.json в user_config_dir (x-rb-data)",
             "required": False,
         },
         {
@@ -250,6 +250,8 @@ def data() -> dict:
         "user_data_dir": {"appname": TOOL, "files": files("data")},
         # Каталога кэша в шаблоне нет: у llmkit там кэш ответов моделей.
         "user_cache_dir": {"appname": TOOL, "files": files("cache")},
+        # Каталога конфигурации в шаблоне нет: у llmkit там routing по умолчанию.
+        "user_config_dir": {"appname": TOOL, "files": files("config")},
     }
 
 

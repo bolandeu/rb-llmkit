@@ -67,10 +67,15 @@ def set_key(
 @app.command("status")
 def status(
     ctx: typer.Context,
-    routing: str = typer.Option(None, "--routing", help="Routing v1: JSON или файл; иначе LLMKIT_ROUTING_FILE."),
+    routing: str = typer.Option(
+        None, "--routing", help="Routing v1: JSON или файл; иначе LLMKIT_ROUTING_FILE, иначе файл по умолчанию."
+    ),
     json_output: bool = JsonOption,
 ) -> None:
     """Показать, откуда берётся ключ каждого провайдера routing.
+
+    Routing — `--routing`, иначе LLMKIT_ROUTING_FILE, иначе routing.json в
+    каталоге конфигурации (`llm config path`).
 
     Значения ключей не печатаются — только источник: env, legacy_env
     (старое имя переменной), keychain, subscription или none. Коды выхода:

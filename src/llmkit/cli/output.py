@@ -107,10 +107,13 @@ def _classify(exc: Exception) -> CliError:
             details={"variable": exc.env_var},
         )
     if isinstance(exc, RoutingMissing):
+        from .runtime import default_routing_path  # runtime импортирует output
+
         return CliError(
             "ROUTING_MISSING",
             str(exc),
-            "передайте --routing '<json>' или путь к JSON-файлу, либо задайте LLMKIT_ROUTING_FILE; "
+            "передайте --routing '<json>' или путь к JSON-файлу, задайте LLMKIT_ROUTING_FILE "
+            f"или положите файл по умолчанию {default_routing_path()}; "
             "старый config.toml не читается — перенести: `llm routing import <config.toml>`",
             exit_code=2,
         )

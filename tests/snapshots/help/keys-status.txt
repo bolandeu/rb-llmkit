@@ -3,6 +3,9 @@
 
  Показать, откуда берётся ключ каждого провайдера routing.
 
+ Routing — `--routing`, иначе LLMKIT_ROUTING_FILE, иначе routing.json в
+ каталоге конфигурации (`llm config path`).
+
  Значения ключей не печатаются — только источник: env, legacy_env
  (старое имя переменной), keychain, subscription или none. Коды выхода:
  0 — готово (даже если ключей нет), 2 — нет routing или он не по схеме.
@@ -10,7 +13,8 @@
  Example: llm keys status --json
 
 ╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
-│ --routing        <str>  Routing v1: JSON или файл; иначе LLMKIT_ROUTING_FILE.                    │
+│ --routing        <str>  Routing v1: JSON или файл; иначе LLMKIT_ROUTING_FILE, иначе файл по      │
+│                         умолчанию.                                                               │
 │ --json                  Машинный вывод: JSON-конверт в stdout.                                   │
 │ --help                  Show this message and exit.                                              │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

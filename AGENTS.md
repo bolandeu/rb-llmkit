@@ -70,7 +70,7 @@ uv run python -X importtime -c "import llmkit" 2>&1 | tail -1   # должно �
   `commands/describe.py` → `cli/describe.py`, `EXIT_CODES` — в `errors.py`,
   `tests/test_describe.py`, `tests/data/opencli.schema.json`); версия шаблона —
   `_distribution.TEMPLATE_VERSION`. Отличия: в `x-rb-data` есть
-  `user_cache_dir` (кэш ответов, `DataFile.dir`); `x-rb-env` — ключи встроенных
+  `user_cache_dir` (кэш ответов) и `user_config_dir` (routing по умолчанию), `DataFile.dir`; `x-rb-env` — ключи встроенных
   провайдеров, `LLMKIT_*` конфига, база, `CLAUDE_COMMAND`; в `EXIT_CODES` нет 4.
   Локальная SQLite (`usage.sqlite`) записана в `DATA_FILES` как путь по
   умолчанию — без `_sqlite_file()` шаблона v1.5.5 (у llmkit нет `<TOOL>_DB_PATH`).
@@ -95,6 +95,10 @@ uv run python -X importtime -c "import llmkit" 2>&1 | tail -1   # должно �
 - [docs/testing.md](docs/testing.md) — как писать тесты (без сети).
 - [docs/cli-conventions.md](docs/cli-conventions.md) — паттерн CLI-команд,
   коды выхода.
+- Routing в CLI — только `runtime.routing_spec`/`load_routing`: `--routing` →
+  `LLMKIT_ROUTING_FILE` → `user_config_dir("llmkit")/routing.json` (права шире 600 —
+  предупреждение) → `ROUTING_MISSING` с путём по умолчанию. Тесты не видят
+  настоящий файл: `conftest.isolated` подменяет `platformdirs.user_config_dir`.
 
 ## База (журнал расходов)
 

@@ -6,7 +6,7 @@
  ChatGPT: по умолчанию вход по коду устройства (ссылка и код, браузер может
  быть на другой машине); `--browser` — через локальный redirect на порт 1455.
  Claude: запускается `claude auth login`. Провайдер — chatgpt, claude или
- провайдер routing (LLMKIT_ROUTING_FILE) с protocol chatgpt | claude_cli.
+ провайдер routing (LLMKIT_ROUTING_FILE или файл по умолчанию) с protocol chatgpt | claude_cli.
  Подсказки идут в stderr. Коды выхода: 0 — вход выполнен, 2 — не провайдер
  по подписке, 3 — вход не удался.
 

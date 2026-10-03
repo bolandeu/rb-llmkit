@@ -85,8 +85,11 @@ routing v1, публичный контракт: `src/llmkit/contracts/routing-v
 - Ошибка схемы — `RoutingInvalid` / `ROUTING_INVALID` (код 2) с `path` — JSON
   Pointer поля; нет routing — `RoutingMissing` / `ROUTING_MISSING` (код 2).
 - Передача в CLI: `--routing '<json>'` или `--routing <файл>`, **не stdin** (stdin —
-  текст или шаблон промпта); без него — `LLMKIT_ROUTING_FILE` (локальный файл на
-  Mac). Библиотека env не читает: `LlmKit(routing=dict)`; без routing первый вызов
+  текст или шаблон промпта); без него — `LLMKIT_ROUTING_FILE`; без него —
+  `routing.json` в `platformdirs.user_config_dir("llmkit")` (macOS —
+  `~/Library/Application Support/llmkit/`, Linux — `~/.config/llmkit/`; права шире
+  600 — предупреждение); нет ничего — `ROUTING_MISSING` с путём по умолчанию.
+  Библиотека env и файл по умолчанию не читает: `LlmKit(routing=dict)`; без routing первый вызов
   бросает `RoutingMissing`.
 - Ключ: `key_env`, по умолчанию `LLM_<ПРОВАЙДЕР>_API_KEY` (верхний регистр, не
   буквы и не цифры → `_`) → старое имя (`OPENROUTER_API_KEY`, `CCODE_API_KEY`,
@@ -331,7 +334,7 @@ usage.total(since) -> Row
 | `llm keys set <provider>` (ввод скрыт) / `llm keys status` / `llm keys rm <provider>` | связка ключей |
 | `llm models [--routing …]` | провайдеры routing, цепочка, источник ключа |
 | `llm cost [--by tool,niche] [--since 7d]` | отчёт из usage, таблица rich или JSON |
-| `llm config path` / `show` | пути кэша, журнала и LLMKIT_ROUTING_FILE; итоговые настройки |
+| `llm config path` / `show` | пути кэша, журнала и routing (LLMKIT_ROUTING_FILE или файл по умолчанию, `routing_default`); итоговые настройки |
 | `llm serve [--port 8765]` | фаза 4 |
 
 ## 11. Прокси `llm serve` (фаза 4)
@@ -356,8 +359,10 @@ FastAPI, extra `[serve]`. `POST /v1/chat/completions` (OpenAI-формат, бе
 
 ##  13. Правка руками
 
-Routing на Mac — свой JSON-файл в `LLMKIT_ROUTING_FILE`; проверка после правки:
+Routing на машине — `~/Library/Application Support/llmkit/routing.json` (macOS) или
+`~/.config/llmkit/routing.json` (Linux), права 600; другой файл — `LLMKIT_ROUTING_FILE`.
+Проверка после правки:
 
 ```bash
-llm routing validate "$LLMKIT_ROUTING_FILE" --providers-only
+llm routing validate "$(llm config path --json | jq -r .routing_file)" --providers-only
 ```

@@ -19,8 +19,9 @@
 ╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
 │ *  --questions  -q      <path>   JSON-файл вопросов: имя → type/instructions/criteria.           │
 │                                  [required]                                                      │
-│    --routing            <str>    Routing v1: JSON-строка или путь к JSON-файлу; без него — файл  │
-│                                  из LLMKIT_ROUTING_FILE. Не stdin.                               │
+│    --routing            <str>    Routing v1: JSON-строка или путь к JSON-файлу; без него —       │
+│                                  LLMKIT_ROUTING_FILE, затем routing.json в каталоге конфигурации │
+│                                  (llm config path). Не stdin.                                    │
 │    --model      -m      <str>    Модель 'провайдер/модель'; повторяется — цепочка с фолбэком по  │
 │                                  порядку (вместо routing.chain).                                 │
 │    --tag                <str>    Метка k=v для учёта расходов; можно несколько.                  │

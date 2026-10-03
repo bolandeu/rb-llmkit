@@ -77,7 +77,8 @@ litellm на импорте. `classify()` возвращает `None` для ч�
 Встроенных провайдеров и уровней нет (0.8.0). `LlmKit(routing=...)` проверяет
 routing при создании (цепочка необязательна: её может дать `Task.chain`); нет
 routing — `RoutingMissing` при первом вызове. Библиотека env не читает; CLI берёт
-`--routing` (JSON или файл) или `LLMKIT_ROUTING_FILE`. Проверка — `routing.parse`:
+`--routing` (JSON или файл), иначе `LLMKIT_ROUTING_FILE`, иначе
+`user_config_dir("llmkit")/routing.json` (`cli/runtime.routing_spec`). Проверка — `routing.parse`:
 pydantic плюс то, что JSON Schema не выражает (ссылки цепочки и цен на описанных
 провайдеров); контрактные векторы гоняет tests/test_routing.py и против llmkit, и
 против JSON Schema.
