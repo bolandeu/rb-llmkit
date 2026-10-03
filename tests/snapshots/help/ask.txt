@@ -6,8 +6,9 @@
  Провайдеры и цепочка — из routing v1 (`--routing` JSON или файл, иначе
  LLMKIT_ROUTING_FILE); встроенных нет. Упавшая модель уступает следующей.
  Вместо текста — шаблон: `--template` с `--vars` (в учёт расходов — имя и
- хэш шаблона, без значений). В `--json`: text, model, served_model,
- chain_position, attempts, tokens_in/out, cost_usd, cost_source, cache_hit.
+ хэш шаблона, без значений). В `--json`: text, task_id (= task_id в учёте),
+ model, served_model, chain_position, attempts, tokens_in/out, cost_usd,
+ cost_source, cache_hit.
  Коды выхода: 0 — ответ получен, 2 — нет routing, routing не по схеме или
  неверные аргументы, 3 — нет ключа провайдера, 5 — все модели упали.
 

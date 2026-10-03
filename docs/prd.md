@@ -323,7 +323,7 @@ usage.total(since) -> Row
 
 | Команда | Что делает |
 |---|---|
-| `llm ask "текст" [--routing <json\|файл>] [-m p/m ...] [--system S] [--tag k=v ...] [--no-cache]` | текстовый ответ; `--json`: text, model, served_model, chain_position, attempts [{model, error_code}], provider, tokens_in, tokens_out, cost_usd, cost_source, cache_hit, latency_ms, warnings. `--level` удалён (код 2 с подсказкой) |
+| `llm ask "текст" [--routing <json\|файл>] [-m p/m ...] [--system S] [--tag k=v ...] [--no-cache]` | текстовый ответ; `--json`: text, task_id (= task_id строки llmkit_calls), model, served_model, chain_position, attempts [{model, error_code}], provider, tokens_in, tokens_out, cost_usd, cost_source, cache_hit, latency_ms, warnings. `--level` удалён (код 2 с подсказкой) |
 | `llm json "текст" --schema schema.json [те же флаги]` | JSON по схеме, вывод только JSON; `--json` — как у ask, поле `data` |
 | `llm routing validate <файл\|json> [--providers-only]` | проверка routing v1 (Windmill, Directus): ok или `ROUTING_INVALID` с `error.path` |
 | `llm routing import <config.toml>` | перенос config.toml < 0.8: routing (providers + prices, key_env по шаблону LLM_<P>_API_KEY, без ключей) и отдельно levels |

@@ -1,6 +1,7 @@
 """Команды `llm ask`, `llm json` и `llm decide`: один вызов модели по routing."""
 
 import json
+import uuid
 from pathlib import Path
 
 import typer
@@ -38,6 +39,7 @@ def _answer_payload(answer, data_key: str) -> dict:
     """Ответ `--json` (контракт для Windmill): ключи и переменные шаблона сюда не попадают."""
     return {
         data_key: answer.data,
+        "task_id": answer.task_id,
         "model": answer.model,
         "served_model": answer.served_model,
         "provider": answer.provider,
@@ -51,6 +53,11 @@ def _answer_payload(answer, data_key: str) -> dict:
         "latency_ms": answer.latency_ms,
         "warnings": answer.warnings,
     }
+
+
+def _task_id() -> str:
+    """Id вызова CLI: попадает в учёт (llmkit_calls.task_id) и в конверт `--json`."""
+    return uuid.uuid4().hex
 
 
 def _echo_warnings(answer) -> None:
@@ -71,6 +78,7 @@ def _run(prompt, routing, system, tags, no_cache, temperature, max_tokens, timeo
         timeout=timeout,
         cache=False if no_cache else None,
         retry=not no_retry,
+        id=_task_id(),
     )
     answer = kit.ask_sync(task)
     _echo_warnings(answer)
@@ -101,8 +109,9 @@ def ask(
     Провайдеры и цепочка — из routing v1 (`--routing` JSON или файл, иначе
     LLMKIT_ROUTING_FILE); встроенных нет. Упавшая модель уступает следующей.
     Вместо текста — шаблон: `--template` с `--vars` (в учёт расходов — имя и
-    хэш шаблона, без значений). В `--json`: text, model, served_model,
-    chain_position, attempts, tokens_in/out, cost_usd, cost_source, cache_hit.
+    хэш шаблона, без значений). В `--json`: text, task_id (= task_id в учёте),
+    model, served_model, chain_position, attempts, tokens_in/out, cost_usd,
+    cost_source, cache_hit.
     Коды выхода: 0 — ответ получен, 2 — нет routing, routing не по схеме или
     неверные аргументы, 3 — нет ключа провайдера, 5 — все модели упали.
 
@@ -193,7 +202,7 @@ def decide(
     в API `/api/alpha/decisions`. Цепочка — из routing или `-m`, только
     провайдеры с protocol=openrouter. Состояние можно собрать шаблоном:
     `--template` с `--vars`. В stdout — словарь answers; в режиме `--json` —
-    конверт с `data`, как у `llm ask`. Коды выхода: 0 — ответ получен,
+    конверт с `data` и `task_id` (= task_id в учёте), как у `llm ask`. Коды выхода: 0 — ответ получен,
     2 — неверные аргументы, routing или модель не OpenRouter, 3 — нет ключа,
     5 — все модели упали.
 
@@ -219,6 +228,7 @@ def decide(
             tags={**runtime.parse_tags(tag), **template_tags},
             timeout=timeout,
             retry=not no_retry,
+            id=_task_id(),
         )
         _echo_warnings(answer)
         emit(

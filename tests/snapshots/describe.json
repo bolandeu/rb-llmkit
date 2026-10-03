@@ -138,7 +138,7 @@
       },
       {
         "name": "ask",
-        "description": "Задать вопрос модели и напечатать текстовый ответ.\n\nПровайдеры и цепочка — из routing v1 (`--routing` JSON или файл, иначе\nLLMKIT_ROUTING_FILE); встроенных нет. Упавшая модель уступает следующей.\nВместо текста — шаблон: `--template` с `--vars` (в учёт расходов — имя и\nхэш шаблона, без значений). В `--json`: text, model, served_model,\nchain_position, attempts, tokens_in/out, cost_usd, cost_source, cache_hit.\nКоды выхода: 0 — ответ получен, 2 — нет routing, routing не по схеме или\nневерные аргументы, 3 — нет ключа провайдера, 5 — все модели упали.\n\nExample: llm ask \"Столица Франции?\" --routing routing.json",
+        "description": "Задать вопрос модели и напечатать текстовый ответ.\n\nПровайдеры и цепочка — из routing v1 (`--routing` JSON или файл, иначе\nLLMKIT_ROUTING_FILE); встроенных нет. Упавшая модель уступает следующей.\nВместо текста — шаблон: `--template` с `--vars` (в учёт расходов — имя и\nхэш шаблона, без значений). В `--json`: text, task_id (= task_id в учёте),\nmodel, served_model, chain_position, attempts, tokens_in/out, cost_usd,\ncost_source, cache_hit.\nКоды выхода: 0 — ответ получен, 2 — нет routing, routing не по схеме или\nневерные аргументы, 3 — нет ключа провайдера, 5 — все модели упали.\n\nExample: llm ask \"Столица Франции?\" --routing routing.json",
         "options": [
           {
             "name": "--system",
@@ -675,7 +675,7 @@
       },
       {
         "name": "decide",
-        "description": "Спросить модель решений OpenRouter: вероятности вместо текста.\n\nВопросы типов noul (да/нет), choice и score описываются в JSON-файле, как\nв API `/api/alpha/decisions`. Цепочка — из routing или `-m`, только\nпровайдеры с protocol=openrouter. Состояние можно собрать шаблоном:\n`--template` с `--vars`. В stdout — словарь answers; в режиме `--json` —\nконверт с `data`, как у `llm ask`. Коды выхода: 0 — ответ получен,\n2 — неверные аргументы, routing или модель не OpenRouter, 3 — нет ключа,\n5 — все модели упали.\n\nExample: llm decide \"Payouts failing for 3 days\" --questions q.json --routing routing.json --json",
+        "description": "Спросить модель решений OpenRouter: вероятности вместо текста.\n\nВопросы типов noul (да/нет), choice и score описываются в JSON-файле, как\nв API `/api/alpha/decisions`. Цепочка — из routing или `-m`, только\nпровайдеры с protocol=openrouter. Состояние можно собрать шаблоном:\n`--template` с `--vars`. В stdout — словарь answers; в режиме `--json` —\nконверт с `data` и `task_id` (= task_id в учёте), как у `llm ask`. Коды выхода: 0 — ответ получен,\n2 — неверные аргументы, routing или модель не OpenRouter, 3 — нет ключа,\n5 — все модели упали.\n\nExample: llm decide \"Payouts failing for 3 days\" --questions q.json --routing routing.json --json",
         "options": [
           {
             "name": "--questions",
