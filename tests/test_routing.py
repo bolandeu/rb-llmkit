@@ -711,3 +711,23 @@ def test_usage_has_tags_but_no_keys_or_template_values(fake_kit, monkeypatch, tm
     assert json.loads(rows[0]["tags"])["level"] == "cheap"
     dump = json.dumps(rows, ensure_ascii=False)
     assert SECRET_KEY not in dump and "значение-переменной" not in dump
+
+
+# --- T138: task_id в конверте — ссылка на строку учёта (llm_call_ref у windmill) -------------------
+
+
+def _v1_task_ids(tmp_path) -> list[str]:
+    with sqlite3.connect(tmp_path / "usage.sqlite") as connection:
+        return [row[0] for row in connection.execute("SELECT task_id FROM llmkit_v1_calls ORDER BY id")]
+
+
+@pytest.mark.parametrize("command", ["ask", "json"])
+def test_t138_envelope_task_id_matches_usage(command, fake_kit, monkeypatch, tmp_path):
+    monkeypatch.setenv("LLM_OPENROUTER_API_KEY", "k")
+    fake_kit([anonymous('{"x": 1}')])
+    extra = ["--schema", str(_schema(tmp_path))] if command == "json" else []
+    result = run(command, "вопрос", *extra, "--routing", json.dumps(OPENROUTER), "--json")
+    assert result.exit_code == 0, result.output
+    task_id = payload(result)["task_id"]
+    assert task_id and [row["task_id"] for row in usage_rows(tmp_path)] == [task_id]
+    assert _v1_task_ids(tmp_path) == [task_id]
