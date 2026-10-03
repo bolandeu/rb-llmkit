@@ -8,6 +8,13 @@
 
 <!-- towncrier release notes start -->
 
+## [0.9.0] - 2026-10-03
+
+### Added
+
+- Конверт `--json` у `llm ask`, `llm json` и `llm decide` отдаёт `task_id` — тот же, что в `llmkit_calls.task_id` и `llmkit_v1_calls.task_id`: ссылка из результата вызова на строку учёта (Windmill: `llm_call_ref`). CLI теперь задаёт id каждому вызову (uuid4 hex); раньше `task_id` из CLI в учёте был пуст. В библиотеке без изменений: `Task.id` по-прежнему задаёт вызывающий.
+
+
 ## [0.8.1] - 2026-10-02
 
 ### Changed
