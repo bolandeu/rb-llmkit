@@ -1,0 +1,73 @@
+# Контракт потребителя: windmill → llmkit (consumer-driven), формат T18 static / run / view.
+# Источник — репо windmill; поставщик держит копию tests/contracts/windmill/llmkit.yaml и гоняет в гейте релиза.
+# Проверяется только то, на что опирается f/content/article (_llm) и f/shared/tools (реестр).
+contract: 1
+consumer: windmill
+provider: llmkit
+provider_range: ">=0.8,<1.0"
+contact: "агент windmill через dev"
+
+static:
+  commands:
+    - path: [ask]
+      arguments: [text]
+      options: [--routing, --template, --vars, --json]
+    - path: [json]
+      arguments: [text]
+      options: [--schema, --routing, --template, --vars, --json]
+    - path: [describe]
+      options: [--json]
+  root_options: [--version]
+  exit_codes: [0, 1, 2, 3, 5]   # 3 — нет ключа, 5 — все модели цепочки упали
+  env:                          # Windmill кладёт в env процесса (f/shared/tools → llmkit)
+    - LLM_<PROVIDER>_API_KEY    # T86: Windmill передаёт LLM_OPENROUTER_API_KEY (имя по x-rb-env)
+    - LLMKIT_DATABASE_URL
+    - LLMKIT_ROUTING_FILE       # routing_missing_is_exit_2 опирается на него
+  # HTTPS_PROXY / NO_PROXY Windmill тоже кладёт, но это стандартные переменные HTTP-клиента, не llmkit (x-rb-env)
+
+# Запуски — на офлайн-фикстурах поставщика (фейковый провайдер / кэш), без сети и денег.
+run:
+  - name: ask_template_routing_envelope
+    argv: [ask, --template, "{fixture_template}", --vars, '{"intent": {"text": "тест"}, "context": {"version": "v1", "knowledge": []}}',
+           --routing, "{fixture_routing}", --json]
+    exit: 0
+    stdout_json_schema: &answer
+      type: object
+      required: [model, cost_usd, attempts]
+      properties:
+        text: {type: string}
+        data: {}
+        model: {type: string}          # модель, которая реально ответила — пишется в версию материала
+        cost_usd: {type: [number, "null"]}
+        attempts: {type: array}        # неудачные попытки цепочки (model, error_code)
+        chain_position: {type: integer}
+      anyOf: [{required: [text]}, {required: [data]}]
+
+  - name: fallback_to_second_model
+    # первая модель цепочки фикстуры падает → ответила вторая, attempts содержит упавшую
+    argv: [ask, тест, --routing, "{fixture_routing_first_broken}", --json]
+    exit: 0
+    stdout_json_schema: *answer
+
+  - name: json_with_schema
+    argv: [json, тест, --schema, "{fixture_judge_schema}", --routing, "{fixture_routing}", --json]
+    exit: 0
+    stdout_json_schema:
+      type: object
+      required: [data, model, cost_usd]
+      properties: {data: {type: object, required: [verdict, remarks]}}
+
+  - name: routing_missing_is_exit_2
+    argv: [ask, тест, --json]
+    env_unset: [LLMKIT_ROUTING_FILE]
+    exit: 2
+
+  - name: whole_chain_failed_is_exit_5
+    argv: [ask, тест, --routing, "{fixture_routing_all_broken}", --json]
+    exit: 5
+
+  - name: template_variable_missing_is_exit_2
+    argv: [ask, --template, "{fixture_template_needs_x}", --vars, "{}", --routing, "{fixture_routing}", --json]
+    exit: 2
+
+view: []
