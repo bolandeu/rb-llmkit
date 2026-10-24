@@ -3,16 +3,11 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import sys
 import time
-from collections import Counter
 from collections.abc import Awaitable, Callable, Sequence
-from dataclasses import dataclass, field
 from typing import Any
-
-from pydantic import BaseModel
 
 from . import cache as cache_mod
 from . import chain as chain_mod
@@ -20,8 +15,19 @@ from . import config as config_mod
 from . import providers as providers_mod
 from . import routing as routing_mod
 from .cache import Cache
+from .callutil import (
+    default_instructor_factory,
+    load_litellm,
+    mask,
+    messages_of,
+    parse_json,
+    provider_cost,
+    text_of,
+    warn_unknown,
+)
 from .config import Config
 from .errors import AllModelsFailed, ConfigError, KeyMissing, LlmKitError, RoutingInvalid, RoutingMissing
+from .models import Answer, Attempt, Outcome, Stats, Task, totals
 from .routing import Routing
 from .usage import Usage
 
@@ -34,184 +40,9 @@ _warned_prices: set[str] = set()
 _warned_budgets: set[str] = set()
 
 
-@dataclass(frozen=True)
-class Task:
-    """Один вызов LLM: что спрашиваем, по какой схеме, чем платим."""
-
-    user: str | None = None
-    system: str | None = None
-    messages: list[dict] | None = None
-    schema: type[BaseModel] | dict | None = None  # None = обычный текст
-    chain: list[str] | None = None  # вместо routing.chain; провайдеры — из routing
-    tags: dict[str, str] = field(default_factory=dict)
-    default: Any = None
-    temperature: float | None = None
-    max_tokens: int | None = None
-    timeout: float | None = None
-    cache: bool | None = None
-    retry: bool = True
-    id: str | None = None
-
-
-@dataclass
-class Attempt:
-    """Одна попытка одной модели."""
-
-    model: str
-    provider: str
-    error_type: str | None = None
-    error: str | None = None
-    latency_ms: int = 0
-    prompt_tokens: int = 0
-    completion_tokens: int = 0
-    cost_usd: float | None = 0.0  # None — цена неизвестна
-    cost_source: str | None = None  # как у Answer
-    billable: bool = False  # провайдер списал вызов: ответ получен (в т.ч. неразобранный) или подписка
-
-
-@dataclass
-class Answer:
-    """Результат задачи и откуда он взялся."""
-
-    data: Any
-    source: str  # llm | cache | default
-    model: str = ""  # элемент цепочки, который ответил: "провайдер/модель"
-    provider: str = ""
-    attempts: list[Attempt] = field(default_factory=list)
-    prompt_tokens: int = 0
-    completion_tokens: int = 0
-    cost_usd: float | None = 0.0  # стоимость ответившей попытки; None — цена неизвестна
-    # provider (списано, из ответа) | price_table (цена × токены: routing.prices, затем LiteLLM)
-    # | subscription | cache | None (неизвестно)
-    cost_source: str | None = "price_table"
-    latency_ms: int = 0
-    warnings: list[str] = field(default_factory=list)
-    error: str | None = None
-    task_id: str | None = None
-    # Версия, которую назвал провайдер (за алиасом вида `~…-latest`); не назвал — `model`.
-    served_model: str = ""
-    chain_position: int = 0  # 0-based номер ответившей модели в цепочке
-    billable_requests: int = 0  # платные вызовы провайдера за задачу: все попытки с `billable`
-    cost_total: float | None = 0.0  # сумма по платным попыткам; None — цена хоть одной неизвестна
-
-    @property
-    def ok(self) -> bool:
-        return self.source in ("llm", "cache")
-
-    @property
-    def cache_hit(self) -> bool:
-        return self.source == "cache"
-
-    @property
-    def cost_known(self) -> bool:
-        return self.cost_source is not None
-
-
-@dataclass
-class Stats:
-    """Итоги за время жизни экземпляра `LlmKit`."""
-
-    calls: int = 0
-    cached: int = 0
-    failed: int = 0
-    fallbacks: int = 0
-    prompt_tokens: int = 0
-    completion_tokens: int = 0
-    cost_usd: float = 0.0
-    seconds: float = 0.0
-    by_model: Counter = field(default_factory=Counter)
-
-
-@dataclass
-class _Outcome:
-    """Успешный сетевой вызов: данные плюс всё для учёта."""
-
-    data: Any
-    cache_value: Any
-    prompt_tokens: int = 0
-    completion_tokens: int = 0
-    cost_usd: float | None = 0.0
-    cost_source: str | None = "price_table"
-    served_model: str = ""
-
-    @property
-    def billable(self) -> bool:
-        """Провайдер списал ответ. Ответ без токенов ответа не списывается (zero completion insurance OpenRouter)."""
-        if self.cost_source == "provider":
-            return bool(self.cost_usd)
-        return self.cost_source == "subscription" or self.completion_tokens > 0
-
-
-def _totals(attempts: list[Attempt]) -> tuple[int, float | None]:
-    """billable_requests и cost_total по попыткам задачи."""
-    billable = [attempt for attempt in attempts if attempt.billable]
-    if any(attempt.cost_usd is None for attempt in billable):
-        return len(billable), None
-    return len(billable), sum(attempt.cost_usd or 0.0 for attempt in billable)
-
-
-def _warn_unknown(warnings: list[str], ref: str) -> None:
-    message = f"price unknown for {ref}"
-    if message not in warnings:
-        warnings.append(message)
-
-
-def _parse_json(text: str) -> Any:
-    try:
-        return json.loads(text)
-    except ValueError as exc:
-        raise chain_mod.JsonParseFailed(f"ответ не разобрался как JSON: {exc}") from exc
-
-
-# Сюда LiteLLM кладёт `usage.cost` из ответа OpenRouter (llms/openrouter/chat/transformation.py).
-_LITELLM_COST_HEADER = "llm_provider-x-litellm-response-cost"
-
-
-def _provider_cost(response: Any) -> float | None:
-    """Сколько списал провайдер по его ответу: `usage.cost` (OpenRouter отдаёт всегда) или он же у LiteLLM."""
-    value = getattr(getattr(response, "usage", None), "cost", None)
-    if value is None:
-        hidden = getattr(response, "_hidden_params", None)
-        headers = hidden.get("additional_headers") if isinstance(hidden, dict) else None
-        value = headers.get(_LITELLM_COST_HEADER) if isinstance(headers, dict) else None
-    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
-        return None
-    try:
-        return float(value)
-    except ValueError:
-        return None
-
-
 async def _sleep(seconds: float) -> None:
     """Пауза перед повтором; тесты подменяют эту функцию."""
     await asyncio.sleep(seconds)
-
-
-def _litellm():
-    """Ленивый импорт LiteLLM с заглушённым шумом (раздел 9)."""
-    import litellm
-
-    litellm.suppress_debug_info = True
-    logging.getLogger("LiteLLM").setLevel(logging.WARNING)
-    return litellm
-
-
-def _instructor():
-    """Ленивый импорт Instructor; его логгер тоже приглушаем."""
-    import instructor
-
-    logging.getLogger("instructor").setLevel(logging.WARNING)
-    return instructor
-
-
-def _default_instructor_factory(completion: Callable[..., Any], mode: str) -> Any:
-    """Клиент Instructor поверх функции вызова модели."""
-    instructor = _instructor()
-    try:
-        enum_mode = instructor.Mode[mode]
-    except KeyError:
-        raise ConfigError(f"неизвестный режим Instructor {mode!r}") from None
-    return instructor.from_litellm(completion, mode=enum_mode)
 
 
 def _strict_ok(schema: Any) -> bool:
@@ -227,11 +58,6 @@ def _strict_ok(schema: Any) -> bool:
         if schema.get("additionalProperties") is not False or set(schema.get("required") or []) != set(props):
             return False
     return all(_strict_ok(value) for key, value in schema.items() if key not in ("required", "enum", "const"))
-
-
-def _mask(text: str, secret: str | None) -> str:
-    """Убрать ключ провайдера из текста ошибки перед записью куда бы то ни было."""
-    return text.replace(secret, "***") if secret else text
 
 
 class _BudgetTracker:
@@ -314,7 +140,7 @@ class LlmKit:
         self.usage = Usage(self.config.usage_path())
         self._completion = completion
         self._decisions = decisions
-        self._instructor_factory = instructor_factory or _default_instructor_factory
+        self._instructor_factory = instructor_factory or default_instructor_factory
         self._instructor_clients: dict[tuple[str, Any], Any] = {}
         self._stats = Stats()
 
@@ -332,7 +158,7 @@ class LlmKit:
         попытки по порядку. Всё упало — `default` или `AllModelsFailed`.
         """
         started = time.perf_counter()
-        messages = self._messages(task)
+        messages = messages_of(task)
         routing, chain = self._chain(task)
         level = None  # уровней нет; метка level, если нужна, — в tags
         tags = {**self.tags, **task.tags}
@@ -377,7 +203,7 @@ class LlmKit:
                 )
                 return self._done(answer, started, position, tags)
 
-        async def invoke(call: providers_mod.ModelCall) -> _Outcome:
+        async def invoke(call: providers_mod.ModelCall) -> Outcome:
             outcome = await self._call_model(call, messages, task, settings)
             key = cache_keys.get(call.ref)
             if cache_enabled and key:
@@ -405,7 +231,7 @@ class LlmKit:
         timeout = self.config.defaults.timeout if task.timeout is None else task.timeout
         tags = {**self.tags, **task.tags}
 
-        async def invoke(call: providers_mod.ModelCall) -> _Outcome:
+        async def invoke(call: providers_mod.ModelCall) -> Outcome:
             return await self._call_decisions(call, state, questions, timeout)
 
         return await self._through_chain(task, routing, chain, tags, None, started, [], [], invoke)
@@ -432,7 +258,7 @@ class LlmKit:
         started: float,
         attempts: list[Attempt],
         warnings: list[str],
-        invoke: Callable[[providers_mod.ModelCall], Awaitable[_Outcome]],
+        invoke: Callable[[providers_mod.ModelCall], Awaitable[Outcome]],
     ) -> Answer:
         """Сетевые попытки по цепочке: ретраи, журнал, бюджет; всё упало — default или AllModelsFailed."""
         budget = await self._budget_tracker(tags)
@@ -460,10 +286,10 @@ class LlmKit:
                         raise  # не ошибка провайдера, а наш баг — не маскируем
                     latency = int((time.perf_counter() - begin) * 1000)
                     billed = getattr(exc, "billed", None)
-                    if isinstance(billed, _Outcome) and billed.billable:
+                    if isinstance(billed, Outcome) and billed.billable:
                         budget.add(billed.cost_usd or 0.0)
                         if billed.cost_usd is None:
-                            _warn_unknown(warnings, call.ref)
+                            warn_unknown(warnings, call.ref)
                     await self._fail(
                         task,
                         tags,
@@ -476,7 +302,7 @@ class LlmKit:
                         retry_index,
                         latency,
                         secret,
-                        billed if isinstance(billed, _Outcome) else None,
+                        billed if isinstance(billed, Outcome) else None,
                     )
                     allowed = chain_mod.retries_for(error_type, self.config.retry, exc) if task.retry else 0
                     if retry_index < allowed:
@@ -490,7 +316,7 @@ class LlmKit:
                 latency = int((time.perf_counter() - begin) * 1000)
                 budget.add(outcome.cost_usd or 0.0)
                 if outcome.cost_usd is None:
-                    _warn_unknown(warnings, call.ref)
+                    warn_unknown(warnings, call.ref)
                 attempts.append(
                     Attempt(
                         model=call.ref,
@@ -520,7 +346,7 @@ class LlmKit:
                     latency_ms=latency,
                     served_model=outcome.served_model or call.ref,
                 )
-                billable_requests, cost_total = _totals(attempts)
+                billable_requests, cost_total = totals(attempts)
                 answer = Answer(
                     data=outcome.data,
                     source="llm",
@@ -540,7 +366,7 @@ class LlmKit:
                 )
                 return self._done(answer, started, position, tags)
 
-        billable_requests, cost_total = _totals(attempts)
+        billable_requests, cost_total = totals(attempts)
         answer = Answer(
             data=task.default,
             source="default",
@@ -677,17 +503,6 @@ class LlmKit:
             "timeout": defaults.timeout if task.timeout is None else task.timeout,
         }
 
-    def _messages(self, task: Task) -> list[dict]:
-        if task.messages:
-            return [dict(message) for message in task.messages]
-        if not task.user:
-            raise LlmKitError("задаче нужен user или messages")
-        messages = []
-        if task.system:
-            messages.append({"role": "system", "content": task.system})
-        messages.append({"role": "user", "content": task.user})
-        return messages
-
     def _done(self, answer: Answer, started: float, position: int, tags: dict[str, str]) -> Answer:
         """Досчитать статистику, записать строку INFO и отдать ответ."""
         self._finish(answer, started, position)
@@ -751,14 +566,14 @@ class LlmKit:
         retry_index: int,
         latency_ms: int = 0,
         secret: str | None = None,
-        billed: _Outcome | None = None,
+        billed: Outcome | None = None,
     ) -> str:
         """Записать провалившуюся попытку в `attempts`, usage и лог.
 
         `billed` — ответ, который пришёл, но не годится (пустой, отфильтрован, не JSON):
         провайдер его списал, если в нём есть токены ответа или цена.
         """
-        message = _mask(f"{type(exc).__name__}: {exc}", secret)[:500]
+        message = mask(f"{type(exc).__name__}: {exc}", secret)[:500]
         spent = billed if billed is not None and billed.billable else None
         attempts.append(
             Attempt(
@@ -819,11 +634,11 @@ class LlmKit:
 
     async def _call_model(
         self, call: providers_mod.ModelCall, messages: list[dict], task: Task, settings: dict
-    ) -> _Outcome:
+    ) -> Outcome:
         # Подмена из тестов → свой транспорт провайдера по подписке → LiteLLM.
         completion = self._completion or call.completion
         if completion is None:
-            completion = _litellm().acompletion
+            completion = load_litellm().acompletion
         kwargs = {
             "model": call.litellm_model,
             "messages": messages,
@@ -838,7 +653,7 @@ class LlmKit:
             kwargs["drop_params"] = True
         if task.schema is None:
             response = await completion(**kwargs)
-            text = self._billed(call, response, lambda: self._text_of(response))
+            text = self._billed(call, response, lambda: text_of(response))
             return self._outcome(call, response, data=text, cache_value=text)
         if isinstance(task.schema, dict):
             response = await completion(
@@ -848,7 +663,7 @@ class LlmKit:
                 },
                 **kwargs,
             )
-            data = self._billed(call, response, lambda: _parse_json(self._text_of(response)))
+            data = self._billed(call, response, lambda: parse_json(text_of(response)))
             return self._outcome(call, response, data=data, cache_value=data)
         return await self._call_structured(call, messages, task, kwargs, completion)
 
@@ -867,7 +682,7 @@ class LlmKit:
         task: Task,
         kwargs: dict,
         completion: Callable[..., Any],
-    ) -> _Outcome:
+    ) -> Outcome:
         """JSON по pydantic-схеме через Instructor: ретраи внутри вызова."""
         key = (call.mode, completion)
         client = self._instructor_clients.get(key)
@@ -883,26 +698,13 @@ class LlmKit:
         cache_value = dump(mode="json") if callable(dump) else data
         return self._outcome(call, response, data=data, cache_value=cache_value)
 
-    @staticmethod
-    def _text_of(response: Any) -> str:
-        choices = getattr(response, "choices", None) or []
-        if not choices:
-            raise chain_mod.EmptyResponse("провайдер вернул ответ без choices")
-        choice = choices[0]
-        if getattr(choice, "finish_reason", None) == "content_filter":
-            raise chain_mod.ContentFiltered("ответ отклонён контент-фильтром провайдера")
-        text = getattr(getattr(choice, "message", None), "content", None) or ""
-        if not text.strip():
-            raise chain_mod.EmptyResponse("модель вернула пустой ответ")
-        return text
-
-    def _outcome(self, call: providers_mod.ModelCall, response: Any, *, data: Any, cache_value: Any) -> _Outcome:
+    def _outcome(self, call: providers_mod.ModelCall, response: Any, *, data: Any, cache_value: Any) -> Outcome:
         usage = getattr(response, "usage", None)
         prompt_tokens = int(getattr(usage, "prompt_tokens", 0) or 0)
         completion_tokens = int(getattr(usage, "completion_tokens", 0) or 0)
         cost, source = self._cost(call, response, prompt_tokens, completion_tokens)
         served = getattr(response, "model", None)
-        return _Outcome(
+        return Outcome(
             data=data,
             cache_value=cache_value,
             prompt_tokens=prompt_tokens,
@@ -923,7 +725,7 @@ class LlmKit:
         """
         if call.subscription:
             return 0.0, "subscription"  # оплачено подпиской, отдельного счёта за вызов нет
-        charged = _provider_cost(response)
+        charged = provider_cost(response)
         if charged is not None:
             return charged, "provider"
         from_routing = self._routing_price(call, prompt_tokens, completion_tokens)
@@ -932,7 +734,7 @@ class LlmKit:
         cost = 0.0
         # litellm импортируем только если он и так в игре: с подменённым
         # `completion` (тесты) модуль тянуть незачем.
-        litellm = sys.modules.get("litellm") or (_litellm() if self._completion is None else None)
+        litellm = sys.modules.get("litellm") or (load_litellm() if self._completion is None else None)
         if litellm is not None:
             try:
                 cost = float(litellm.completion_cost(completion_response=response) or 0.0)
@@ -961,7 +763,7 @@ class LlmKit:
 
     async def _call_decisions(
         self, call: providers_mod.ModelCall, state: str, questions: dict[str, Any], timeout: float
-    ) -> _Outcome:
+    ) -> Outcome:
         # Подмена из тестов → транспорт эндпоинта решений.
         decide = self._decisions
         if decide is None:
@@ -983,7 +785,7 @@ class LlmKit:
                 cost, source = from_routing, "price_table"
             else:
                 cost, source = self._unknown_price(call, prompt_tokens, completion_tokens)
-        return _Outcome(
+        return Outcome(
             data=body["answers"],
             cache_value=None,
             prompt_tokens=prompt_tokens,
