@@ -4,7 +4,7 @@ import typer
 
 # Импорт модулей регистрирует их команды на `app`; порядок импорта — порядок в справке.
 # isort: off
-from . import ask, render, models, cost, serve, describe  # noqa: F401
+from . import ask, render, models, cost, serve, describe, doctor  # noqa: F401
 
 # isort: on
 from ..version import installed_version

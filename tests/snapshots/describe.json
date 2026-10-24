@@ -1053,6 +1053,26 @@
         ]
       },
       {
+        "name": "doctor",
+        "description": "Проверить, готов ли llm к работе: версия, конфиг, routing, база расходов, внешние программы.\n\nПроверки локальные, без сети и без вызовов моделей (доступы провайдеров — `llm auth status`).\nОтчёт — результат команды: код выхода 0, даже если `healthy` ложно.\nФорма `--json`: `healthy` и `checks[]` с `name`, `ok`, `detail`.\n\nExample: llm doctor --json",
+        "options": [
+          {
+            "name": "--json",
+            "description": "Машинный вывод: JSON-конверт в stdout.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "boolean"
+              },
+              {
+                "name": "x-rb-default",
+                "value": false
+              }
+            ]
+          }
+        ]
+      },
+      {
         "name": "keys",
         "description": "Ключи провайдеров: связка ключей ОС и переменные окружения.",
         "commands": [
