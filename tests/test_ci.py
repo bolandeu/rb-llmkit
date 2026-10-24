@@ -16,6 +16,7 @@ GATE = (
     f'@{TEMPLATE_TAG}#subdirectory=gate" rb-release check'
 )
 
+
 def test_no_github_workflow() -> None:
     assert not (ROOT / ".github").exists()
 
