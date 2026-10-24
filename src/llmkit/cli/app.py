@@ -2,9 +2,12 @@
 
 import typer
 
+from .output import RootGroup
+
 DESCRIPTION = "llmkit: вызовы LLM с цепочками моделей, кэшем и учётом расходов"
 
 app = typer.Typer(
+    cls=RootGroup,
     name="llm",
     help=(
         f"{DESCRIPTION}.\n\n"

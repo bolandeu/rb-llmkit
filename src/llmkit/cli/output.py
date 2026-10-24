@@ -14,9 +14,11 @@ import logging
 import sys
 from collections.abc import Callable
 from contextlib import contextmanager
+from typing import NoReturn, cast
 
 import typer
 from rich.console import Console
+from typer.core import TyperGroup
 
 from ..errors import (
     AllModelsFailed,
@@ -33,6 +35,9 @@ from ..errors import (
 # Консоли: данные — в stdout, всё остальное — в stderr.
 out = Console()
 err = Console(stderr=True)
+
+# Базовый класс ошибок использования Click (UsageError): у Typer он общий для BadParameter и NoSuchOption.
+_UsageError = cast("type[Exception]", typer.BadParameter.__bases__[0])
 
 JsonOption = typer.Option(False, "--json", help="Машинный вывод: JSON-конверт в stdout.")
 
@@ -218,3 +223,36 @@ def group(name: str, help_text: str) -> typer.Typer:
             raise typer.Exit(0)
 
     return app
+
+
+class RootGroup(TyperGroup):
+    """Корневая группа: ошибка использования под `--json` — конверт INVALID_ARGUMENTS, код 2.
+
+    Click ловит её при разборе аргументов, до тела команды, поэтому `guard` её не видит:
+    аргументы корня падают в `make_context`, аргументы подкоманды — в `invoke`.
+    """
+
+    def make_context(self, info_name, args, parent=None, **extra):
+        argv = list(args)  # Click съедает `args` при разборе
+        try:
+            ctx = super().make_context(info_name, args, parent, **extra)
+        except _UsageError as exc:
+            _usage_error(exc, argv)
+        ctx.meta["argv"] = argv
+        return ctx
+
+    def invoke(self, ctx):
+        try:
+            return super().invoke(ctx)
+        except _UsageError as exc:
+            _usage_error(exc, ctx.meta["argv"])
+
+
+def _usage_error(exc: Exception, argv: list[str]) -> NoReturn:
+    """Под `--json` до `--`: конверт на stdout и код 2; иначе обычное сообщение Click."""
+    options = argv[: argv.index("--")] if "--" in argv else argv
+    if "--json" not in options:
+        raise exc
+    envelope = {"ok": False, "error": {"code": "INVALID_ARGUMENTS", "message": str(exc)}}
+    print(json.dumps(envelope, ensure_ascii=False, indent=2))
+    raise typer.Exit(2)
