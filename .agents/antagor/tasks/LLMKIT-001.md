@@ -2,7 +2,7 @@
 id: LLMKIT-001
 title: 'ask_many(raise_on_error): raise AllModelsFailed, not ExceptionGroup, on Python
   3.11.2'
-status: ideas
+status: queue
 attempts: 0
 blocked: false
 blocked_reason: null
@@ -10,7 +10,7 @@ phase: null
 tests_hash: null
 publish_stage: null
 created_by: architect
-approved_by: null
+approved_by: architect
 worker: claude-code
 type: bugfix
 owns_paths:
