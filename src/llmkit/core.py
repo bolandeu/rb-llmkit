@@ -618,9 +618,13 @@ class LlmKit:
         try:
             async with asyncio.TaskGroup() as group:
                 running = [group.create_task(one(task)) for task in tasks]
-        except* AllModelsFailed as errors:
-            # TaskGroup уже отменил остальные задачи — наружу отдаём первую ошибку.
-            raise errors.exceptions[0] from None
+        except BaseExceptionGroup as group:
+            # TaskGroup уже отменил остальные задачи — наружу отдаём первую ошибку. Не `except*`: на Python 3.11.2
+            # исключение, брошенное из его тела, снова оборачивается в ExceptionGroup.
+            failed = group.subgroup(AllModelsFailed)
+            if failed is None:
+                raise
+            raise failed.exceptions[0] from None
         return [item.result() for item in running]
 
     @staticmethod
