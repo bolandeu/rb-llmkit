@@ -280,3 +280,31 @@ def test_version_falls_back_to_legacy_distribution_name(monkeypatch):
 
 def test_help_output_is_the_same_in_ci(same_in_ci) -> None:
     same_in_ci("test_help_documents_exit_codes or test_bare_call_prints_help_with_zero")
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["--json", "render", "--no-such-option"],
+        ["render", "--json", "--no-such-option"],
+        ["--json", "--no-such-option"],
+    ],
+)
+def test_usage_error_under_json_is_the_envelope(argv):
+    result = run(*argv)
+    assert result.exit_code == 2
+    body = payload(result)
+    assert body["ok"] is False and body["error"]["code"] == "INVALID_ARGUMENTS" and body["error"]["message"]
+
+
+def test_usage_error_without_json_stays_the_usage_message():
+    result = run("render", "--no-such-option")
+    assert result.exit_code == 2
+    assert not result.stdout.lstrip().startswith("{")
+    assert "No such option" in result.output
+
+
+def test_usage_error_after_double_dash_json_is_not_a_flag():
+    result = run("render", "--no-such-option", "--", "--json")
+    assert result.exit_code == 2
+    assert "No such option" in result.output
