@@ -6,13 +6,15 @@
 импорт-пакет — `llmkit`, команда — `llm`.
 
 - Спецификация — `docs/prd.md`, она главнее этого файла.
-- Планы — `docs/backlog.md`, сделанное — `CHANGELOG.md` (собирается из `changelog.d/`).
+- Стандарт CLI — [standard.md](https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator/src/branch/main/skills/cli-builder/reference/standard.md); пакет приведён к шаблону v1.27.3.
+- Планы — `docs/backlog.md`, сделанное — `CHANGELOG.md` (пишет `antagor publish`, руками не правится).
 
 ## Команды
 
 ```bash
 uv sync                              # после переименования в rb-llmkit один раз: uv sync --reinstall-package rb-llmkit
-uv run scripts/release.py --check   # весь гейт: lock, ruff, ty, pytest, изменённые тесты, фрагмент, сборка колеса — перед каждым коммитом
+# Гейт стандарта — шаг `rb-release check` в .gitea/workflows/ci.yml (команда записана только там); её же запускать перед релизом.
+uv run ruff check . && uv run ruff format --check . && uv run ty check   # быстрая проверка перед коммитом
 uv run pytest -q                    # только тесты
 uv run python -X importtime -c "import llmkit" 2>&1 | tail -1   # должно быть < 300 мс
 ```
@@ -48,20 +50,20 @@ uv run python -X importtime -c "import llmkit" 2>&1 | tail -1   # должно �
 Стандарт — `~/Work/tools/docs/standard-release.md`.
 
 - Версия только из git-тега `vX.Y.Z`, строки `version =` в `pyproject.toml` нет.
-  Релиз — `uv run scripts/release.py patch|minor|major` с чистого `main`; никто
-  из агентов здесь не пушит — релиз отчитывается корневому агенту (см.
+  Релиз — `antagor publish --main --bump patch|minor|major` (его deploy с push
+  выпускает Архитектор проекта); о релизе — отчёт корневому агенту (см.
   «Инструмент в системе»); в отчёте — красный прогон новых тестов и каждая
-  строка `existing tests` с причиной (TDD выше). SemVer на `0.x`: исправление или
+  строка `existing tests` гейта с причиной (TDD выше). SemVer на `0.x`: исправление или
   совместимая функция — patch, ломающее (Python API, команды, флаги, форма
   `--json`, коды выхода и ошибок) — minor.
-- `CHANGELOG.md` руками не правится: на каждое заметное изменение —
-  `uv run towncrier create +<slug>.<type>.md -c "..."` (types: added, changed,
-  deprecated, removed, fixed, security; в slug без точек).
+- `CHANGELOG.md` руками не правится: его пишет `antagor publish`.
 - Докстринг команды — её `--help`: поменял поведение команды — поправь
   докстринг в том же коммите (строка `Example: llm ...` обязательна, у каждого
   параметра `help=`), затем `uv run pytest --snapshot-update` и просмотри
-  `tests/snapshots/help/`. Это проверяют хуки (`.claude/settings.json`,
-  `.githooks/pre-commit`, подключение — `scripts/install_hooks.sh`) и тесты.
+  `tests/snapshots/help/`. Это проверяют `scripts/check_command_docstrings.py`
+  (строка `checks` Antagor) и тесты.
+- `llm doctor --json` — отчёт о готовности (Standard, Health): `healthy`, `checks[]`; реализация — `src/llmkit/doctor.py`,
+  тесты — `tests/test_doctor.py`.
 - `llm auth status [--check] --json` — общий контракт инструментов (§8),
   форму фиксирует `tests/test_health.py`; реализация — `src/llmkit/health.py`.
 - `llm describe --json` — контракт CLI документом OpenCLI для каталога tools и
@@ -83,8 +85,7 @@ uv run python -X importtime -c "import llmkit" 2>&1 | tail -1   # должно �
   `tests/contracts/fixtures.yaml` (плейсхолдеры → `tests/contracts/data/`) и фикстура
   `contract_offline` в `tests/conftest.py` (фейковый провайдер `contract`). Кейс не
   проходит из-за поведения CLI — не подгонять контракт, сообщить tools.
-- `scripts/release.py` — копия из cli-generator (сейчас v1.8.1), не править; единственное
-  местное отличие шаблонных скриптов — поиск команд в
+- Единственное местное отличие шаблонных скриптов — поиск команд в
   `scripts/check_command_docstrings.py` (`src/*/cli/*.py`, `with guard(ctx):`).
 
 ## Конвенции
@@ -134,11 +135,11 @@ uv run python -X importtime -c "import llmkit" 2>&1 | tail -1   # должно �
 ## Каждое заметное изменение выходит релизом
 
 Серверы, другие инструменты и Mac ставят только по тегам, не из `main`:
-влитое без релиза изменение для них не существует. Изменение с фрагментом
-changelog закончено только после релиза: влить в `main` →
-`uv run scripts/release.py patch|minor|major` → отчитать релиз корневому
+влитое без релиза изменение для них не существует. Заметное изменение
+закончено только после релиза: влить в `main` →
+`antagor publish --main --bump patch|minor|major` → отчитать релиз корневому
 агенту (ниже) → назвать новый тег в отчёте. Служебные коммиты
-(без фрагмента) ждут следующего релиза. Не оставлять фрагмент на `main` без
+ждут следующего релиза. Не оставлять заметное изменение на `main` без
 релиза, не назвав причину (`~/Work/tools/docs/standard-release.md` §3).
 
 ## Инструмент в системе
@@ -150,7 +151,7 @@ changelog закончено только после релиза: влить в
 - **Здесь никто не пушит; релизы и вопросы — через корневого агента**, не
   пользователю в этом окне. Релиз или ветка готовы →
   `~/Work/tools/scripts/agent_say.sh tools "<репо, ветка, теги, что внутри,
-  результат release.py --check, красный прогон, изменённые существующие тесты
+  результат шага `rb-release check`, красный прогон, изменённые существующие тесты
   с причинами>"`, одно сообщение на тег. Корневой агент
   проверяет и ставит в очередь dev; dev показывает пользователю и после его
   «да» пушит; затем корневой агент ставит релиз на Mac и homeserver. Самому

@@ -1,12 +1,9 @@
 # Changelog
 
-Обратный хронологический порядок. Файл не правится руками: каждое изменение
-добавляет фрагмент `changelog.d/+<slug>.<type>.md`
-(`uv run towncrier create +<slug>.<type>.md -c "..."`), а `scripts/release.py`
-собирает их в раздел новой версии. Разделы по датам ниже — история до v0.2.0.
-Планы и отложенное — в docs/backlog.md.
+All notable changes to this project are documented here. Versions follow
+[SemVer](https://semver.org/) (while at `0.x`, a minor bump may break).
 
-<!-- towncrier release notes start -->
+The changelog is written by `antagor publish`; don't edit it by hand.
 
 ## [0.10.0] - 2026-10-03
 

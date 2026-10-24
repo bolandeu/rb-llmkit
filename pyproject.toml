@@ -31,7 +31,7 @@ serve = ["fastapi", "uvicorn"]
 llm = "llmkit.cli.main:main"
 
 [project.urls]
-Repository = "https://github.com/bolandeu/llmkit"
+Repository = "https://homeserver.tailee01ab.ts.net:3000/bolandeu/llmkit"
 
 [build-system]
 requires = ["hatchling", "uv-dynamic-versioning"]
@@ -50,7 +50,7 @@ fallback-version = "0.0.0"
 cache-keys = [{ file = "pyproject.toml" }, { git = { commit = true, tags = true } }]
 
 [tool.cli-generator]
-# Где scripts/check_command_docstrings.py (git pre-commit + хуки Claude Code) ищет
+# Где scripts/check_command_docstrings.py (checks Antagor) ищет
 # команды: у llmkit они в src/*/cli/*.py (не commands/), регистрация — `@app.command`.
 commands = "src/*/cli/*.py"
 
@@ -87,48 +87,8 @@ dev = [
     "pyyaml>=6.0",
     "ruff>=0.6",
     "syrupy>=4.8",
-    "towncrier>=24.8",
     "ty>=0.0.80",
 ]
-
-# Changelog из фрагментов: каждое изменение — файл changelog.d/+<slug>.<type>.md
-# (`uv run towncrier create +<slug>.<type>.md -c "..."`); собирает scripts/release.py.
-[tool.towncrier]
-filename = "CHANGELOG.md"
-directory = "changelog.d"
-start_string = "<!-- towncrier release notes start -->\n"
-title_format = "## [{version}] - {project_date}"
-issue_format = "#{issue}"
-
-[[tool.towncrier.type]]
-directory = "added"
-name = "Added"
-showcontent = true
-
-[[tool.towncrier.type]]
-directory = "changed"
-name = "Changed"
-showcontent = true
-
-[[tool.towncrier.type]]
-directory = "deprecated"
-name = "Deprecated"
-showcontent = true
-
-[[tool.towncrier.type]]
-directory = "removed"
-name = "Removed"
-showcontent = true
-
-[[tool.towncrier.type]]
-directory = "fixed"
-name = "Fixed"
-showcontent = true
-
-[[tool.towncrier.type]]
-directory = "security"
-name = "Security"
-showcontent = true
 
 [tool.pytest.ini_options]
 # Только tests/: mutmut оставляет копию дерева в mutants/.
@@ -138,7 +98,7 @@ addopts = "--cov --cov-report=term-missing:skip-covered"
 
 [tool.mutmut]
 source_paths = ["src/llmkit"]
-also_copy = ["scripts/", "pyproject.toml"]  # их читают тесты (test_scripts.py, проверки дистрибутива)
+also_copy = ["scripts/", "pyproject.toml"]  # их читают тесты (проверки дистрибутива)
 pytest_add_cli_args = ["--no-cov"]  # fail_under убил бы каждого мутанта
 # only_mutate = ["*/db/normalize.py"]  # по модулю за раз
 

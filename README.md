@@ -325,7 +325,7 @@ print(kit.stats)  # итоги за время жизни экземпляра
 
 ## Разработка
 
-Базовые команды (`uv sync`, `uv run scripts/release.py --check`) и порядок
+Базовые команды (`uv sync`, гейт — шаг `rb-release check` в `.gitea/workflows/ci.yml`) и порядок
 релиза — в [AGENTS.md](AGENTS.md). Дополнительно:
 
 ```bash
