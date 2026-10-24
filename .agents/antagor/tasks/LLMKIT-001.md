@@ -2,7 +2,7 @@
 id: LLMKIT-001
 title: 'ask_many(raise_on_error): raise AllModelsFailed, not ExceptionGroup, on Python
   3.11.2'
-status: publish
+status: done
 attempts: 2
 blocked: false
 blocked_reason: null

@@ -5,6 +5,12 @@ All notable changes to this project are documented here. Versions follow
 
 The changelog is written by `antagor publish`; don't edit it by hand.
 
+## v0.11.0 — 2026-10-24
+
+### Outside epics
+
+- ask_many(raise_on_error): raise AllModelsFailed, not ExceptionGroup, on Python 3.11.2 (LLMKIT-001)
+
 ## [0.10.0] - 2026-10-03
 
 ### Changed
