@@ -124,6 +124,20 @@ class FakeCompletion:
 
 
 @pytest.fixture(autouse=True)
+def _plain_terminal(monkeypatch):
+    """Справка без цвета и с фиксированной шириной, как бы ни был настроен CI: Typer форсирует терминал при импорте."""
+    import typer.rich_utils
+
+    from llmkit.cli import output
+
+    monkeypatch.setattr(typer.rich_utils, "FORCE_TERMINAL", False)
+    # Консоли llmkit создаются при импорте и тоже читают FORCE_COLOR.
+    for console in (output.out, output.err):
+        monkeypatch.setattr(console, "_force_terminal", False)
+        monkeypatch.setattr(console, "_color_system", None)
+
+
+@pytest.fixture(autouse=True)
 def isolated(tmp_path, monkeypatch):
     """Настройки, кэш и журнал — только во временном каталоге; routing — только явно."""
     from llmkit import config as config_mod
