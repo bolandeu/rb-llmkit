@@ -15,6 +15,8 @@ src/llmkit/
   usage.py      журнал вызовов, отчёты, бюджеты — таблица llmkit_calls
   db/           слой БД: PostgreSQL из LLMKIT_DATABASE_URL или SQLite, миграции Alembic
   core.py       LlmKit: ask / generate / ask_many и sync-обёртки
+  models.py     Task, Attempt, Answer, Stats, Outcome — данные задачи и ответа (реэкспорт из core)
+  callutil.py   помощники вызова модели: разбор ответа, цена провайдера, ленивые LiteLLM и Instructor
   errors.py     исключения; EXIT_CODES — коды выхода CLI
   template.py   render(): шаблон промпта mustache (combustache), строгий, без экранирования HTML
   opencli.py    `llm describe --json`: документ OpenCLI (из шаблона cli-generator v1.5.6)
