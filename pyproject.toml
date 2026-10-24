@@ -61,6 +61,11 @@ required = false
 check = "claude --version"
 why = "провайдер claude-cli (подписка Claude): transports/claude_cli.py, `llm auth login/logout claude`; путь переопределяет CLAUDE_COMMAND"
 
+# Установка (Standard, Install): инструмент для людей на Mac, ставится и на homeserver.
+[tool.rb.install]
+homeserver = ["rbtools"]
+mac = true
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/llmkit"]
 
@@ -139,6 +144,8 @@ pytest_add_cli_args = ["--no-cov"]  # fail_under убил бы каждого м
 
 [tool.coverage.run]
 source = ["src"]
+# Ядро по умолчанию в Python 3.14 растёт по памяти на каждый вызов CLI в тестах.
+core = "ctrace"
 
 [tool.coverage.report]
 # Порог — по факту на момент перехода на стандарт; поднимать, не опускать.
