@@ -5,12 +5,18 @@ from __future__ import annotations
 import asyncio
 import inspect
 import os
+import subprocess
+import sys
+from collections.abc import Callable
 from types import SimpleNamespace
 
 import pytest
 
 from llmkit import LlmKit
 from llmkit import core as core_mod
+
+# Typer читает эти переменные один раз при импорте и после этого форсирует терминальный вывод — как на CI.
+CI_ENV = {"GITHUB_ACTIONS": "true", "FORCE_COLOR": "1", "PY_COLORS": "1"}
 
 # Routing тестов: провайдеры и цепочка приходят данными (routing v1), встроенных нет.
 ROUTING: dict = {
@@ -194,3 +200,19 @@ def contract_offline(monkeypatch):
     monkeypatch.setattr(core_mod, "_sleep", lambda seconds: asyncio.sleep(0))
     monkeypatch.setattr(runtime, "build_kit", lambda **kwargs: LlmKit(completion=completion, **kwargs))
     return completion
+
+
+@pytest.fixture
+def same_in_ci(request: pytest.FixtureRequest) -> Callable[[str], None]:
+    """Перезапускает тесты этого файла по `-k` под CI_ENV в новом интерпретаторе: значение читается при импорте."""
+    if request.config.getoption("--snapshot-update"):
+        pytest.skip("снимки пишутся: сравнивать ещё не с чем")
+
+    def run(selection: str) -> None:
+        options = ["-k", selection, "-p", "no:cacheprovider", "--no-cov", "-q"]
+        command = [sys.executable, "-m", "pytest", str(request.path), *options]
+        env = {**os.environ, **CI_ENV}
+        result = subprocess.run(command, env=env, capture_output=True, text=True, check=False)  # noqa: S603
+        assert result.returncode == 0, result.stdout[-3000:]
+
+    return run

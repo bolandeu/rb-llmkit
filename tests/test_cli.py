@@ -276,3 +276,7 @@ def test_version_falls_back_to_legacy_distribution_name(monkeypatch):
     assert version.installed_version() == installed
     monkeypatch.setattr(version, "DIST_NAME_LEGACY", None)
     assert version.installed_version() is None
+
+
+def test_help_output_is_the_same_in_ci(same_in_ci) -> None:
+    same_in_ci("test_help_documents_exit_codes or test_bare_call_prints_help_with_zero")

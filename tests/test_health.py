@@ -241,3 +241,7 @@ def test_check_timeout_is_unreachable(monkeypatch):
     monkeypatch.setattr(health, "CHECK_TIMEOUT", 0.05)
     got = health._with_timeout(lambda: time.sleep(0.5) or health.Health())
     assert got.status == "unreachable"
+
+
+def test_human_output_is_the_same_in_ci(same_in_ci) -> None:
+    same_in_ci("test_human_output_line_per_provider_and_error_on_stderr")

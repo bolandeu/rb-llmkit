@@ -124,3 +124,7 @@ def test_every_parameter_has_help(path: tuple[str, ...]) -> None:
 @pytest.mark.parametrize("path", sorted(GROUPS), ids=_slug)
 def test_every_group_has_help(path: tuple[str, ...]) -> None:
     assert (GROUPS[path].info.help or "").strip(), f"group `{_slug(path)}` has no description"
+
+
+def test_help_is_the_same_in_ci(same_in_ci: Callable[[str], None]) -> None:
+    same_in_ci("test_help_snapshot")
