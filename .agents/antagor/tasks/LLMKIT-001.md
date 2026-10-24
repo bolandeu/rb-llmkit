@@ -3,7 +3,7 @@ id: LLMKIT-001
 title: 'ask_many(raise_on_error): raise AllModelsFailed, not ExceptionGroup, on Python
   3.11.2'
 status: queue
-attempts: 0
+attempts: 2
 blocked: false
 blocked_reason: null
 phase: null
@@ -16,6 +16,9 @@ type: bugfix
 owns_paths:
 - src/llmkit/core.py
 - tests/test_core.py
+- docs/architecture.md
+- src/llmkit/callutil.py
+- src/llmkit/models.py
 test_paths:
 - tests/test_core.py
 docs: none
@@ -47,3 +50,13 @@ Existing tests tests/test_core.py::test_ask_many_can_raise and test_raise_on_err
 ## Out of scope
 
 - No other behaviour change; no test edits.
+
+## Feedback
+
+### Attempt 1: file docstring
+
+- src/llmkit/core.py 994 lines > limit 800: split it by meaning (one capability, one module)
+
+### Attempt 2: file docstring
+
+- update the docstring of src/llmkit/core.py: -Answer -Attempt -Stats -Task
