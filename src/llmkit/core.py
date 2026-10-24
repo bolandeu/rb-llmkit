@@ -1,4 +1,4 @@
-"""LlmKit: ask / generate / ask_many и sync-обёртки (раздел 5)."""
+"""LlmKit: ask / generate / decide / ask_many, sync-обёртки, цепочка моделей, кэш и учёт (раздел 5)."""
 
 from __future__ import annotations
 
