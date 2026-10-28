@@ -13,3 +13,5 @@ mutants/
 
 # uv / окружение
 .venv/
+.DS_Store
+Thumbs.db
