@@ -5,6 +5,17 @@ All notable changes to this project are documented here. Versions follow
 
 The changelog is written by `antagor publish`; don't edit it by hand.
 
+## v0.12.0 — 2026-10-29
+
+### E-001 — Shared response cache in the usage database
+
+Every worker that uses one LLMKIT_DATABASE_URL shares one cache: the same call gives the same answer, the second one is a free hit.
+Time: 0.8h since the epic was approved
+
+- Cache in the usage database (table, migration 0003, first write wins) (LLMKIT-003)
+- Cache surfaces: config path, describe, doctor, docs (LLMKIT-004)
+- Two-worker acceptance on PostgreSQL (LLMKIT-005)
+
 ## v0.11.1 — 2026-10-29
 
 ### Outside epics
