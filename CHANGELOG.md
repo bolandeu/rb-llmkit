@@ -5,6 +5,12 @@ All notable changes to this project are documented here. Versions follow
 
 The changelog is written by `antagor publish`; don't edit it by hand.
 
+## v0.11.1 — 2026-10-29
+
+### Outside epics
+
+- LiteLLM 1.106.5: the critical vulnerability GHSA-7hp6-4w63-5g45 of 1.102.1 is gone, the release audit is green (LLMKIT-002)
+
 ## v0.11.0 — 2026-10-24
 
 ### Outside epics

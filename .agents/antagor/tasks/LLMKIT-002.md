@@ -2,7 +2,7 @@
 id: LLMKIT-002
 title: 'LiteLLM 1.106.5: the critical vulnerability GHSA-7hp6-4w63-5g45 of 1.102.1
   is gone, the release audit is green'
-status: in_review
+status: done
 attempts: 0
 blocked: false
 blocked_reason: null
