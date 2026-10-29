@@ -20,11 +20,16 @@ owns_paths:
 - docs/prd.md
 - README.md
 - src/llmkit/opencli.py
+- src/llmkit/db/__init__.py
 test_paths:
 - tests/test_cli.py
 - tests/test_describe.py
 - tests/test_doctor.py
 - tests/test_config.py
+- tests/snapshots/describe.json
+- tests/snapshots/help/config-path.txt
+- tests/snapshots/help/config-show.txt
+- tests/snapshots/help/config.txt
 docs:
 - docs/prd.md
 tools: []
@@ -65,3 +70,7 @@ Follow the existing config path and describe code.
 ## Out of scope
 
 - Storage code and migration.
+
+## Feedback
+
+### Blocked: scope_held (holders ['LLMKIT-003'], paths ['src/llmkit/db/__init__.py'])

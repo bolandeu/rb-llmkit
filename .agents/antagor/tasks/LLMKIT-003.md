@@ -1,7 +1,7 @@
 ---
 id: LLMKIT-003
 title: Cache in the usage database (table, migration 0003, first write wins)
-status: queue
+status: publish
 attempts: 0
 blocked: false
 blocked_reason: null
@@ -22,6 +22,7 @@ test_paths:
 - tests/test_cache.py
 - tests/test_core.py
 - tests/test_db.py
+- tests/snapshots/describe.json
 docs: none
 tools: []
 worker_args: null
