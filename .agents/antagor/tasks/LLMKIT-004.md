@@ -3,11 +3,11 @@ id: LLMKIT-004
 title: 'Cache surfaces: config path, describe, doctor, docs'
 status: publish
 attempts: 0
-blocked: false
-blocked_reason: null
+blocked: true
+blocked_reason: environment_broken
 phase: null
 tests_hash: null
-publish_stage: null
+publish_stage: gate
 created_by: architect
 approved_by: human
 approved_words: да
