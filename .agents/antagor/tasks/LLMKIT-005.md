@@ -1,7 +1,7 @@
 ---
 id: LLMKIT-005
 title: Two-worker acceptance on PostgreSQL
-status: queue
+status: in_review
 attempts: 0
 blocked: false
 blocked_reason: null
