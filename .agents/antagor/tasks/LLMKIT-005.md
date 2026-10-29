@@ -1,7 +1,7 @@
 ---
 id: LLMKIT-005
 title: Two-worker acceptance on PostgreSQL
-status: ideas
+status: queue
 attempts: 0
 blocked: false
 blocked_reason: null
@@ -9,7 +9,8 @@ phase: null
 tests_hash: null
 publish_stage: null
 created_by: architect
-approved_by: null
+approved_by: human
+approved_words: да
 worker: claude-code
 type: feature
 owns_paths:
