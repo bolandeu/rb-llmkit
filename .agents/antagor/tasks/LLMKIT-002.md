@@ -4,8 +4,8 @@ title: 'LiteLLM 1.106.5: the critical vulnerability GHSA-7hp6-4w63-5g45 of 1.102
   is gone, the release audit is green'
 status: queue
 attempts: 0
-blocked: true
-blocked_reason: check_broken
+blocked: false
+blocked_reason: null
 phase: null
 tests_hash: null
 publish_stage: null
@@ -52,3 +52,16 @@ The Human asked to update LiteLLM to the latest release (28.10.2026). The releas
 
 - No other dependency is bumped on purpose; only what uv's relock of LiteLLM moves.
 - No change of llmkit's own behaviour, options or output.
+
+## Feedback
+
+### Blocked: check_broken (check osv-scanner scan source --lockfile uv.lock, exit 1, sign red on main before the work; a chore or docs task builds nothing to make it green, tail Filtered 1 local/unscannable package/s from the scan.
+
+Total 1 package affected by 1 known vulnerability (1 Critical, 0 High, 0 Medium, 0 Low, 0 Unknown) from 1 ecosystem.
+1 vulnerability can be fixed.
+
++-------------------------------------+------+-----------+---------+---------+---------------+---------+
+| OSV URL                             | CVSS | ECOSYSTEM | PACKAGE | VERSION | FIXED VERSION | SOURCE  |
++-------------------------------------+------+-----------+---------+---------+---------------+---------+
+| https://osv.dev/GHSA-7hp6-4w63-5g45 | 9.9  | PyPI      | litellm | 1.102.1 | 1.102.2       | uv.lock |
++-------------------------------------+------+-----------+---------+---------+---------------+---------+)
