@@ -1,7 +1,8 @@
 
  Usage: llm config path [OPTIONS]
 
- Показать пути кэша, журнала вызовов и файла routing (LLMKIT_ROUTING_FILE или файл по умолчанию).
+ Показать, где лежат кэш и журнал вызовов (база) и файл routing (LLMKIT_ROUTING_FILE или файл по
+ умолчанию).
 
  Код выхода всегда 0.
 

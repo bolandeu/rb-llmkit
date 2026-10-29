@@ -105,7 +105,7 @@ routing v1, публичный контракт: `src/llmkit/contracts/routing-v
 | настройка | дефолт |
 |---|---|
 | temperature / timeout / max_tokens / concurrency | 0.0 / 120 с / 16000 / 6 |
-| cache | включён, ttl 30 дней, `platformdirs.user_cache_dir/cache.sqlite` |
+| cache | включён, ttl 30 дней, таблица `llmkit_cache` в базе журнала (раздел 8) |
 | usage | `platformdirs.user_data_dir/usage.sqlite` (или `LLMKIT_DATABASE_URL`) |
 | budget.daily_usd | 20.0 — только предупреждение |
 | retry | timeout 0, rate_limit 6, server 6, invalid_output 2 (раздел 6) |
@@ -270,7 +270,7 @@ Instructor не используется: вызов идёт с `response_forma
 
 ## 7. Кэш (`cache.py`)
 
-SQLite, таблица `cache(key TEXT PRIMARY KEY, model TEXT, created_at REAL, response TEXT)`.
+Таблица `llmkit_cache` в базе журнала (раздел 8): общая PostgreSQL, если задан `LLMKIT_DATABASE_URL`, иначе локальная SQLite `usage.sqlite`; воркеры одной базы делят один кэш. Колонки: `key`, `model`, `created_at`, `response`.
 `key = sha256(canonical_json({model, api_base, messages, schema, temperature, max_tokens}))`,
 где `model` — ссылка `provider/model` конкретной попытки (не уровень и не имя модели для
 LiteLLM): ответ дешёвой модели не выдаётся за ответ сильной, а одна и та же модель у
@@ -278,7 +278,7 @@ ollama.com и у localhost не делит запись. Ключ провайд
 Кэш проверяется по **всей цепочке** до первого сетевого вызова и до резолва ключей:
 попадание на любой модели цепочки отдаётся сразу, без обращения к провайдерам.
 TTL из конфига; протухшие записи удаляются при старте (`DELETE WHERE created_at < …`).
-`journal_mode=WAL`, `busy_timeout=5000` — несколько процессов одновременно.
+Несколько процессов — через блокировки базы. Где лежит кэш, показывают `llm config path|show`, `llm describe` (таблица вида `cache`) и строка `cache` в `llm doctor`.
 Попадание пишется в usage как `status="cache"`, стоимость 0.
 
 ## 8. Учёт и бюджет (`usage.py`)

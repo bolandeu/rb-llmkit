@@ -66,3 +66,16 @@ def test_optional_external_program_missing_does_not_fail():
 
 def test_usage_db_is_ok_on_a_fresh_local_database():
     assert checks(doctor())["usage-db"]["ok"] is True
+
+
+def test_cache_line_reports_the_database_error_not_a_file_path(monkeypatch):
+    monkeypatch.setenv("LLMKIT_DATABASE_URL", "postgresql+psycopg://user:pw@127.0.0.1:1/llmkit")
+    cache = checks(doctor())["cache"]
+    assert cache["ok"] is False
+    assert "OperationalError" in cache["detail"] or "DatabaseUnavailable" in cache["detail"]
+    assert "cache.sqlite" not in cache["detail"]
+
+
+def test_cache_line_names_the_local_database_when_ready():
+    cache = checks(doctor())["cache"]
+    assert cache["ok"] is True and "usage.sqlite" in cache["detail"]

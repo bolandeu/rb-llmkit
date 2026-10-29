@@ -41,17 +41,18 @@ def _routing() -> dict[str, Any]:
     return _check("routing", True, spec if not spec.lstrip().startswith("{") else "inline")
 
 
-def _usage_db(loaded: config_mod.Config | None) -> dict[str, Any]:
+def _database(name: str, loaded: config_mod.Config | None) -> dict[str, Any]:
+    """База журнала и кэша: открывается, схема на месте; при ошибке — её текст, не путь файла."""
     from . import db
 
     if loaded is None:
-        return _check("usage-db", False, "конфиг не загрузился")
+        return _check(name, False, "конфиг не загрузился")
     try:
         engine = db.open_db(loaded.usage_path())
     except Exception as exc:
-        return _check("usage-db", False, f"{type(exc).__name__}: {exc}")
+        return _check(name, False, f"{type(exc).__name__}: {exc}")
     try:
-        return _check("usage-db", True, db.describe(engine))
+        return _check(name, True, db.describe(engine))
     finally:
         engine.dispose()
 
@@ -72,5 +73,12 @@ def _external() -> list[dict[str, Any]]:
 
 def report() -> dict[str, Any]:
     config_check, loaded = _config()
-    checks = [_version(), config_check, _routing(), _usage_db(loaded), *_external()]
+    checks = [
+        _version(),
+        config_check,
+        _routing(),
+        _database("usage-db", loaded),
+        _database("cache", loaded),
+        *_external(),
+    ]
     return {"healthy": all(check["ok"] for check in checks), "checks": checks}

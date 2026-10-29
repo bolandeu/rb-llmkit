@@ -180,3 +180,11 @@ def test_parameter_shapes() -> None:
     assert internal_cmd["hidden"] is True
     [path] = internal_cmd["arguments"]
     assert path["required"] is False and path["arity"] == {"minimum": 0, "maximum": 1}
+
+
+def test_cache_is_a_table_not_a_file() -> None:
+    data = _meta(DOCUMENT["command"])["x-rb-data"]
+    kinds = {table["name"]: table["kind"] for table in data["tables"]}
+    assert kinds["llmkit_cache"] == "cache"  # таблицу создаёт LLMKIT-003
+    listed = [entry["path"] for directory in ("user_cache_dir", "user_data_dir") for entry in data[directory]["files"]]
+    assert "cache.sqlite" not in listed

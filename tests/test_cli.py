@@ -94,8 +94,15 @@ def test_cost_rejects_bad_period():
 
 def test_config_path_lists_files():
     body = payload(run("config", "path", "--json"))
-    assert body["ok"] is True and body["cache"].endswith("cache.sqlite")
+    assert body["ok"] is True and body["cache"] == body["usage"]  # кэш — в базе, не в файле cache.sqlite
     assert body["routing_file"].endswith("routing.json")
+
+
+def test_config_path_reports_the_database_without_password(monkeypatch):
+    monkeypatch.setenv("LLMKIT_DATABASE_URL", "postgresql+psycopg://user:s3cret@db.example:5432/llmkit")
+    body = payload(run("config", "path", "--json"))
+    assert body["cache"] == "postgresql+psycopg://user:***@db.example:5432/llmkit"
+    assert "s3cret" not in json.dumps(body)
 
 
 def test_config_init_is_removed():
