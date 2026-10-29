@@ -1,10 +1,10 @@
 ---
 id: LLMKIT-004
 title: 'Cache surfaces: config path, describe, doctor, docs'
-status: queue
+status: in_progress
 attempts: 0
-blocked: false
-blocked_reason: null
+blocked: true
+blocked_reason: scope_held
 phase: null
 tests_hash: null
 publish_stage: null
@@ -20,11 +20,16 @@ owns_paths:
 - docs/prd.md
 - README.md
 - src/llmkit/opencli.py
+- src/llmkit/db/__init__.py
 test_paths:
 - tests/test_cli.py
 - tests/test_describe.py
 - tests/test_doctor.py
 - tests/test_config.py
+- tests/snapshots/describe.json
+- tests/snapshots/help/config-path.txt
+- tests/snapshots/help/config-show.txt
+- tests/snapshots/help/config.txt
 docs:
 - docs/prd.md
 tools: []
