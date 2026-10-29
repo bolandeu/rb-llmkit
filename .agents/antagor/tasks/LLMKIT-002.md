@@ -65,3 +65,17 @@ Total 1 package affected by 1 known vulnerability (1 Critical, 0 High, 0 Medium,
 +-------------------------------------+------+-----------+---------+---------+---------------+---------+
 | https://osv.dev/GHSA-7hp6-4w63-5g45 | 9.9  | PyPI      | litellm | 1.102.1 | 1.102.2       | uv.lock |
 +-------------------------------------+------+-----------+---------+---------+---------------+---------+)
+
+### Answer to question #1
+
+> LiteLLM 1.106.5 requires filelock<4 (uv cannot pick 4.x even with --upgrade-package filelock), so the relock gives filelock 3.32.7, and osv-scanner reports 13 filelock vulns (max CVSS 7.1, fixed only in 4.0.9/4.2.1); the task says both 'keep filelock as uv resolves it' and 'the release audit is green'.
+> Question: Which point wins?
+> Options:
+> 1. Keep uv's resolve, submit; audit stays red on filelock
+> 2. Add an osv-scanner ignore/override for filelock (outside Owns)
+> 3. Stay on a litellm version that allows filelock 4 (none known)
+> Recommended: Add an osv-scanner ignore/override for filelock (outside Owns)
+
+Use litellm==1.102.2 instead of 1.106.5: it is the fixed version named by GHSA-7hp6-4w63-5g45, it has no filelock requirement, so filelock stays 4.2.4 as now. No osv ignore. The goal is a green audit; the version in the title is superseded.
+
+### Blocked: needs_scope (entries [{'n': 1, 'text': 'LiteLLM 1.106.5 requires filelock<4 (uv cannot pick 4.x even with --upgrade-package filelock), so the relock gives filelock 3.32.7, and osv-scanner reports 13 filelock vulns (max CVSS 7.1, fixed only '}])
