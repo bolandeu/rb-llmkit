@@ -2,10 +2,10 @@
 id: LLMKIT-002
 title: 'LiteLLM 1.106.5: the critical vulnerability GHSA-7hp6-4w63-5g45 of 1.102.1
   is gone, the release audit is green'
-status: in_progress
+status: queue
 attempts: 0
-blocked: true
-blocked_reason: needs_scope
+blocked: false
+blocked_reason: null
 phase: null
 tests_hash: null
 publish_stage: null
@@ -77,3 +77,5 @@ Total 1 package affected by 1 known vulnerability (1 Critical, 0 High, 0 Medium,
 > Recommended: Add an osv-scanner ignore/override for filelock (outside Owns)
 
 Use litellm==1.102.2 instead of 1.106.5: it is the fixed version named by GHSA-7hp6-4w63-5g45, it has no filelock requirement, so filelock stays 4.2.4 as now. No osv ignore. The goal is a green audit; the version in the title is superseded.
+
+### Blocked: needs_scope (entries [{'n': 1, 'text': 'LiteLLM 1.106.5 requires filelock<4 (uv cannot pick 4.x even with --upgrade-package filelock), so the relock gives filelock 3.32.7, and osv-scanner reports 13 filelock vulns (max CVSS 7.1, fixed only '}])
