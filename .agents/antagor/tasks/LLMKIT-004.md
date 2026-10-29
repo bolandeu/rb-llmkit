@@ -18,6 +18,7 @@ owns_paths:
 - src/llmkit/doctor.py
 - docs/prd.md
 - README.md
+- src/llmkit/opencli.py
 test_paths:
 - tests/test_cli.py
 - tests/test_describe.py
