@@ -4,8 +4,8 @@ title: 'LiteLLM 1.106.5: the critical vulnerability GHSA-7hp6-4w63-5g45 of 1.102
   is gone, the release audit is green'
 status: queue
 attempts: 0
-blocked: false
-blocked_reason: null
+blocked: true
+blocked_reason: check_broken
 phase: null
 tests_hash: null
 publish_stage: null
