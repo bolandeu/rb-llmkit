@@ -1814,6 +1814,38 @@
                   "nullable": true
                 }
               ]
+            },
+            {
+              "name": "llmkit_cache",
+              "kind": "cache",
+              "columns": [
+                {
+                  "name": "id",
+                  "type": "INTEGER",
+                  "nullable": false,
+                  "primary_key": true
+                },
+                {
+                  "name": "key",
+                  "type": "TEXT",
+                  "nullable": false
+                },
+                {
+                  "name": "model",
+                  "type": "TEXT",
+                  "nullable": true
+                },
+                {
+                  "name": "created_at",
+                  "type": "FLOAT",
+                  "nullable": true
+                },
+                {
+                  "name": "response",
+                  "type": "TEXT",
+                  "nullable": true
+                }
+              ]
             }
           ],
           "views": [

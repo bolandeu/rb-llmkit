@@ -59,6 +59,18 @@ calls = sa.Table(
     info={"kind": "data"},
 )
 
+# Кэш ответов (cache.py): первая запись по ключу остаётся, поэтому ключ — UNIQUE.
+cache = sa.Table(
+    f"{PREFIX}cache",
+    metadata,
+    sa.Column("id", sa.Integer, primary_key=True),
+    sa.Column("key", sa.Text, nullable=False, unique=True),  # make_key: sha256 запроса
+    sa.Column("model", sa.Text),
+    sa.Column("created_at", sa.Float, index=True),  # unix-время
+    sa.Column("response", sa.Text),  # JSON ответа
+    info={"kind": "cache"},
+)
+
 # Представления `llmkit_v1_*`, которые читают другие инструменты, Directus и
 # платформа вместо таблиц, — контракт данных, его публикует `llm describe --json`
 # (x-rb-data.views). Создаёт их миграция (`CREATE VIEW`), здесь — объявление;

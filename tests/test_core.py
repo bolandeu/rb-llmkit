@@ -473,3 +473,15 @@ def test_strict_only_for_compatible_schema():
     strict = {**loose, "additionalProperties": False}
     nested = {**strict, "properties": {"a": {"type": "array", "items": loose}}}
     assert not _strict_ok(loose) and _strict_ok(strict) and not _strict_ok(nested)
+
+
+async def test_cache_database_failure_never_fails_the_call():
+    instance, fake = kit([response("ответ")])
+    await instance.ask(Task(user="прогрев", cache=False))  # журнал открыт и смигрирован
+    with instance.usage._db().begin() as connection:
+        connection.exec_driver_sql("DROP TABLE llmkit_cache")
+    answer = await instance.ask(Task(user="вопрос"))
+    assert answer.source == "llm" and answer.data == "ответ"
+    assert len(fake.calls) == 2
+    assert answer.warnings and all(warning.startswith("cache:") for warning in answer.warnings)
+    assert any("запись" in warning for warning in answer.warnings)

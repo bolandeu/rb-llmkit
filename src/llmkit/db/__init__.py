@@ -215,8 +215,8 @@ def import_sqlite(source: Path, target: sa.Engine, *, dry_run: bool = False) -> 
     """Скопировать таблицы llmkit из локального файла SQLite в `target` (общую базу) одной транзакцией.
 
     Источник сначала приводится к последней ревизии (своими миграциями, как при любом
-    открытии — даже при `dry_run`), так что таблицы с обеих сторон одинаковые. Каждая
-    таблица в `target` должна быть пустой: импорт — разовый переезд, не слияние.
+    открытии — даже при `dry_run`), так что таблицы с обеих сторон одинаковые. Таблицы кэша
+    не переносятся. Каждая таблица в `target` должна быть пустой: импорт — разовый переезд, не слияние.
     Возвращает число строк по таблицам.
     """
     if not source.is_file():
@@ -230,6 +230,8 @@ def import_sqlite(source: Path, target: sa.Engine, *, dry_run: bool = False) -> 
         counts: dict[str, int] = {}
         with source_engine.connect() as src, target.begin() as dst:
             for table in metadata.sorted_tables:  # родители раньше детей (внешние ключи)
+                if table.info["kind"] == "cache":  # кэш получают заново, переносить незачем
+                    continue
                 if dst.execute(sa.select(sa.func.count()).select_from(table)).scalar_one():
                     raise InvalidArguments(f"таблица '{table.name}' в целевой базе не пуста")
                 counts[table.name] = src.execute(sa.select(sa.func.count()).select_from(table)).scalar_one()
