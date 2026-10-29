@@ -10,7 +10,7 @@
 
 | Задача | Решение | Отвергнуто и почему |
 |---|---|---|
-| Провайдеры, вызов моделей, стоимость | **LiteLLM** (MIT, pin `==1.106.5`) | aisuite — заброшен с 12.2024; any-llm — нет фолбэков и учёта; pydantic-ai — агентный фреймворк, тяжелее задачи |
+| Провайдеры, вызов моделей, стоимость | **LiteLLM** (MIT, pin `==1.102.2`) | aisuite — заброшен с 12.2024; any-llm — нет фолбэков и учёта; pydantic-ai — агентный фреймворк, тяжелее задачи |
 | JSON по pydantic-схеме, ретрай при невалидном ответе | **Instructor** (`instructor.from_litellm`) | своя валидация — уже написана трижды, не нужна |
 | Кэш ответов | своя таблица SQLite (~60 строк) | кэш LiteLLM (diskcache): не даёт учесть попадание с нашими метками, ключ непрозрачен, отдельный файл-формат |
 | Ключи | `keyring` (связка macOS) + env | .env-файлы — запрещены конвенцией cli-builder |
@@ -29,7 +29,7 @@ advisory на PyPI/GitHub.
 - Имя пакета и импорта `llmkit`, CLI-команда `llm`. Репозиторий `github.com/bolandeu/llmkit`,
   установка в потребители через `[tool.uv.sources] rb-llmkit = { git = ..., tag = ... }` (дистрибутив `rb-llmkit`, импорт `llmkit`).
 - Python >= 3.11, `uv`, `hatchling`, `src/llmkit/`. Тесты `pytest` + `pytest-asyncio`.
-- Зависимости: `litellm==1.106.5`, `instructor>=1.17`, `pydantic>=2`, `keyring>=25`,
+- Зависимости: `litellm==1.102.2`, `instructor>=1.17`, `pydantic>=2`, `keyring>=25`,
   `platformdirs>=4`, `typer>=0.12`, `rich>=13`, `tomli-w>=1`, `httpx>=0.27` (транспорт
   подписки ChatGPT; уже приходит с LiteLLM, указан явно), `sqlalchemy>=2.0`, `alembic>=1.14`,
   `psycopg[binary]>=3.2` (журнал расходов в общей PostgreSQL, слой БД шаблона cli-generator).
