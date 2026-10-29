@@ -1,10 +1,10 @@
 ---
 id: LLMKIT-004
 title: 'Cache surfaces: config path, describe, doctor, docs'
-status: in_progress
+status: queue
 attempts: 0
-blocked: true
-blocked_reason: scope_held
+blocked: false
+blocked_reason: null
 phase: null
 tests_hash: null
 publish_stage: null
@@ -70,3 +70,7 @@ Follow the existing config path and describe code.
 ## Out of scope
 
 - Storage code and migration.
+
+## Feedback
+
+### Blocked: scope_held (holders ['LLMKIT-003'], paths ['src/llmkit/db/__init__.py'])
