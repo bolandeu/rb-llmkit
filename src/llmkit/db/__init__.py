@@ -8,6 +8,7 @@
   общей базы, и никто бы не заметил.
 - URL не задан → SQLite: файл журнала из конфига (`usage.path`, по умолчанию
   `usage.sqlite` в каталоге данных) — так потребители без URL работают как раньше.
+- `location()` — где лежит база (URL без пароля или файл): для `llm config` и кэша.
 
 Схема меняется миграциями Alembic (`migrations/`), ревизия — в своей таблице
 `alembic_version_llmkit`. SQLite приводится к последней ревизии при открытии.
@@ -42,7 +43,7 @@ from .tables import PREFIX, metadata
 
 ENV_VAR = f"{TOOL.upper()}_DATABASE_URL"
 # Что значит каждая — `llm describe --json` перечисляет их (x-rb-env).
-ENV_VARS = {ENV_VAR: "Общая PostgreSQL для журнала расходов; не задана → локальная SQLite (usage.path)"}
+ENV_VARS = {ENV_VAR: "Общая PostgreSQL для журнала расходов и кэша ответов; не задана → локальная SQLite (usage.path)"}
 VERSION_TABLE = f"alembic_version_{TOOL}"
 CONNECT_TIMEOUT_S = 5
 # Сколько ждать блокировку SQLite: файл пишут несколько процессов (wp-bulk, antagor, `llm`).
@@ -69,6 +70,14 @@ def is_postgres(engine: sa.Engine | sa.Connection) -> bool:
 def describe(engine: sa.Engine) -> str:
     """Куда смотрит engine, без пароля — для `db status`."""
     return engine.url.render_as_string(hide_password=True)
+
+
+def location(path: Path | None = None) -> str:
+    """Где лежит база: URL общей PostgreSQL без пароля или файл локальной SQLite."""
+    url = database_url()
+    if url is None:
+        return str(path or sqlite_path())
+    return sa.engine.make_url(url).render_as_string(hide_password=True)
 
 
 def _sqlite_pragmas(dbapi_connection, _record) -> None:

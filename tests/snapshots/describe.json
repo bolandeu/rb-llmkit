@@ -1378,11 +1378,11 @@
       },
       {
         "name": "config",
-        "description": "Настройки llmkit: где лежат кэш, журнал и файл routing, что получилось в итоге.",
+        "description": "Настройки llmkit: где лежат кэш и журнал (база), файл routing, что получилось в итоге.",
         "commands": [
           {
             "name": "path",
-            "description": "Показать пути кэша, журнала вызовов и файла routing (LLMKIT_ROUTING_FILE или файл по умолчанию).\n\nКод выхода всегда 0.\n\nExample: llm config path",
+            "description": "Показать, где лежат кэш и журнал вызовов (база) и файл routing (LLMKIT_ROUTING_FILE или файл по умолчанию).\n\nКод выхода всегда 0.\n\nExample: llm config path",
             "options": [
               {
                 "name": "--json",
@@ -1402,7 +1402,7 @@
           },
           {
             "name": "show",
-            "description": "Показать итоговые настройки вызовов: дефолты кода и LLMKIT_*.\n\nПровайдеров и цепочек здесь нет — они в routing (`llm models`).\nКоды выхода: 0 — готово, 2 — настройки не проходят проверку.\n\nExample: llm config show --json",
+            "description": "Показать итоговые настройки вызовов: дефолты кода и LLMKIT_*, где лежит кэш.\n\nПровайдеров и цепочек здесь нет — они в routing (`llm models`).\nКоды выхода: 0 — готово, 2 — настройки не проходят проверку.\n\nExample: llm config show --json",
             "options": [
               {
                 "name": "--json",
@@ -1698,7 +1698,7 @@
           {
             "name": "LLMKIT_DATABASE_URL",
             "purpose": "database",
-            "description": "Общая PostgreSQL для журнала расходов; не задана → локальная SQLite (usage.path)",
+            "description": "Общая PostgreSQL для журнала расходов и кэша ответов; не задана → локальная SQLite (usage.path)",
             "required": false
           },
           {
@@ -1963,13 +1963,7 @@
           },
           "user_cache_dir": {
             "appname": "llmkit",
-            "files": [
-              {
-                "path": "cache.sqlite",
-                "kind": "cache",
-                "description": "Кэш ответов моделей: повторный запрос с теми же параметрами не идёт к провайдеру; cache.path"
-              }
-            ]
+            "files": []
           },
           "user_config_dir": {
             "appname": "llmkit",

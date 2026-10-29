@@ -248,7 +248,7 @@ def data() -> dict:
             for view in tables.views.tables.values()
         ],
         "user_data_dir": {"appname": TOOL, "files": files("data")},
-        # Каталога кэша в шаблоне нет: у llmkit там кэш ответов моделей.
+        # Каталога кэша в шаблоне нет; кэш ответов llmkit — таблица в базе, файлов там нет.
         "user_cache_dir": {"appname": TOOL, "files": files("cache")},
         # Каталога конфигурации в шаблоне нет: у llmkit там routing по умолчанию.
         "user_config_dir": {"appname": TOOL, "files": files("config")},

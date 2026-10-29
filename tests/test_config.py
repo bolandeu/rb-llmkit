@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from llmkit import config as config_mod
@@ -101,3 +103,15 @@ def test_model_defaults_match_code_defaults(monkeypatch):
     config = config_mod.Config()
     assert config.defaults.max_tokens == 16000
     assert (config.retry.timeout, config.retry.rate_limit, config.retry.server) == (0, 6, 6)
+
+
+def test_config_show_reports_cache_in_the_local_default_database():
+    from typer.testing import CliRunner
+
+    from llmkit.cli.main import app
+
+    result = CliRunner().invoke(app, ["config", "show", "--json"])
+    assert result.exit_code == 0, result.output
+    body = json.loads(result.stdout)
+    assert body["cache"] == str(config_mod.load().usage_path())
+    assert not body["cache"].endswith("cache.sqlite")
