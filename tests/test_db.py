@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 import sqlalchemy as sa
+from alembic import command
 from alembic.autogenerate import compare_metadata
 from alembic.runtime.migration import MigrationContext
 from typer.testing import CliRunner
@@ -316,3 +317,17 @@ def test_postgres_round_trip(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) ->
         assert sa.inspect(conn).has_table("directus_users")
     assert not (tmp_path / "unused.sqlite").exists()
     engine.dispose()
+
+
+def test_migration_0003_adds_the_cache_table_and_keeps_calls(local_path: Path) -> None:
+    engine = db.sqlite_engine(local_path)
+    with engine.begin() as connection:
+        command.upgrade(db.alembic_config(connection), "0002")
+        connection.execute(sa.insert(tables.calls).values(ts=1.0, model="a/m1", status="ok", tags={}))
+    assert "llmkit_cache" not in sa.inspect(engine).get_table_names()
+    state = db.upgrade(engine)
+    assert (state.current, state.head) == ("0003", "0003")
+    assert "llmkit_cache" in sa.inspect(engine).get_table_names()
+    with engine.connect() as connection:
+        assert connection.execute(sa.select(sa.func.count()).select_from(tables.calls)).scalar_one() == 1
+    assert tables.cache.info["kind"] == "cache"

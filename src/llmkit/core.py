@@ -132,12 +132,12 @@ class LlmKit:
         if self.config.log_level:
             logging.getLogger("llmkit").setLevel(self.config.log_level)
         self.tags = dict(tags or {})
+        self.usage = Usage(self.config.usage_path())
         self.cache = Cache(
-            self.config.cache_path(),
+            self.usage._db,
             ttl_days=self.config.cache.ttl_days,
             enabled=self.config.cache.enabled,
         )
-        self.usage = Usage(self.config.usage_path())
         self._completion = completion
         self._decisions = decisions
         self._instructor_factory = instructor_factory or default_instructor_factory
@@ -172,7 +172,7 @@ class LlmKit:
         if cache_enabled:
             for position, ref in enumerate(chain):
                 key = cache_keys.get(ref)
-                cached = await self.cache.aget(key) if key else None
+                cached = await self.cache.aget_safe(key, warnings) if key else None
                 if cached is None:
                     continue
                 provider = ref.partition("/")[0]
@@ -207,7 +207,7 @@ class LlmKit:
             outcome = await self._call_model(call, messages, task, settings)
             key = cache_keys.get(call.ref)
             if cache_enabled and key:
-                await self.cache.aset(key, call.ref, outcome.cache_value)
+                await self.cache.aset_safe(key, call.ref, outcome.cache_value, warnings)
             return outcome
 
         return await self._through_chain(task, routing, chain, tags, level, started, attempts, warnings, invoke)

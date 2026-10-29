@@ -1,4 +1,4 @@
-"""SQLite-кэш ответов (раздел 7).
+"""Кэш ответов в базе журнала (раздел 7).
 
 Ключ считается по конкретной модели попытки, а не по уровню: ответ дешёвой
 модели не выдаётся за ответ сильной.
@@ -7,24 +7,15 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import hashlib
 import json
-import sqlite3
 import threading
 import time
-from contextlib import contextmanager
-from pathlib import Path
-from typing import Any
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS cache (
-    key TEXT PRIMARY KEY,
-    model TEXT,
-    created_at REAL,
-    response TEXT
-)
-"""
+if TYPE_CHECKING:  # pragma: no cover
+    import sqlalchemy as sa
 
 
 def schema_fingerprint(schema: Any) -> Any:
@@ -64,64 +55,59 @@ def make_key(
     return hashlib.sha256(canonical.encode()).hexdigest()
 
 
-def _set_wal(connection: sqlite3.Connection) -> None:
-    """WAL — режим файла, он живёт между запусками.
-
-    Смена режима требует эксклюзивной блокировки и, в отличие от обычных
-    запросов, не ждёт busy_timeout: если файл уже открыт другим процессом,
-    SQLite сразу отвечает "database is locked". Режим при этом уже такой,
-    какой нужно, поэтому ошибку глотаем.
-    """
-    with contextlib.suppress(sqlite3.OperationalError):
-        connection.execute("PRAGMA journal_mode=WAL")
-
-
 class Cache:
-    """Таблица `cache` в SQLite; несколько процессов — через WAL."""
+    """Таблица `llmkit_cache` в базе журнала: общая PostgreSQL или локальная SQLite.
 
-    def __init__(self, path: Path, *, ttl_days: int = 30, enabled: bool = True) -> None:
-        self.path = Path(path)
+    `engine` отдаёт открытую базу (её держит `Usage`). Первая запись по ключу
+    остаётся: повторная вставка молча пропускается.
+    """
+
+    def __init__(self, engine: Callable[[], sa.Engine], *, ttl_days: int = 30, enabled: bool = True) -> None:
+        self._engine = engine
         self.ttl_seconds = max(ttl_days, 0) * 86400
         self.enabled = enabled
         self._ready = False
         self._lock = threading.Lock()
 
-    @contextmanager
-    def _connect(self):
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        connection = sqlite3.connect(self.path, timeout=5.0)
-        try:
-            # Ждать блокировку, а не падать: базу пишут несколько процессов.
-            connection.execute("PRAGMA busy_timeout=5000")
-            yield connection
-            connection.commit()
-        finally:
-            connection.close()
+    def _expired(self) -> Any:
+        from .db.tables import cache
+
+        return cache.c.created_at < time.time() - self.ttl_seconds
 
     def _prepare(self) -> None:
-        """Создать таблицу и выкинуть протухшее — один раз на экземпляр."""
+        """Выкинуть протухшее — один раз на экземпляр."""
         if self._ready:
             return
         with self._lock:
             if self._ready:  # успели, пока ждали лок
                 return
-            with self._connect() as connection:
-                _set_wal(connection)
-                connection.execute(SCHEMA)
-                if self.ttl_seconds:
-                    connection.execute("DELETE FROM cache WHERE created_at < ?", (time.time() - self.ttl_seconds,))
+            if self.ttl_seconds:
+                self._delete_expired()
             self._ready = True
+
+    def _delete_expired(self) -> None:
+        import sqlalchemy as sa
+
+        from .db.tables import cache
+
+        with self._engine().begin() as connection:
+            connection.execute(sa.delete(cache).where(self._expired()))
 
     def get(self, key: str) -> Any | None:
         if not self.enabled:
             return None
+        import sqlalchemy as sa
+
+        from .db.tables import cache
+
         self._prepare()
-        with self._connect() as connection:
-            row = connection.execute("SELECT created_at, response FROM cache WHERE key = ?", (key,)).fetchone()
+        with self._engine().connect() as connection:
+            row = connection.execute(sa.select(cache.c.created_at, cache.c.response).where(cache.c.key == key)).first()
         if row is None:
             return None
         created_at, response = row
         if self.ttl_seconds and created_at < time.time() - self.ttl_seconds:
+            self._delete_expired()
             return None
         try:
             return json.loads(response)
@@ -131,16 +117,35 @@ class Cache:
     def set(self, key: str, model: str, value: Any) -> None:
         if not self.enabled:
             return
+
+        from .db.tables import cache
+
         self._prepare()
         payload = json.dumps(value, ensure_ascii=False, default=str)
-        with self._connect() as connection:
-            connection.execute(
-                "INSERT OR REPLACE INTO cache (key, model, created_at, response) VALUES (?, ?, ?, ?)",
-                (key, model, time.time(), payload),
-            )
+        values = {"key": key, "model": model, "created_at": time.time(), "response": payload}
+        with self._engine().begin() as connection:
+            if connection.dialect.name == "postgresql":
+                from sqlalchemy.dialects.postgresql import insert
+            else:
+                from sqlalchemy.dialects.sqlite import insert
+            connection.execute(insert(cache).values(**values).on_conflict_do_nothing(index_elements=["key"]))
 
     async def aget(self, key: str) -> Any | None:
         return await asyncio.to_thread(self.get, key)
 
     async def aset(self, key: str, model: str, value: Any) -> None:
         await asyncio.to_thread(self.set, key, model, value)
+
+    async def aget_safe(self, key: str, warnings: list[str]) -> Any | None:
+        """Сбой базы кэша — промах и предупреждение, вызов не падает."""
+        try:
+            return await self.aget(key)
+        except Exception as exc:
+            warnings.append(f"cache: чтение не удалось ({type(exc).__name__}), вызов идёт к провайдеру")
+            return None
+
+    async def aset_safe(self, key: str, model: str, value: Any, warnings: list[str]) -> None:
+        try:
+            await self.aset(key, model, value)
+        except Exception as exc:
+            warnings.append(f"cache: запись не удалась ({type(exc).__name__}), ответ не сохранён")
