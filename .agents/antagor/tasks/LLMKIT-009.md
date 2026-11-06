@@ -2,9 +2,9 @@
 id: LLMKIT-009
 title: 'Gateway client: ask, generate and ask_many through 9router over httpx'
 status: publish
-attempts: 4
-blocked: false
-blocked_reason: null
+attempts: 5
+blocked: true
+blocked_reason: attempts
 phase: green
 tests_hash: 6b82e19ada9d10a3add888ab5e17b61d5e6897b83a2efdb4b11fe5d9f655e977
 publish_stage: null
@@ -377,6 +377,69 @@ release: code failed
 ```
 
 ### Attempt 4: the project's full check failed after the merge
+
+The project's full check fails with this task merged into main, and passes without it: your change broke something elsewhere. Merge main into your branch and fix it within the task, or say what is outside it with `antagor inbox add`.
+
+- `uvx --from "git+https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator.git@v1.27.3#subdirectory=gate" rb-release check`
+
+```
+release: gate step 'ty check' failed:
+…
+^^^^^^^^^^^^^^
+info: Method signature here
+  --> src/llmkit/core.py:70:9
+   |
+70 |       def __init__(
+   |  _________^
+71 | |         self,
+72 | |         *,
+73 | |         routing: Routing | dict[str, Any] | None = None,
+74 | |         config: Config | None = None,
+75 | |         tags: dict[str, str] | None = None,
+76 | |         transport: Any = None,
+77 | |         temperature: float | None = None,
+78 | |         max_tokens: int | None = None,
+79 | |         timeout: float | None = None,
+80 | |         concurrency: int | None = None,
+81 | |         cache: bool | None = None,
+82 | |     ) -> None:
+   | |_____________^
+
+error[unresolved-import]: Module `llmkit.transports` has no member `decisions`
+  --> tests/test_decide.py:12:31
+   |
+12 | from llmkit.transports import decisions
+   |                               ^^^^^^^^^
+
+error[unresolved-import]: Cannot resolve imported module `llmkit.providers`
+  --> tests/test_health.py:18:6
+   |
+18 | from llmkit.providers import KINDS, SUBSCRIPTION_KINDS
+   |      ^^^^^^^^^^^^^^^^
+info: Searched in the following paths during module resolution:
+info:   1. /Users/bolandau/Work/tools/llmkit/src (first-party code)
+info:   2. /Users/bolandau/Work/tools/llmkit (first-party code)
+info:   3. vendored://stdlib (stdlib typeshed stubs vendored by ty)
+info:   4. /Users/bolandau/Work/tools/llmkit/.venv/lib/python3.11/site-packages (site-packages)
+info: make sure your Python environment is properly configured: https://docs.astral.sh/ty/modules/#python-environment
+
+error[unresolved-import]: Module `test_routing` has no member `OPENROUTER`
+  --> tests/test_routing_default.py:16:26
+   |
+16 | from test_routing import OPENROUTER, anonymous
+   |                          ^^^^^^^^^^
+
+error[unresolved-import]: Module `test_routing` has no member `anonymous`
+  --> tests/test_routing_default.py:16:38
+   |
+16 | from test_routing import OPENROUTER, anonymous
+   |                                      ^^^^^^^^^
+
+Found 7 diagnostics
+release: code failed
+```
+
+### Attempt 5: the project's full check failed after the merge
 
 The project's full check fails with this task merged into main, and passes without it: your change broke something elsewhere. Merge main into your branch and fix it within the task, or say what is outside it with `antagor inbox add`.
 
