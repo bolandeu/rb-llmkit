@@ -38,6 +38,8 @@ owns_paths:
 - AGENTS.md
 - CODING_STANDARDS.md
 - docs/
+- src/llmkit/__init__.py
+- src/llmkit/errors.py
 test_paths:
 - tests/test_cost.py
 - tests/test_media.py
