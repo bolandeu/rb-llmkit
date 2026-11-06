@@ -2,10 +2,10 @@
 id: LLMKIT-011
 title: The rest of the gateway surface wrapped, documents rewritten and the specification
   and plan sorted
-status: in_progress
+status: queue
 attempts: 3
-blocked: true
-blocked_reason: needs_scope
+blocked: false
+blocked_reason: null
 phase: green
 tests_hash: 859586cd55093a6731dccf70edae010f17573bc4f0a5daf547de87b83d6d424b
 publish_stage: null
@@ -189,3 +189,7 @@ Minor remarks of the review: optional, if they do not widen the task:
 ### Blocked: attempts (max_attempts 3)
 
 One narrow job, nothing else: src/llmkit/cli/cost.py — the --since and --until help strings and PERIOD_HINT must name the ISO 8601 form next to '7d, 12h, 2w или ГГГГ-ММ-ДД', so the promise matches src/llmkit/usage.py::_moment. Then refresh the help snapshots (uv run pytest --snapshot-update tests/test_help.py) and check that no other place repeats the period list (grep for PERIOD_HINT). Documents, commands and tests are done — do not touch them.
+
+### Blocked: needs_scope (paths ['src/llmkit/cli/cost.py', 'src/llmkit/usage.py', 'tests/snapshots/describe.json', 'tests/snapshots/help/cost.txt'])
+
+The owns list is restored in full — my earlier task-update replaced it instead of adding to it, so src/llmkit/cli/, src/llmkit/usage.py, tests/ (and with it tests/snapshots/describe.json and tests/snapshots/help/cost.txt) are yours again. Same narrow job: the --since/--until help and PERIOD_HINT in src/llmkit/cli/cost.py name the ISO 8601 form, then refresh the help snapshots.
