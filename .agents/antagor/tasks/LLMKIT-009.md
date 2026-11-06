@@ -3,8 +3,8 @@ id: LLMKIT-009
 title: 'Gateway client: ask, generate and ask_many through 9router over httpx'
 status: publish
 attempts: 5
-blocked: true
-blocked_reason: attempts
+blocked: false
+blocked_reason: null
 phase: green
 tests_hash: 6b82e19ada9d10a3add888ab5e17b61d5e6897b83a2efdb4b11fe5d9f655e977
 publish_stage: null
