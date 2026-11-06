@@ -2,7 +2,7 @@
 id: LLMKIT-010
 title: 'Nothing of its own left: state, transports and their commands out, dependencies
   pruned'
-status: in_review
+status: queue
 attempts: 1
 blocked: false
 blocked_reason: null
@@ -139,3 +139,22 @@ Reuse the gateway client, the error kinds and EXIT_CODES of the first task, the 
 
 - Media and the other non-chat endpoints; documents; moving other repositories to the new API or to the gateway journal.
 - Publishing a release of its own; the epic closes it.
+
+## Feedback
+
+### Attempt 1: the Architect's verdict
+
+The review found blockers; close each:
+
+- [blocker] [wrong] `cost` advertises a date format the code rejects: `--since/--until` help, `PERIOD_HINT` and the error message promise «7d, 12h, 2w или ГГГГ-ММ-ДД», but `usage._since` parses only digits+unit and `llm cost --since 2026-11-01` fails with INVALID_ARGUMENTS (checked on this HEAD). Task: «lm cost --json keeps reporting spend for a period» — either parse dates or fix every promise (help, snapshot, describe). Every remaining-command docstring is a checked contract here.
+
+Minor remarks of the review: optional, if they do not widen the task:
+
+- [minor] C11 src/llmkit/cli/app.py: root help still shows `-m ПРОВАЙДЕР/МОДЕЛЬ … можно несколько: -m a/x -m b/y`. ADR-0001: variants with `/` are no longer provider–model; the same file's example uses `-m "Deep Sec"`. Stale example in the same help.
+- [minor] C3 src/llmkit/cli/cost.py: totals recomputed row-wise in the command while `usage.total()` does the same; one of them should go.
+- [minor] C6 src/llmkit/core.py: `try: … except GatewayUnavailable: raise` is a no-op pass-through, leftover of the removed journaling.
+- [minor] C9 src/llmkit/usage.py: `total()` is defined and never used in the tree (the CLI recomputes inline instead).
+- [minor] C9 src/llmkit/health.py: `check_key(kind, …)` — `kind` parameter is never read; the caller passes `cfg.protocol` for nothing.
+- [minor] usage.py: `with _open(target) as connection` never closes the sqlite3 connection (context manager only manages transactions); harmless per-process but leaks a fd per call.
+- [minor] [missing] Task names both journal tables — «the gateway SQLite (usageHistory and usageDaily)» — but usage.py reads only `usageHistory`; `usageDaily` appears only in the test fixture and the journal glossary. Grouping by API key is met without it, so acceptable if the Architect agrees the daily aggregate is unused.
+- [minor] [missing] Acceptance «Then spend is grouped by the gateway API key» quoted against `_daily`/`byApiKey`: fixture builds `usageDaily.byApiKey`, but no code path ever reads it (same point as above, list once for decision).
