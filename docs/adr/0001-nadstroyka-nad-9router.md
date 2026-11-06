@@ -81,6 +81,19 @@ promptTokens, completionTokens, cost, status, tokens), `usageDaily` (агрег�
   (PostgreSQL/SQLite), `LLMKIT_DATABASE_URL`, `llm db *`, `llm cost` в текущем
   виде, метки и бюджеты, представление `llmkit_v1_calls`.
 
+## Цена — из ответа шлюза
+
+Своего прайса нет. Ответ `/v1/chat/completions` уже содержит всё, что нужно
+(проверено живьём, `deepseek-4.1-flash`): `model` — фактическая модель
+(`deepseek/deepseek-v4.1-flash-1017`), `provider` — имя провайдера,
+`usage.cost` — цена в USD (`usage.cost_details` — её разбивка). Отсюда
+`Answer.cost` — `usage.cost`, `served_model` — `model`, `provider` —
+`provider`; таблица `prices` в routing уходит.
+
+Особенность шлюза: на непоточный запрос он всё равно отвечает с
+`content-type: text/event-stream` — тело это один JSON и строка `data: [DONE]`;
+клиент разбирает оба вида.
+
 ## Кэша ответов нет
 
 Кэширование ответов — не задача llmkit (пользователь, 2026-11-06): убираются
