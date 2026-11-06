@@ -23,7 +23,8 @@ worker_args: null
 decision: false
 visual: null
 review: true
-depends_on: []
+depends_on:
+- LLMKIT-006
 budget_usd: null
 epic: E-002
 spec_refs: []
