@@ -15,8 +15,14 @@ heavy = ["rb-release check"]
 # the workserver, 48 cores (the Human 28.10: at least four tasks at once); heavy checks queue on the machine
 parallel = 4
 
+# fast mode: a worker holds a whole block in its context; the fuses are not targets
+[limits]
+max_files = 150
+max_lines = 4000
+max_prompt_tokens = 60000
+
 [protocol]
-test_command = "uv run pytest -q"  # red -> green, the TDD rule in AGENTS.md
+test_command = "uv run pytest -q --no-cov"  # --no-cov: a task runs its own test_paths, coverage gate lives in `checks`
 
 [docs]
 living = ["docs/architecture.md", "docs/cli-conventions.md", "docs/testing.md", "docs/decisions.md"]
