@@ -1,0 +1,128 @@
+---
+id: LLMKIT-011
+title: The rest of the gateway surface wrapped, documents rewritten and the specification
+  and plan sorted
+status: ideas
+attempts: 0
+blocked: false
+blocked_reason: null
+phase: null
+tests_hash: null
+publish_stage: null
+created_by: architect
+approved_by: null
+worker: pi
+type: feature
+owns_paths:
+- src/llmkit/gateway/
+- src/llmkit/cli/
+- tests/
+- README.md
+- CONTEXT.md
+- AGENTS.md
+- CODING_STANDARDS.md
+- docs/
+test_paths:
+- tests/test_media.py
+- tests/test_api_surface.py
+- tests/test_describe.py
+- tests/test_doctor.py
+- tests/test_help.py
+docs:
+- README.md
+- CONTEXT.md
+- AGENTS.md
+- docs/architecture.md
+- docs/decisions.md
+- docs/prd.md
+- docs/backlog.md
+tools: []
+worker_args: null
+class: hard
+decision: false
+visual: null
+depends_on:
+- LLMKIT-010
+budget_usd: null
+epic: E-003
+spec_refs: []
+checks:
+- uv run pytest -q
+- uv run ruff check .
+- uv run ruff format --check .
+- uv run ty check
+- python3 scripts/check_command_docstrings.py
+resident: null
+tool: null
+pr: null
+translation: 'Обернуть остальную поверхность шлюза: картинки, речь, видео, embeddings,
+  поиск, fetch, модели, responses/messages/systemone/Gemini — по команде на семейство,
+  с --json и Example. Документы под новую форму: README, глоссарий, архитектура, карта
+  решений; спецификация и план разбираются по разделам — живой документ, ADR, идея
+  или выброс (текст и причина на решение Человека).'
+---
+
+## What must work
+
+The rest of the gateway surface is wrapped, and the documents match the design that is left.
+
+### The rest of the gateway surface
+
+One typed wrapper and one CLI command group per family, each with --json and a --help that has an Example line:
+
+- images: generation;
+- audio: speech, transcriptions, voices;
+- video: generation, edits, extensions, get by id;
+- embeddings;
+- search and web fetch;
+- models: list, info, show one;
+- the other chat shapes: responses, responses compact, messages, messages count tokens, systemone, and the Gemini-shaped models endpoint.
+
+A media answer is a file or a URL, not a parse of a provider format; llmkit keeps no provider list and no keys of its own.
+
+### The documents
+
+- README is the reader's path: what llmkit is now (an overlay over 9router), the requirement of a running gateway, install, routing example with one gateway provider and the gateway key variable, one example per command group, and how an agent drives the CLI (--help, --json, exit codes). Every command and flag it shows exists and matches --help.
+- The glossary keeps only terms of the current design: no journal, response cache, tags, budget, cost source, transports or price table of llmkit.
+- The architecture document describes the modules as they are now; no database layer, no migrations, no subscription transports, no serve.
+- The decision map names who decides what, with the gateway as the only access, no own state and the doc kinds.
+- The v1 specification and the plan are sorted section by section into a living document, an ADR, a research record, an idea, or the drop list; both files are deleted only when every section is accounted for.
+- Pointers to the deleted documents are updated in the agent regulation, the README and the architecture document.
+
+## The report
+
+- Every section of the v1 specification and of the plan → its destination: a living document, an ADR, a research record, an idea (with the ready antagor idea add command), or the drop list.
+- The drop list carries each dropped section's text verbatim and the reason; the Human decides on it at acceptance, nothing is deleted silently.
+- The result of antagor layout check and antagor memory-check as the last lines of the report.
+- The list of the commands the README shows, so the Human can run them once.
+
+## Acceptance
+
+- Given a fake gateway answering an image generation, When lm image --json runs, Then the result carries the URL or the written file path, the model and the cost when present, exit 0 [check: tests/test_media.py]
+- Given a fake gateway answering speech, When the audio command runs with an output file, Then the bytes are written there and the path is in --json [check: tests/test_media.py]
+- Given the embeddings, search, fetch, models and other chat shapes, When each command runs against the fake gateway, Then it returns its typed result and has its own --help with an Example line [check: tests/test_api_surface.py]
+- Given lm describe --json after the new commands, When it is regenerated, Then its command tree matches the snapshots and lists every new group [check: tests/test_describe.py]
+- Given lm doctor --json, When the gateway answers, Then healthy is true and the checks name the gateway; when it does not answer, healthy is false [check: tests/test_doctor.py]
+- Given the README, When each command and flag it shows is compared with --help, Then every one exists with that flag [check: tests/test_help.py]
+- Given the glossary and the architecture document, When they are searched for the removed words, Then no term describes the response cache, the journal, tags, budgets, cost source, the subscription transports or the price table [check: tests/test_help.py]
+
+## How to test
+
+Unit, no network: the httpx gateway stub of the first task returns recorded answers of every family (image, speech, video, embeddings, search, fetch, models, responses, messages, systemone, Gemini-shaped models). Documents: the Human reads the report and runs the README commands once against the fake gateway or a real one.
+
+## Basis
+
+Reuse the gateway client and the error kinds of the first task and the guard/emit CLI pattern; follow docs/cli-conventions.md, ADR-0001 and the doc kinds of the antagor-method skill.
+
+## Read first
+
+- `docs/adr/0001-nadstroyka-nad-9router.md` — the whole surface and what stays
+- `README.md` — the reader's path that is being rewritten
+- `docs/prd.md` — the specification that is sorted
+- `docs/backlog.md` — the plan that is sorted
+- `docs/decisions.md` — who decides what
+
+## Out of scope
+
+- Moving other repositories to the new API or to the gateway journal.
+- Publishing a release of its own; the epic closes it.
