@@ -2,7 +2,7 @@
 id: LLMKIT-008
 title: 'Documents of the gateway design: README, glossary, architecture, and the sorting
   of the specification and the plan'
-status: ideas
+status: cancelled
 attempts: 0
 blocked: false
 blocked_reason: null

@@ -1,7 +1,7 @@
 ---
 id: LLMKIT-006
 title: 'Gateway client: ask, generate and ask_many through 9router over httpx'
-status: ideas
+status: cancelled
 attempts: 0
 blocked: false
 blocked_reason: null

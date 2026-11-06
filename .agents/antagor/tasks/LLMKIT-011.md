@@ -3,10 +3,10 @@ id: LLMKIT-011
 title: The rest of the gateway surface wrapped, documents rewritten and the specification
   and plan sorted
 status: queue
-attempts: 0
+attempts: 1
 blocked: false
 blocked_reason: null
-phase: null
+phase: red
 tests_hash: null
 publish_stage: null
 created_by: architect
@@ -30,6 +30,7 @@ test_paths:
 - tests/test_describe.py
 - tests/test_doctor.py
 - tests/test_help.py
+- tests/conftest.py
 docs:
 - README.md
 - CONTEXT.md
@@ -128,3 +129,19 @@ Reuse the gateway client and the error kinds of the first task and the guard/emi
 
 - Moving other repositories to the new API or to the gateway journal.
 - Publishing a release of its own; the epic closes it.
+
+## Feedback
+
+### Blocked: aborted
+
+Parked on purpose while LLMKIT-010 fixes the cost period blocker (its help text and snapshots change). Back in queue: the overlap with LLMKIT-010 keeps you from starting until it finishes, and you will stack on its branch, which already carries that fix. The prd.md and backlog.md sorting stays yours, as the review of LLMKIT-010 said.
+
+### Attempt 1: out of the task's bounds (the changes were reverted)
+
+- `AGENTS.md`
+- `CONTEXT.md`
+- `README.md`
+- `docs/architecture.md`
+- `docs/backlog.md`
+- `docs/decisions.md`
+- `docs/prd.md`

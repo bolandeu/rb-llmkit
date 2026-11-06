@@ -2,7 +2,7 @@
 id: LLMKIT-007
 title: 'Nothing of its own left: state and transports out, the rest of the gateway
   surface wrapped'
-status: ideas
+status: cancelled
 attempts: 0
 blocked: false
 blocked_reason: null

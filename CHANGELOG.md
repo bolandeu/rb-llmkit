@@ -5,6 +5,26 @@ All notable changes to this project are documented here. Versions follow
 
 The changelog is written by `antagor publish`; don't edit it by hand.
 
+## v0.13.0 — 2026-11-06
+
+### Main
+
+- architect: protocol test command without the coverage gate (a task runs a subset of tests)
+- architect: no own database — extended layer over 9router, CLI and help for agents (ADR-0001)
+- onboard: method layout
+- LLMKIT-IDEA-001: new
+- architect: ADR — gateway journals streaming calls only, cost optional
+- architect: ADR — what llmkit still is: code, no state
+- architect: ADR — cost and served model come in the gateway response
+- architect: ADR — no own usage journal, read the gateway's read-only
+- architect: ADR — full 9router surface list, systemone and gemini endpoints
+- architect: ADR — llmkit covers the whole 9router surface, media included
+- architect: ADR — no response cache in llmkit
+- architect: ADR — llmkit is a layer over 9router, model names verbatim
+- architect: floor on deepseek-4.1-flash with effort max
+- workers: pi for the worker, pi-glm for the reviewer
+
+
 ## v0.12.0 — 2026-10-29
 
 ### E-001 — Shared response cache in the usage database
