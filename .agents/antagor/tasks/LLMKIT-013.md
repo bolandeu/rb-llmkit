@@ -1,7 +1,7 @@
 ---
 id: LLMKIT-013
 title: 'AGENTS.md: the ladder for a plan defect found mid-run'
-status: ideas
+status: queue
 attempts: 0
 blocked: false
 blocked_reason: null
@@ -9,7 +9,7 @@ phase: null
 tests_hash: null
 publish_stage: null
 created_by: architect
-approved_by: null
+approved_by: architect
 worker: pi
 type: docs
 owns_paths:
