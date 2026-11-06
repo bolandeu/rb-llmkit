@@ -155,3 +155,14 @@ Reuse the error kinds and EXIT_CODES as they are, the guard/emit CLI pattern, an
 - `tests/test_subscriptions.py`
 - `tests/conftest.py`
 - `tests/test_gateway.py`
+
+### Answer to question #1
+
+> Green phase froze tests/test_gateway.py, but six of its cases cannot pass against the frozen tests/conftest.py: test_model_name_goes_verbatim calls kit(fake, routing=...) while the file's kit() already passes routing= (TypeError: got multiple values for keyword argument 'routing'), and the five CLI cases patch runtime.build_kit with a kit that has no routing, so llm ask exits 2 ROUTING_MISSING while the cases expect exit 0 with gateway fields and exit 5 for gateway errors.
+> Question: Who fixes tests/test_gateway.py: this task or the task that owns the test suite?
+> Options:
+> 1. Thaw tests/test_gateway.py for these six cases and fix them here
+> 2. Keep it frozen: the red checks stay red and LLMKIT-010 fixes the file
+> Recommended: Thaw tests/test_gateway.py for these six cases and fix them here
+
+Option 1: thaw tests/test_gateway.py; its six cases are the task's own test defects (kit() already passes routing=, and the CLI cases patch runtime.build_kit with a kit that has no routing) — fix them here, keep the intended behaviour of the acceptance items
