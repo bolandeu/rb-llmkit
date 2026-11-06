@@ -1,4 +1,4 @@
-"""Точки входа CLI в ядро: сборка `LlmKit` и разбор общих аргументов."""
+"""Точки входа CLI: сборка `LlmKit`, клиент шлюза и поиск файла routing."""
 
 import os
 import sys
@@ -16,6 +16,20 @@ ROUTING_FILE_ENV = "LLMKIT_ROUTING_FILE"
 def build_kit(**kwargs) -> LlmKit:
     """Единственное место, где CLI создаёт ядро (тесты подменяют его)."""
     return LlmKit(**kwargs)
+
+
+def build_gateway(spec: str | None = None):
+    """Клиент шлюза для команд его поверхности: адрес и ключ провайдера из routing (тесты подменяют его)."""
+    from .. import keys as keys_mod
+    from ..errors import RoutingInvalid
+    from ..gateway import GatewayClient
+
+    loaded = load_routing(spec, require_chain=False)
+    # У шлюза один провайдер: остальные семейства адресуются прямо ему.
+    if len(loaded.providers) != 1:
+        raise RoutingInvalid("/providers", "провайдер шлюза в routing один — 9router")
+    provider, cfg = next(iter(loaded.providers.items()))
+    return GatewayClient(cfg.base_url or "", api_key=keys_mod.resolve(provider, cfg))
 
 
 def default_routing_path() -> Path:

@@ -8,12 +8,26 @@ from . import ask, render, models, cost, describe, doctor  # noqa: F401
 
 # isort: on
 from ..version import installed_version
+from . import audio as audio_mod
 from . import auth as auth_mod
+from . import chat as chat_mod
 from . import config as config_mod
+from . import embeddings as embeddings_mod
+from . import image as image_mod
+from . import model as model_mod
 from . import routing as routing_mod
+from . import video as video_mod
+from . import web as web_mod
 from .app import app
 from .output import configure_logging
 
+app.add_typer(image_mod.app, name="image")
+app.add_typer(audio_mod.app, name="audio")
+app.add_typer(video_mod.app, name="video")
+app.add_typer(embeddings_mod.app, name="embeddings")
+app.add_typer(web_mod.app, name="web")
+app.add_typer(model_mod.app, name="model")
+app.add_typer(chat_mod.app, name="chat")
 app.add_typer(auth_mod.app, name="auth")
 app.add_typer(config_mod.app, name="config")
 app.add_typer(routing_mod.app, name="routing")

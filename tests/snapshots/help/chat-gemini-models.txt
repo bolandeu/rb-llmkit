@@ -1,0 +1,17 @@
+
+ Usage: llm chat gemini-models [OPTIONS]
+
+ Модели шлюза в форме Gemini (`name`, `displayName`) с `/v1beta/models`.
+
+ Коды выхода: 0 — готово, 2 — нет routing, 3 — нет ключа шлюза, 5 — шлюз
+ недоступен или ответил ошибкой.
+
+ Example: llm chat gemini-models --json
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --routing        <str>  Routing v1: JSON или файл; иначе LLMKIT_ROUTING_FILE, иначе файл по      │
+│                         умолчанию.                                                               │
+│ --json                  Машинный вывод: JSON-конверт в stdout.                                   │
+│ --help                  Show this message and exit.                                              │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+
