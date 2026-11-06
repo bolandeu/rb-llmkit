@@ -4,9 +4,9 @@ title: The rest of the gateway surface wrapped, documents rewritten and the spec
   and plan sorted
 status: queue
 attempts: 0
-blocked: false
-blocked_reason: null
-phase: null
+blocked: true
+blocked_reason: aborted
+phase: red
 tests_hash: null
 publish_stage: null
 created_by: architect
