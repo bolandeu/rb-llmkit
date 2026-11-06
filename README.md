@@ -1,92 +1,49 @@
 # llmkit
 
-Общий LLM-слой для инструментов: один клиент к шлюзу 9router вместо нескольких
-самописных. Даёт вызов модели, текст или JSON по схеме, пачку задач и чтение
-расходов из журнала шлюза.
+Надстройка над шлюзом [9router](https://github.com/decolua/9router): вызовы моделей,
+JSON по схеме и пачка задач — через шлюз, без своих клиентов провайдеров.
+Даёт `LlmKit` в Python и команду `llm` для людей и агентов.
 
-Своего состояния у llmkit нет: ни базы, ни журнала, ни кэша ответов, ни
-прайса, ни доступа к провайдерам напрямую — всё это у шлюза (ADR-0001).
-Провайдеры, ключи, подписки и кэш живут в 9router.
+Своего состояния у llmkit нет: ни базы, ни журнала, ни хранения ключей. Доступ к
+моделям, подписки, квоты и расходы — у шлюза (ADR-0001). Нужен запущенный 9router
+на той же машине.
 
-Статус — [CHANGELOG.md](CHANGELOG.md). План — [docs/backlog.md](docs/backlog.md).
+Статус — [CHANGELOG.md](CHANGELOG.md).
 
 ## Что это даёт
 
 | Возможность | Коротко |
 |---|---|
-| Routing данными | провайдер шлюза и цепочка моделей — JSON routing v1 в вызове (`--routing`, `LlmKit(routing=...)`); встроенных провайдеров нет |
-| Один вызов — один запрос | цепочку, фолбэк и кэш исполняет шлюз; llmkit просит первую модель |
-| JSON по схеме | JSON Schema ответа уходит в шлюз как `response_format`; невалидный ответ повторяется с текстом ошибки |
+| Один вызов модели | `LlmKit.ask` / `generate`; цепочку, фолбэк и повторы исполняет шлюз |
+| JSON по схеме | JSON Schema уходит в шлюз как `response_format`; невалидный ответ повторяется с текстом ошибки |
 | Пачка задач | `ask_many` с ограничением параллельности, падение одной задачи не рвёт пачку |
+| Вся поверхность шлюза | команды `llm image`, `audio`, `video`, `embeddings`, `web`, `model`, `chat` — по одной на семейство эндпоинтов |
 | Расходы | `llm cost` читает журнал шлюза (`usageHistory`) только на чтение, по ключам потребителей |
 
 ## Установка
 
-Дистрибутив называется **`rb-llmkit`** (стандарт tools §10). Импорт —
-`import llmkit`, команда — `llm`. Ставить всегда по тегу `vX.Y.Z`.
+Дистрибутив называется **`rb-llmkit`**, импорт — `llmkit`, команда — `llm`.
+Ставить всегда по тегу `vX.Y.Z`.
 
 ```bash
-uv add "rb-llmkit @ git+https://github.com/bolandeu/llmkit@vX.Y.Z"        # в проект
+uv add "rb-llmkit @ git+https://github.com/bolandeu/llmkit@vX.Y.Z"           # в проект
 uv tool install "rb-llmkit @ git+https://github.com/bolandeu/llmkit@vX.Y.Z"  # команда в систему
 ```
 
-Репозиторий приватный, поэтому на машине нужен доступ к GitHub: `gh auth login`
-(или ssh-ключ и адрес `git+ssh://git@github.com/bolandeu/llmkit`).
+Репозиторий приватный: на машине нужен доступ к GitHub (`gh auth login` или
+ssh-ключ и адрес `git+ssh://git@github.com/bolandeu/llmkit`). Требуется Python >= 3.11.
 
-```toml
-[project]
-dependencies = ["rb-llmkit"]
+## Ключ шлюза и routing
 
-[tool.uv.sources]
-rb-llmkit = { git = "https://github.com/bolandeu/llmkit", tag = "vX.Y.Z" }
-```
-
-Требуется Python >= 3.11.
-
-## CLI `llm`
-
-У всех команд есть `--json` (конверт в stdout), диагностика идёт в stderr.
-Коды выхода: **0** — успех, **1** — непредвиденная ошибка, **2** — неверные
-аргументы или routing, **3** — нет переменной с ключом шлюза, **5** — шлюз
-недоступен, ответил ошибкой, ответ невалиден или журнал расходов не читается.
-
-```bash
-llm                                      # справка: список команд, код выхода 0
-llm ask "Столица Франции?" --routing routing.json --tag tool=notes
-llm ask "Привет" -m "Deep Sec" -m opencode-go   # цепочка из CLI, если в routing нет chain
-cat prompt.txt | llm ask --system "Отвечай кратко" --json
-llm json "Разбери запрос" --schema schema.json   # в stdout только JSON-объект
-llm render --template prompt.md --vars vars.json # шаблон mustache; нет переменной — код 2
-llm ask --template prompt.md --vars '{"city": "Москва"}'
-llm models                                # провайдеры routing, источник ключа, цепочка
-llm routing validate routing.json         # проверка перед сохранением; ROUTING_INVALID с путём к полю
-llm routing import config.toml            # перенос config.toml llmkit < 0.8
-llm auth status --check                   # ключ шлюза: откуда и работает ли; 3 — ключ не принят
-llm cost --since 7d                       # расходы из журнала шлюза, по ключам
-llm config show                           # итоговые настройки вызова
-llm doctor --json                         # готовность: версия, конфиг, routing, шлюз
-llm describe --json                       # контракт CLI документом OpenCLI
-```
-
-Полный список команд и флагов — `llm --help` и `llm <команда> --help`; справка
-генерируется из кода и не расходится с ним.
-
-## Ключ шлюза
-
-Ключ берётся только из окружения: имя переменной называет routing (`key_env`, по
-умолчанию `LLM_<ПРОВАЙДЕР>_API_KEY`). Связки ключей и `.env`-файлов у llmkit нет.
+Ключ берётся только из окружения; имя переменной называет routing (`key_env`).
 Нет переменной — код 3, `AUTH_MISSING` с её именем.
 
 ```bash
 export NINEROUTER_API_KEY=sk-...
 ```
 
-## Routing v1
-
-Файла конфига нет. Провайдер шлюза и цепочка приходят данными в каждом вызове —
-routing v1 (схема `src/llmkit/contracts/routing-v1.schema.json`, векторы
-`routing-v1.vectors.json` — публичный контракт). Секретов в routing нет: только
-имя переменной с ключом.
+Провайдер шлюза и цепочка моделей приходят данными — routing v1 (схема
+`src/llmkit/contracts/routing-v1.schema.json`). Секретов в routing нет.
 
 ```json
 {
@@ -98,107 +55,107 @@ routing v1 (схема `src/llmkit/contracts/routing-v1.schema.json`, векто
 }
 ```
 
-- `protocol` — только `openai_compatible` с адресом шлюза; других провайдеров у
-  llmkit нет.
+- `protocol` — только `openai_compatible` с адресом шлюза.
 - `chain` — имена моделей шлюза строками, как в его настройке (комбо — одна
   строка). Порядок и фолбэк исполняет шлюз: llmkit просит первую.
-- CLI: `--routing '<json>'` или `--routing <файл>` (не stdin — он для текста и
-  шаблона); без него — `LLMKIT_ROUTING_FILE`; без него — `routing.json` в каталоге
-  конфигурации (`platformdirs.user_config_dir("llmkit")`; macOS —
-  `~/Library/Application Support/llmkit/routing.json`). Права шире 600 —
-  предупреждение в stderr. Нет ничего — код 2, `ROUTING_MISSING` с путём по умолчанию.
+- CLI: `--routing '<json>'` или `--routing <файл>`; без него — `LLMKIT_ROUTING_FILE`;
+  без него — `routing.json` в каталоге конфигурации (`platformdirs.user_config_dir("llmkit")`,
+  macOS — `~/Library/Application Support/llmkit/routing.json`). Нет ничего — код 2,
+  `ROUTING_MISSING` с путём по умолчанию.
 - Цепочку можно задать `-m` (повторяемый) в routing без `chain`; оба сразу —
   `ROUTING_INVALID` «chain задана дважды».
 
-Настройки вызова — дефолты в коде (температура 0, таймаут 120 с, `max_tokens`
-16000, 6 параллельных, повторы невалидного ответа 2) → `LLMKIT_LOG_LEVEL` →
-аргументы `LlmKit(...)` и флаги CLI (`--temperature`, `--max-tokens`, `--timeout`,
-`--no-retry`).
+## CLI `llm`
+
+У всех команд есть `--json` (конверт в stdout), диагностика идёт в stderr.
+Коды выхода: **0** — успех, **1** — непредвиденная ошибка, **2** — неверные
+аргументы или routing, **3** — нет переменной с ключом шлюза, **5** — шлюз
+недоступен, ответил ошибкой или его журнал расходов не читается.
+
+```bash
+llm                                      # справка: список команд, код выхода 0
+llm ask "Столица Франции?" --routing routing.json
+llm ask "Привет" -m "Deep Sec" -m opencode-go   # цепочка из CLI, если в routing нет chain
+llm json "Разбери запрос" --schema schema.json   # в stdout только JSON-объект
+llm render --template prompt.md --vars vars.json # шаблон mustache; нет переменной — код 2
+llm models --json                        # провайдеры routing, источник ключа, цепочка
+llm routing validate routing.json        # проверка перед сохранением; ROUTING_INVALID с путём к полю
+llm routing import config.toml           # перенос config.toml llmkit < 0.8
+llm auth status --check --json           # ключ шлюза: откуда и работает ли; 3 — ключ не принят
+llm cost --since 7d --json               # расходы из журнала шлюза, по ключам
+llm config show --json                   # итоговые настройки вызова
+llm doctor --json                        # готовность: версия, конфиг, routing, шлюз
+llm describe --json                      # контракт CLI документом OpenCLI
+```
+
+### Поверхность шлюза
+
+Одна команда — один эндпоинт шлюза; ответ типизирован в `--json`, форматы
+провайдера llmkit не разбирает.
+
+```bash
+llm image generate "кот в шляпе" -m openai/gpt-image-1 --out cat.png --json
+llm audio speech "привет" -m openai/gpt-4o-mini-tts --voice alloy --out speech.mp3 --json
+llm audio transcribe speech.mp3 -m openai/whisper-1 --json
+llm audio voices --json
+llm video generate "волна на пляже" -m google/veo-3 --json
+llm video get video_1 --json
+llm embeddings create "текст" -m openai/text-embedding-3-small --json
+llm web search "llmkit" -m perplexity/sonar --json
+llm web fetch https://example.com --json
+llm model list --json
+llm model show deepseek/deepseek-v4.1-flash-1017 --json
+llm chat responses "Столица Франции?" -m openai/gpt-5 --json
+llm chat messages "Столица Франции?" -m anthropic/claude-x --json
+```
+
+Картинка и речь приходят байтами — их место в файле `--out`; ссылку или URL
+`--json` отдаёт в поле `url`.
+
+## Как агент работает с CLI
+
+1. `llm --help` и `llm <команда> --help` — справка из кода: у каждой команды есть
+   строка `Example:`, у каждого флага `help=`.
+2. `--json` — машинный конверт в stdout: `{"ok": true, ...}` или
+   `{"ok": false, "error": {"code", "message", "action"}}`.
+3. Коды выхода говорят, что делать: 0 — готово, 2 — аргументы, 3 — ключ, 5 — шлюз.
+4. `llm doctor --json` — готовность до работы; `llm describe --json` — контракт
+   CLI для каталога инструментов.
 
 ## Расходы
 
 `llm cost` читает SQLite шлюза: `LLMKIT_GATEWAY_DB`, по умолчанию
 `~/.9router/db/data.sqlite`. Файл открывается только на чтение — llmkit его не
-пишет и не мигрирует. Строки отчёта — по ключу шлюза (`apiKey`); потребителя
-различает его собственный ключ. Нет файла — код 5, `GATEWAY_DB_UNAVAILABLE` с путём.
+пишет. Строки отчёта — по ключу шлюза (`apiKey`); потребителя различает его
+собственный ключ. Период: `7d`, `12h`, `2w`, `ГГГГ-ММ-ДД` или метка ISO 8601. Нет файла — код 5,
+`GATEWAY_DB_UNAVAILABLE` с путём.
 
-```bash
-llm cost --since 7d --json   # rows[] по ключам и total
-```
-
-## Примеры
-
-### Текст: `generate`
-
-Ошибок не бросает — при полном провале возвращает `None`.
+## Python API
 
 ```python
 import asyncio
-from llmkit import LlmKit
+from llmkit import LlmKit, Task
 
-kit = LlmKit(routing=routing, tags={"tool": "antagor"})  # routing — dict по схеме v1
+kit = LlmKit(routing=routing)  # routing — dict по схеме v1
 
 
 async def main():
-    text = await kit.generate("Одним словом: столица Франции?", system="Отвечай кратко")
-    print(text)
+    print(await kit.generate("Одним словом: столица Франции?", system="Отвечай кратко"))
 
 
 asyncio.run(main())
 ```
 
-Синхронно — `kit.generate_sync("…")`; работает и там, где event loop уже запущен
-(вызов уходит в отдельный поток).
+`LlmKit.ask` возвращает `Answer`: `data`, `model` (запрошенная строка),
+`served_model` (что назвал шлюз), `provider`, `cost_usd`, `attempts`, токены,
+`latency_ms`, `warnings`, `ok`. `ask_many` идёт параллельно (`concurrency`) и не
+рвёт пачку на упавшей задаче; `default` у `Task` — что вернуть, когда моделей нет.
+Синхронные обёртки — `ask_sync`, `generate_sync`, `ask_many_sync`.
 
-### JSON по схеме: `ask`
+## Решения
 
-```python
-from pydantic import BaseModel
-from llmkit import LlmKit, Task
-
-
-class Verdict(BaseModel):
-    intent: str
-    confidence: float
-
-
-kit = LlmKit(routing=routing)
-answer = kit.ask_sync(
-    Task(
-        user="Запрос: «купить кофеварку». Определи намерение.",
-        schema=Verdict,  # или готовая JSON Schema (dict)
-        tags={"tool": "intentree", "niche": "ved"},
-        default=Verdict(intent="unknown", confidence=0.0),  # без него — AllModelsFailed
-    )
-)
-print(answer.data.intent, answer.source, answer.model, answer.cost_usd)
-```
-
-`Answer` содержит `data`, `source` (`llm` | `default`), `model` (запрошенная
-строка модели), `served_model` (что назвал шлюз), `provider`, `attempts` (по
-записи на попытку: `cost_usd`, `cost_source`, `billable`), токены, `cost_usd`
-(`None` — цены в ответе нет), `cost_source`, `billable_requests`, `cost_total`,
-`latency_ms`, `warnings` и `ok`. Без routing экземпляр создаётся, а первый вызов
-бросает `RoutingMissing`.
-
-### Пачка задач: `ask_many`
-
-Порядок результатов совпадает с порядком задач, упавшая задача не рвёт пачку,
-параллельность ограничена `defaults.concurrency`.
-
-```python
-tasks = [Task(user=f"Тема: {t}. Одно предложение.") for t in темы]
-answers = await kit.ask_many(
-    tasks,
-    concurrency=4,
-    on_progress=lambda done, total, answer: print(f"{done}/{total} {answer.model}"),
-)
-```
-
-## Решения и отвергнутые альтернативы
-
-[docs/prd.md](docs/prd.md) §1 и [docs/adr/](docs/adr/). Действующее решение —
-ADR-0001: llmkit — надстройка над шлюзом 9router.
+[docs/adr/](docs/adr/). Действующее: ADR-0001 — llmkit надстройка над шлюзом
+9router, своего состояния и доступа к провайдерам нет.
 
 ## Разработка
 

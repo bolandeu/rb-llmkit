@@ -4,9 +4,8 @@ One LLM layer for the user's tools: one gateway call, a typed answer and a spend
 the `llm` CLI. It replaces the hand-written LLM clients of the tools that call it, so routing and the shape of the
 answer are decided in one place.
 
-ADR-0001 replaced the state layer of this list: the own providers, transports, journal, cache, price table and tags
-went to the 9router gateway; llmkit keeps code — the typed API, the response parsing, the media wrappers and the CLI
-contracts.
+ADR-0001 made llmkit an overlay over the 9router gateway: the gateway holds the access to providers, the accounts and
+the spend; llmkit keeps code — the typed API, the response parsing, the media wrappers and the CLI contracts.
 
 ## Glossary
 
@@ -16,9 +15,9 @@ The data that tells llmkit where to call: the gateway provider and the chain of 
 _Avoid_: config, settings, config.toml, profile
 
 **provider** (провайдер):
-One upstream service named in routing: a protocol (`openrouter`, `openai_compatible`, `claude_cli`…), a base URL and
-the name of an environment variable that holds the key. Keeps no secret itself. After ADR-0001 the only provider is
-the gateway: one `openai_compatible` entry, the provider keys live in 9router.
+One upstream service named in routing: a protocol (`openai_compatible`), a base URL and the name of an environment
+variable that holds the key. Keeps no secret itself. The only provider is the gateway: one `openai_compatible` entry,
+the provider keys live in 9router.
 _Avoid_: backend, vendor, endpoint, integration
 
 **chain** (цепочка):
@@ -28,40 +27,39 @@ _Avoid_: fallback list, pool, router
 **attempt** (попытка):
 One model call inside a chain; with one call to the gateway it is usually one attempt. Failed attempts of an invalid
 answer stay in `Answer.attempts`, they are billed too.
-_Avoid_: try, call (when the journal row is meant)
+_Avoid_: try, call (when a request row is meant)
 
 **task** (`Task`):
-The unit of `ask_many`: a prompt, a schema, tags for the log line and an optional `default`.
+The unit of `ask_many`: a prompt, a schema and an optional `default`.
 _Avoid_: job, item, request, Antagor task
 
 **answer** (`Answer`):
 The parsed value llmkit returns for a task: the text or the value of the schema, with the model, cost and warnings.
 _Avoid_: result, response (for the llmkit value)
 
-**journal** (журнал шлюза, `usageHistory`, `usageDaily`):
-The gateway's own SQLite journal: one row per request with the consumer's API key, tokens and cost. llmkit reads it
-for `llm cost`, only read-only, never writes or migrates it; a consumer is told apart by its gateway API key.
-_Avoid_: usage, log, history, stats
-
-**tags** (метки):
-The caller's labels on a task (`tool`, `niche`…). They go to the log line only: grouping of spend is by the gateway
-API key of the consumer.
-_Avoid_: labels, metadata, dimensions
-
 **cost** (цена, `cost_usd`):
 The money of one attempt, taken from the gateway's answer (`usage.cost`); `served_model` and `provider` come from the
-same answer. `cost_source` is `provider` or null: llmkit keeps no price table.
-_Avoid_: price (of a model — that is the price table), spend, expense
+same answer. llmkit keeps no table of its own.
+_Avoid_: spend, expense
 
 **served model** (фактическая модель, `served_model`):
 The concrete model that answered when the asked name is an alias or a gateway combo.
 _Avoid_: actual model, real model, resolved model
 
 **gateway** (шлюз, 9router):
-The external OpenAI-compatible gateway on `localhost:20128/v1` that holds accounts, OAuth subscriptions, quotas,
-the response cache and the spend journal. It is the only way to a model — llmkit calls it as one
-`openai_compatible` provider, executes no fallback of its own and keeps no journal, cache or price of its own.
+The external OpenAI-compatible gateway on `localhost:20128/v1` that holds accounts, OAuth subscriptions, quotas and the
+spend. It is the only way to a model — llmkit calls it as one `openai_compatible` provider, executes no
+fallback of its own and keeps no state of its own.
 _Avoid_: proxy, router
+
+**gateway surface** (поверхность шлюза):
+The endpoint families llmkit wraps one command group each: chat shapes, images, audio, video, embeddings, search and
+page fetch, models.
+_Avoid_: API, endpoints, integrations
+
+**media answer** (медиа-ответ):
+The answer of an image, audio or video command: a URL or a written file, never a parse of a provider format.
+_Avoid_: blob, binary, attachment
 
 **readiness report** (`llm doctor`):
 The checks a caller runs before work — version, settings, routing, gateway — as `healthy` plus a list of checks.

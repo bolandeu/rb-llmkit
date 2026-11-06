@@ -7,7 +7,7 @@ from .. import usage
 from .app import app
 from .output import CliError, JsonOption, bad_arguments, emit, enable_json, guard, out
 
-PERIOD_HINT = "ожидается 7d, 12h, 2w или ГГГГ-ММ-ДД"
+PERIOD_HINT = f"ожидается {usage.PERIOD_FORMS}"
 
 
 def _row_payload(row: usage.Row) -> dict:
@@ -23,8 +23,8 @@ def _row_payload(row: usage.Row) -> dict:
 @app.command("cost")
 def cost(
     ctx: typer.Context,
-    since: str = typer.Option(None, "--since", help="Начало периода: 7d, 12h, 2w или ГГГГ-ММ-ДД."),
-    until: str = typer.Option(None, "--until", help="Конец периода в том же формате."),
+    since: str = typer.Option(None, "--since", help=f"Начало периода: {usage.PERIOD_FORMS}."),
+    until: str = typer.Option(None, "--until", help=f"Конец периода: {usage.PERIOD_FORMS}."),
     json_output: bool = JsonOption,
 ) -> None:
     """Показать расходы из журнала шлюза по ключам потребителей.

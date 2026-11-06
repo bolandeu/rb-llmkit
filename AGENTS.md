@@ -7,9 +7,11 @@
 импорт-пакет — `llmkit`, команда — `llm`.
 
 - Термины — `CONTEXT.md`; устройство модулей и публичный контракт CLI —
-  `docs/architecture.md`; правила, которые судит ревьюер, — `CODING_STANDARDS.md`.
-- Спецификация v1 — `docs/prd.md` (разбирается по видам документов; пока главнее
-  этого файла). Сделанное — `CHANGELOG.md` (пишет `antagor publish`, руками не правится).
+  `docs/architecture.md`; правила, которые судит ревьюер, — `CODING_STANDARDS.md`;
+  кто что решает и где это задано — `docs/decisions.md`.
+- Решения с датой — `docs/adr/`, проверенное исследование — `docs/research/`,
+  отложенное — идея (`antagor idea add`). Сделанное — `CHANGELOG.md` (пишет
+  `antagor publish`, руками не правится).
 - Стандарт CLI — [standard.md](https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator/src/branch/main/skills/cli-builder/reference/standard.md);
   пакет приведён к шаблону cli-generator v1.27.3.
 
@@ -71,13 +73,16 @@ uv run python -X importtime -c "import llmkit" 2>&1 | tail -1   # должно �
 ## Конвенции
 
 - Комментарии и докстринги — по-русски, короткие.
-- `docs/architecture.md` — модули, ленивые импорты, классификация ошибок, ключи,
-  слой БД, контракт `llm describe`, контракты потребителей, routing.
+- `docs/architecture.md` — модули, поверхность шлюза, публичный API, ленивые
+  импорты, классификация ошибок, ключи, контракт `llm describe`, контракты
+  потребителей, routing.
 - `docs/testing.md` — как писать тесты (без сети).
 - `docs/cli-conventions.md` — паттерн CLI-команд, коды выхода.
 - Routing в CLI — только `runtime.routing_spec`/`load_routing` (порядок поиска —
   `docs/architecture.md`). Тесты не видят настоящий файл: `conftest.isolated`
   подменяет `platformdirs.user_config_dir`.
+- Клиент шлюза для команд его поверхности — только `runtime.build_gateway`
+  (тесты подменяют его); один метод на семейство — `src/llmkit/gateway/client.py`.
 
 ## Журнал расходов — у шлюза, только чтение
 
@@ -108,5 +113,5 @@ uv run python -X importtime -c "import llmkit" 2>&1 | tail -1   # должно �
   убранную зависимость от другого инструмента, ломающий релиз и его потребителей.
 - **Серверы Linux без экрана**: сначала переменные окружения; имена переменных —
   уже существующие; без TTY никаких вопросов; без путей только для Mac.
-- **Данные** — только в каталоге конфигурации пользователя (`routing.json`), не
+- **Данные** — только в каталоге конфигурации пользователя (файл routing), не
   в репозитории; журнал расходов — файл шлюза, llmkit его только читает.

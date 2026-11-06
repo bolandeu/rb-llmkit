@@ -693,7 +693,7 @@
                 "required": true
               }
             ],
-            "description": "Начало периода: 7d, 12h, 2w или ГГГГ-ММ-ДД.",
+            "description": "Начало периода: 7d, 12h, 2w, ГГГГ-ММ-ДД или метка ISO 8601.",
             "metadata": [
               {
                 "name": "x-rb-type",
@@ -709,7 +709,7 @@
                 "required": true
               }
             ],
-            "description": "Конец периода в том же формате.",
+            "description": "Конец периода: 7d, 12h, 2w, ГГГГ-ММ-ДД или метка ISO 8601.",
             "metadata": [
               {
                 "name": "x-rb-type",
@@ -768,6 +768,1504 @@
               {
                 "name": "x-rb-default",
                 "value": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "image",
+        "description": "Картинки шлюза: генерация — `llm image generate`.",
+        "commands": [
+          {
+            "name": "generate",
+            "description": "Сгенерировать картинку по описанию.\n\nОтвет — `url` картинки или файл `--out`, если шлюз вернул её байтами; модель\nи цена (`cost`) — из ответа шлюза. Коды выхода: 0 — готово, 2 — нет routing\nили не указан `--out` под байты, 3 — нет ключа шлюза, 5 — шлюз недоступен\nили ответил ошибкой.\n\nExample: llm image generate \"кот в шляпе\" -m openai/gpt-image-1 --out cat.png --json",
+            "options": [
+              {
+                "name": "--model",
+                "aliases": [
+                  "-m"
+                ],
+                "required": true,
+                "arguments": [
+                  {
+                    "name": "MODEL",
+                    "required": true
+                  }
+                ],
+                "description": "Модель шлюза строкой как в его настройке.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--out",
+                "arguments": [
+                  {
+                    "name": "OUT_PATH",
+                    "required": true
+                  }
+                ],
+                "description": "Файл для ответа: картинка или речь приходят байтами.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--size",
+                "arguments": [
+                  {
+                    "name": "SIZE",
+                    "required": true
+                  }
+                ],
+                "description": "Размер картинки как его ждёт шлюз, например 1024x1024.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--routing",
+                "arguments": [
+                  {
+                    "name": "ROUTING",
+                    "required": true
+                  }
+                ],
+                "description": "Routing v1: JSON или файл; иначе LLMKIT_ROUTING_FILE, иначе файл по умолчанию.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--json",
+                "description": "Машинный вывод: JSON-конверт в stdout.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ],
+            "arguments": [
+              {
+                "name": "prompt",
+                "required": true,
+                "arity": {
+                  "minimum": 1,
+                  "maximum": 1
+                },
+                "description": "Что нарисовать.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "audio",
+        "description": "Речь шлюза: озвучка, расшифровка, голоса — `llm audio speech` и другие.",
+        "commands": [
+          {
+            "name": "speech",
+            "description": "Озвучить текст: шлюз отдаёт байты речи, команда пишет их в `--out`.\n\nОтвет — путь к файлу и его content-type. Коды выхода: 0 — готово, 2 — нет\nrouting, 3 — нет ключа шлюза, 5 — шлюз недоступен или ответил ошибкой.\n\nExample: llm audio speech \"привет\" -m openai/gpt-4o-mini-tts --voice alloy --out speech.mp3 --json",
+            "options": [
+              {
+                "name": "--model",
+                "aliases": [
+                  "-m"
+                ],
+                "required": true,
+                "arguments": [
+                  {
+                    "name": "MODEL",
+                    "required": true
+                  }
+                ],
+                "description": "Модель шлюза строкой как в его настройке.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--out",
+                "required": true,
+                "arguments": [
+                  {
+                    "name": "OUT_PATH",
+                    "required": true
+                  }
+                ],
+                "description": "Файл для байтов речи: шлюз отвечает не JSON.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--voice",
+                "arguments": [
+                  {
+                    "name": "VOICE",
+                    "required": true
+                  }
+                ],
+                "description": "Голос шлюза; список — `llm audio voices`.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--format",
+                "arguments": [
+                  {
+                    "name": "FMT",
+                    "required": true
+                  }
+                ],
+                "description": "Формат ответа как его ждёт шлюз, например mp3.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--routing",
+                "arguments": [
+                  {
+                    "name": "ROUTING",
+                    "required": true
+                  }
+                ],
+                "description": "Routing v1: JSON или файл; иначе LLMKIT_ROUTING_FILE, иначе файл по умолчанию.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--json",
+                "description": "Машинный вывод: JSON-конверт в stdout.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ],
+            "arguments": [
+              {
+                "name": "text",
+                "required": true,
+                "arity": {
+                  "minimum": 1,
+                  "maximum": 1
+                },
+                "description": "Что озвучить.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "transcribe",
+            "description": "Расшифровать речь из файла: текст, модель и цена из ответа шлюза.\n\nКоды выхода: 0 — готово, 2 — нет routing или файла, 3 — нет ключа шлюза,\n5 — шлюз недоступен или ответил ошибкой.\n\nExample: llm audio transcribe speech.mp3 -m openai/whisper-1 --json",
+            "options": [
+              {
+                "name": "--model",
+                "aliases": [
+                  "-m"
+                ],
+                "required": true,
+                "arguments": [
+                  {
+                    "name": "MODEL",
+                    "required": true
+                  }
+                ],
+                "description": "Модель шлюза строкой как в его настройке.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--language",
+                "arguments": [
+                  {
+                    "name": "LANGUAGE",
+                    "required": true
+                  }
+                ],
+                "description": "Язык речи кодом, например ru.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--routing",
+                "arguments": [
+                  {
+                    "name": "ROUTING",
+                    "required": true
+                  }
+                ],
+                "description": "Routing v1: JSON или файл; иначе LLMKIT_ROUTING_FILE, иначе файл по умолчанию.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--json",
+                "description": "Машинный вывод: JSON-конверт в stdout.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ],
+            "arguments": [
+              {
+                "name": "file",
+                "required": true,
+                "arity": {
+                  "minimum": 1,
+                  "maximum": 1
+                },
+                "description": "Файл с речью.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "voices",
+            "description": "Список голосов шлюза для `llm audio speech --voice`.\n\nКоды выхода: 0 — готово, 2 — нет routing, 3 — нет ключа шлюза, 5 — шлюз\nнедоступен или ответил ошибкой.\n\nExample: llm audio voices --json",
+            "options": [
+              {
+                "name": "--routing",
+                "arguments": [
+                  {
+                    "name": "ROUTING",
+                    "required": true
+                  }
+                ],
+                "description": "Routing v1: JSON или файл; иначе LLMKIT_ROUTING_FILE, иначе файл по умолчанию.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--json",
+                "description": "Машинный вывод: JSON-конверт в stdout.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "video",
+        "description": "Видео шлюза: генерация, правка, продолжение, задание по id — `llm video generate`.",
+        "commands": [
+          {
+            "name": "generate",
+            "description": "Поставить задание видео по описанию.\n\nОтвет — id задания, его состояние (`status`), ссылка на файл (`url`), модель\nи цена. Коды выхода: 0 — готово, 2 — нет routing, 3 — нет ключа шлюза,\n5 — шлюз недоступен или ответил ошибкой.\n\nExample: llm video generate \"волна на пляже\" -m google/veo-3 --json",
+            "options": [
+              {
+                "name": "--model",
+                "aliases": [
+                  "-m"
+                ],
+                "required": true,
+                "arguments": [
+                  {
+                    "name": "MODEL",
+                    "required": true
+                  }
+                ],
+                "description": "Модель шлюза строкой как в его настройке.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--routing",
+                "arguments": [
+                  {
+                    "name": "ROUTING",
+                    "required": true
+                  }
+                ],
+                "description": "Routing v1: JSON или файл; иначе LLMKIT_ROUTING_FILE, иначе файл по умолчанию.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--json",
+                "description": "Машинный вывод: JSON-конверт в stdout.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ],
+            "arguments": [
+              {
+                "name": "prompt",
+                "required": true,
+                "arity": {
+                  "minimum": 1,
+                  "maximum": 1
+                },
+                "description": "Что снять.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "edit",
+            "description": "Поставить задание правки готового видео.\n\nОтвет — как у `llm video generate`: id задания, состояние, ссылка, модель\nи цена. Коды выхода: 0 — готово, 2 — нет routing, 3 — нет ключа шлюза,\n5 — шлюз недоступен или ответил ошибкой.\n\nExample: llm video edit https://video.test/1.mp4 --prompt \"закат\" -m google/veo-3 --json",
+            "options": [
+              {
+                "name": "--prompt",
+                "required": true,
+                "arguments": [
+                  {
+                    "name": "PROMPT",
+                    "required": true
+                  }
+                ],
+                "description": "Что изменить.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--model",
+                "aliases": [
+                  "-m"
+                ],
+                "required": true,
+                "arguments": [
+                  {
+                    "name": "MODEL",
+                    "required": true
+                  }
+                ],
+                "description": "Модель шлюза строкой как в его настройке.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--routing",
+                "arguments": [
+                  {
+                    "name": "ROUTING",
+                    "required": true
+                  }
+                ],
+                "description": "Routing v1: JSON или файл; иначе LLMKIT_ROUTING_FILE, иначе файл по умолчанию.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--json",
+                "description": "Машинный вывод: JSON-конверт в stdout.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ],
+            "arguments": [
+              {
+                "name": "video",
+                "required": true,
+                "arity": {
+                  "minimum": 1,
+                  "maximum": 1
+                },
+                "description": "Ссылка на готовое видео.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "extend",
+            "description": "Поставить задание продолжения готового видео.\n\nОтвет — как у `llm video generate`: id задания, состояние, ссылка, модель\nи цена. Коды выхода: 0 — готово, 2 — нет routing, 3 — нет ключа шлюза,\n5 — шлюз недоступен или ответил ошибкой.\n\nExample: llm video extend https://video.test/1.mp4 --prompt \"дальше\" -m google/veo-3 --json",
+            "options": [
+              {
+                "name": "--prompt",
+                "required": true,
+                "arguments": [
+                  {
+                    "name": "PROMPT",
+                    "required": true
+                  }
+                ],
+                "description": "Что добавить дальше.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--model",
+                "aliases": [
+                  "-m"
+                ],
+                "required": true,
+                "arguments": [
+                  {
+                    "name": "MODEL",
+                    "required": true
+                  }
+                ],
+                "description": "Модель шлюза строкой как в его настройке.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--routing",
+                "arguments": [
+                  {
+                    "name": "ROUTING",
+                    "required": true
+                  }
+                ],
+                "description": "Routing v1: JSON или файл; иначе LLMKIT_ROUTING_FILE, иначе файл по умолчанию.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--json",
+                "description": "Машинный вывод: JSON-конверт в stdout.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ],
+            "arguments": [
+              {
+                "name": "video",
+                "required": true,
+                "arity": {
+                  "minimum": 1,
+                  "maximum": 1
+                },
+                "description": "Ссылка на готовое видео.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "get",
+            "description": "Показать задание видео по id: состояние и ссылка на файл, когда оно готово.\n\nКоды выхода: 0 — готово, 2 — нет routing, 3 — нет ключа шлюза, 5 — шлюз\nнедоступен или ответил ошибкой.\n\nExample: llm video get video_1 --json",
+            "options": [
+              {
+                "name": "--routing",
+                "arguments": [
+                  {
+                    "name": "ROUTING",
+                    "required": true
+                  }
+                ],
+                "description": "Routing v1: JSON или файл; иначе LLMKIT_ROUTING_FILE, иначе файл по умолчанию.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--json",
+                "description": "Машинный вывод: JSON-конверт в stdout.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ],
+            "arguments": [
+              {
+                "name": "video_id",
+                "required": true,
+                "arity": {
+                  "minimum": 1,
+                  "maximum": 1
+                },
+                "description": "Id задания из ответа `llm video generate`.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "embeddings",
+        "description": "Векторы текста шлюза — `llm embeddings create`.",
+        "commands": [
+          {
+            "name": "create",
+            "description": "Получить векторы текста: `embeddings` по порядку, модель и цена из ответа шлюза.\n\nКоды выхода: 0 — готово, 2 — нет routing, 3 — нет ключа шлюза, 5 — шлюз\nнедоступен или ответил ошибкой.\n\nExample: llm embeddings create \"текст\" -m openai/text-embedding-3-small --json",
+            "options": [
+              {
+                "name": "--model",
+                "aliases": [
+                  "-m"
+                ],
+                "required": true,
+                "arguments": [
+                  {
+                    "name": "MODEL",
+                    "required": true
+                  }
+                ],
+                "description": "Модель шлюза строкой как в его настройке.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--routing",
+                "arguments": [
+                  {
+                    "name": "ROUTING",
+                    "required": true
+                  }
+                ],
+                "description": "Routing v1: JSON или файл; иначе LLMKIT_ROUTING_FILE, иначе файл по умолчанию.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--json",
+                "description": "Машинный вывод: JSON-конверт в stdout.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ],
+            "arguments": [
+              {
+                "name": "text",
+                "required": true,
+                "arity": {
+                  "minimum": 1,
+                  "maximum": 1
+                },
+                "description": "Текст, для которого нужны векторы.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "web",
+        "description": "Интернет через шлюз: поиск и загрузка страницы — `llm web search`.",
+        "commands": [
+          {
+            "name": "search",
+            "description": "Найти в интернете: `results` — ссылка, заголовок и сниппет каждого результата.\n\nМодель и цена — из ответа шлюза. Коды выхода: 0 — готово, 2 — нет routing,\n3 — нет ключа шлюза, 5 — шлюз недоступен или ответил ошибкой.\n\nExample: llm web search \"llmkit\" -m perplexity/sonar --json",
+            "options": [
+              {
+                "name": "--model",
+                "aliases": [
+                  "-m"
+                ],
+                "required": true,
+                "arguments": [
+                  {
+                    "name": "MODEL",
+                    "required": true
+                  }
+                ],
+                "description": "Модель шлюза строкой как в его настройке.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--routing",
+                "arguments": [
+                  {
+                    "name": "ROUTING",
+                    "required": true
+                  }
+                ],
+                "description": "Routing v1: JSON или файл; иначе LLMKIT_ROUTING_FILE, иначе файл по умолчанию.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--json",
+                "description": "Машинный вывод: JSON-конверт в stdout.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ],
+            "arguments": [
+              {
+                "name": "query",
+                "required": true,
+                "arity": {
+                  "minimum": 1,
+                  "maximum": 1
+                },
+                "description": "Поисковый запрос.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "fetch",
+            "description": "Загрузить страницу через шлюз: адрес, заголовок и текст.\n\nКоды выхода: 0 — готово, 2 — нет routing, 3 — нет ключа шлюза, 5 — шлюз\nнедоступен или ответил ошибкой.\n\nExample: llm web fetch https://example.com --json",
+            "options": [
+              {
+                "name": "--routing",
+                "arguments": [
+                  {
+                    "name": "ROUTING",
+                    "required": true
+                  }
+                ],
+                "description": "Routing v1: JSON или файл; иначе LLMKIT_ROUTING_FILE, иначе файл по умолчанию.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--json",
+                "description": "Машинный вывод: JSON-конверт в stdout.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ],
+            "arguments": [
+              {
+                "name": "url",
+                "required": true,
+                "arity": {
+                  "minimum": 1,
+                  "maximum": 1
+                },
+                "description": "Адрес страницы.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "model",
+        "description": "Модели шлюза: список, подробности, одна модель — `llm model list`.",
+        "commands": [
+          {
+            "name": "list",
+            "description": "Список моделей шлюза формой OpenAI: `models` как их отдал шлюз.\n\nКоды выхода: 0 — готово, 2 — нет routing, 3 — нет ключа шлюза, 5 — шлюз\nнедоступен или ответил ошибкой.\n\nExample: llm model list --json",
+            "options": [
+              {
+                "name": "--routing",
+                "arguments": [
+                  {
+                    "name": "ROUTING",
+                    "required": true
+                  }
+                ],
+                "description": "Routing v1: JSON или файл; иначе LLMKIT_ROUTING_FILE, иначе файл по умолчанию.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--json",
+                "description": "Машинный вывод: JSON-конверт в stdout.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "info",
+            "description": "Модели шлюза с подробностями: провайдер и вид услуги каждой.\n\nКоды выхода: 0 — готово, 2 — нет routing, 3 — нет ключа шлюза, 5 — шлюз\nнедоступен или ответил ошибкой.\n\nExample: llm model info --json",
+            "options": [
+              {
+                "name": "--routing",
+                "arguments": [
+                  {
+                    "name": "ROUTING",
+                    "required": true
+                  }
+                ],
+                "description": "Routing v1: JSON или файл; иначе LLMKIT_ROUTING_FILE, иначе файл по умолчанию.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--json",
+                "description": "Машинный вывод: JSON-конверт в stdout.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "show",
+            "description": "Показать одну модель шлюза по id.\n\nКоды выхода: 0 — готово, 2 — нет routing, 3 — нет ключа шлюза, 5 — шлюз\nнедоступен, ответил ошибкой или не знает такую модель.\n\nExample: llm model show deepseek/deepseek-v4.1-flash-1017 --json",
+            "options": [
+              {
+                "name": "--routing",
+                "arguments": [
+                  {
+                    "name": "ROUTING",
+                    "required": true
+                  }
+                ],
+                "description": "Routing v1: JSON или файл; иначе LLMKIT_ROUTING_FILE, иначе файл по умолчанию.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--json",
+                "description": "Машинный вывод: JSON-конверт в stdout.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ],
+            "arguments": [
+              {
+                "name": "model_id",
+                "required": true,
+                "arity": {
+                  "minimum": 1,
+                  "maximum": 1
+                },
+                "description": "Id модели как его отдаёт `llm model list`.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "chat",
+        "description": "Прочие формы чата шлюза: responses, messages, systemone, api, модели Gemini.",
+        "commands": [
+          {
+            "name": "responses",
+            "description": "Спросить шлюз формой `responses`: текст `output`, модель и цена.\n\nКоды выхода: 0 — готово, 2 — нет routing, 3 — нет ключа шлюза, 5 — шлюз\nнедоступен или ответил ошибкой.\n\nExample: llm chat responses \"Столица Франции?\" -m openai/gpt-5 --json",
+            "options": [
+              {
+                "name": "--model",
+                "aliases": [
+                  "-m"
+                ],
+                "required": true,
+                "arguments": [
+                  {
+                    "name": "MODEL",
+                    "required": true
+                  }
+                ],
+                "description": "Модель шлюза строкой как в его настройке.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--routing",
+                "arguments": [
+                  {
+                    "name": "ROUTING",
+                    "required": true
+                  }
+                ],
+                "description": "Routing v1: JSON или файл; иначе LLMKIT_ROUTING_FILE, иначе файл по умолчанию.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--json",
+                "description": "Машинный вывод: JSON-конверт в stdout.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ],
+            "arguments": [
+              {
+                "name": "prompt",
+                "required": true,
+                "arity": {
+                  "minimum": 1,
+                  "maximum": 1
+                },
+                "description": "Текст запроса.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "responses-compact",
+            "description": "Спросить шлюз формой `responses` со сжатием: текст, модель и цена.\n\nКоды выхода: 0 — готово, 2 — нет routing, 3 — нет ключа шлюза, 5 — шлюз\nнедоступен или ответил ошибкой.\n\nExample: llm chat responses-compact \"Столица Франции?\" -m openai/gpt-5 --json",
+            "options": [
+              {
+                "name": "--model",
+                "aliases": [
+                  "-m"
+                ],
+                "required": true,
+                "arguments": [
+                  {
+                    "name": "MODEL",
+                    "required": true
+                  }
+                ],
+                "description": "Модель шлюза строкой как в его настройке.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--routing",
+                "arguments": [
+                  {
+                    "name": "ROUTING",
+                    "required": true
+                  }
+                ],
+                "description": "Routing v1: JSON или файл; иначе LLMKIT_ROUTING_FILE, иначе файл по умолчанию.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--json",
+                "description": "Машинный вывод: JSON-конверт в stdout.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ],
+            "arguments": [
+              {
+                "name": "prompt",
+                "required": true,
+                "arity": {
+                  "minimum": 1,
+                  "maximum": 1
+                },
+                "description": "Текст запроса.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "messages",
+            "description": "Спросить шлюз формой `messages` (Anthropic): текст блоков `content`, модель и цена.\n\nКоды выхода: 0 — готово, 2 — нет routing, 3 — нет ключа шлюза, 5 — шлюз\nнедоступен или ответил ошибкой.\n\nExample: llm chat messages \"Столица Франции?\" -m anthropic/claude-x --json",
+            "options": [
+              {
+                "name": "--model",
+                "aliases": [
+                  "-m"
+                ],
+                "required": true,
+                "arguments": [
+                  {
+                    "name": "MODEL",
+                    "required": true
+                  }
+                ],
+                "description": "Модель шлюза строкой как в его настройке.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--routing",
+                "arguments": [
+                  {
+                    "name": "ROUTING",
+                    "required": true
+                  }
+                ],
+                "description": "Routing v1: JSON или файл; иначе LLMKIT_ROUTING_FILE, иначе файл по умолчанию.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--json",
+                "description": "Машинный вывод: JSON-конверт в stdout.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ],
+            "arguments": [
+              {
+                "name": "prompt",
+                "required": true,
+                "arity": {
+                  "minimum": 1,
+                  "maximum": 1
+                },
+                "description": "Текст запроса.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "count-tokens",
+            "description": "Сколько токенов шлюз насчитал запросу: поле `tokens`.\n\nМодель не вызывается. Коды выхода: 0 — готово, 2 — нет routing, 3 — нет\nключа шлюза, 5 — шлюз недоступен или ответил ошибкой.\n\nExample: llm chat count-tokens \"Столица Франции?\" -m openai/gpt-5 --json",
+            "options": [
+              {
+                "name": "--model",
+                "aliases": [
+                  "-m"
+                ],
+                "required": true,
+                "arguments": [
+                  {
+                    "name": "MODEL",
+                    "required": true
+                  }
+                ],
+                "description": "Модель шлюза строкой как в его настройке.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--routing",
+                "arguments": [
+                  {
+                    "name": "ROUTING",
+                    "required": true
+                  }
+                ],
+                "description": "Routing v1: JSON или файл; иначе LLMKIT_ROUTING_FILE, иначе файл по умолчанию.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--json",
+                "description": "Машинный вывод: JSON-конверт в stdout.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ],
+            "arguments": [
+              {
+                "name": "prompt",
+                "required": true,
+                "arity": {
+                  "minimum": 1,
+                  "maximum": 1
+                },
+                "description": "Текст запроса.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "systemone",
+            "description": "Спросить шлюз формой `systemone`: текст, провайдер и цена.\n\nКоды выхода: 0 — готово, 2 — нет routing, 3 — нет ключа шлюза, 5 — шлюз\nнедоступен или ответил ошибкой.\n\nExample: llm chat systemone \"вопрос\" -m openai/gpt-5 --json",
+            "options": [
+              {
+                "name": "--model",
+                "aliases": [
+                  "-m"
+                ],
+                "required": true,
+                "arguments": [
+                  {
+                    "name": "MODEL",
+                    "required": true
+                  }
+                ],
+                "description": "Модель шлюза строкой как в его настройке.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--routing",
+                "arguments": [
+                  {
+                    "name": "ROUTING",
+                    "required": true
+                  }
+                ],
+                "description": "Routing v1: JSON или файл; иначе LLMKIT_ROUTING_FILE, иначе файл по умолчанию.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--json",
+                "description": "Машинный вывод: JSON-конверт в stdout.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ],
+            "arguments": [
+              {
+                "name": "prompt",
+                "required": true,
+                "arity": {
+                  "minimum": 1,
+                  "maximum": 1
+                },
+                "description": "Текст запроса.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "api",
+            "description": "Спросить шлюз формой `/api/chat`: текст, провайдер и цена.\n\nКоды выхода: 0 — готово, 2 — нет routing, 3 — нет ключа шлюза, 5 — шлюз\nнедоступен или ответил ошибкой.\n\nExample: llm chat api \"вопрос\" -m openai/gpt-5 --json",
+            "options": [
+              {
+                "name": "--model",
+                "aliases": [
+                  "-m"
+                ],
+                "required": true,
+                "arguments": [
+                  {
+                    "name": "MODEL",
+                    "required": true
+                  }
+                ],
+                "description": "Модель шлюза строкой как в его настройке.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--routing",
+                "arguments": [
+                  {
+                    "name": "ROUTING",
+                    "required": true
+                  }
+                ],
+                "description": "Routing v1: JSON или файл; иначе LLMKIT_ROUTING_FILE, иначе файл по умолчанию.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--json",
+                "description": "Машинный вывод: JSON-конверт в stdout.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ],
+            "arguments": [
+              {
+                "name": "prompt",
+                "required": true,
+                "arity": {
+                  "minimum": 1,
+                  "maximum": 1
+                },
+                "description": "Текст запроса.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "gemini-models",
+            "description": "Модели шлюза в форме Gemini (`name`, `displayName`) с `/v1beta/models`.\n\nКоды выхода: 0 — готово, 2 — нет routing, 3 — нет ключа шлюза, 5 — шлюз\nнедоступен или ответил ошибкой.\n\nExample: llm chat gemini-models --json",
+            "options": [
+              {
+                "name": "--routing",
+                "arguments": [
+                  {
+                    "name": "ROUTING",
+                    "required": true
+                  }
+                ],
+                "description": "Routing v1: JSON или файл; иначе LLMKIT_ROUTING_FILE, иначе файл по умолчанию.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--json",
+                "description": "Машинный вывод: JSON-конверт в stdout.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
               }
             ]
           }
