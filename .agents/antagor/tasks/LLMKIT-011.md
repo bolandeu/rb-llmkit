@@ -165,3 +165,13 @@ src/llmkit/usage.py is in your owns now. The blocker: the merge with LLMKIT-010 
 ### Blocked: needs_scope (paths ['tests/test_cost_dates.py'])
 
 tests/test_cost_dates.py is in your owns now — that is your own test file from the red round; keep it, do not rename it. The round's job is unchanged: ISO timestamps in src/llmkit/usage.py.
+
+### Attempt 3: the Architect's verdict
+
+The review found blockers; close each:
+
+- [blocker] C11 src/llmkit/cli/cost.py: the new accepted period form (ISO 8601 timestamp) does not reach the places that promise the period format. `--since` help («Начало периода: 7d, 12h, 2w или ГГГГ-ММ-ДД.») and `--until` help stay date-only, and `PERIOD_HINT` says «ожидается 7d, 12h, 2w или ГГГГ-ММ-ДД» while the error message from `src/llmkit/usage.py::_moment` now says «…'ГГГГ-ММ-ДД' или метка ISO 8601» — two lists of the same rule in two files, one stale (C3). Update both help strings and `PERIOD_HINT` to include the ISO form, then refresh the help snapshots. Note: `src/llmkit/cli/cost.py` is `cli/`, inside the task's owned paths.
+
+Minor remarks of the review: optional, if they do not widen the task:
+
+- [minor] T5 tests/test_cost_dates.py: `test_until_takes_a_timestamp` lands in the green commit after the code (3861840 fixes `usage.py`, 12be88f retargets the test). The red commit 512a1d9 carries `test_iso_timestamp_bounds_cut_inside_a_day`, which goes red on the symptom, so the principal order holds; the retargeted test itself satisfies red-on-symptom but arrives without its own red commit.
