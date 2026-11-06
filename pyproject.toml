@@ -2,30 +2,21 @@
 name = "rb-llmkit"
 # Версия — из git-тега vX.Y.Z (uv-dynamic-versioning); строку `version =` не добавлять.
 dynamic = ["version"]
-description = "Общий LLM-слой: цепочки моделей, кэш, учёт расходов"
+description = "Общий LLM-слой: вызовы моделей через шлюз 9router"
 readme = "README.md"
 authors = [
     { name = "Roman Bolandau" }
 ]
 requires-python = ">=3.11"
 dependencies = [
-    "litellm==1.102.2",
-    "instructor>=1.17",
     "pydantic>=2",
-    "keyring>=25",
     "platformdirs>=4",
     "typer>=0.12",
     "rich>=13",
     "httpx>=0.27",
-    "sqlalchemy>=2.0",
-    "alembic>=1.14",
-    "psycopg[binary]>=3.2",
     # Рендер шаблонов промптов (template.py): точный пин — используются внутренности движка (Ctx, _render).
     "combustache==3.0.1",
 ]
-
-[project.optional-dependencies]
-serve = ["fastapi", "uvicorn"]
 
 [project.scripts]
 llm = "llmkit.cli.main:main"
@@ -53,13 +44,6 @@ cache-keys = [{ file = "pyproject.toml" }, { git = { commit = true, tags = true 
 # Где scripts/check_command_docstrings.py (checks Antagor) ищет
 # команды: у llmkit они в src/*/cli/*.py (не commands/), регистрация — `@app.command`.
 commands = "src/*/cli/*.py"
-
-# Внешние программы (стандарт §12); гейт сверяет список с src/ в обе стороны.
-[[tool.rb.external]]
-name = "claude"
-required = false
-check = "claude --version"
-why = "провайдер claude-cli (подписка Claude): transports/claude_cli.py, `llm auth login/logout claude`; путь переопределяет CLAUDE_COMMAND"
 
 # Установка (Standard, Install): инструмент для людей на Mac, ставится и на homeserver.
 [tool.rb.install]

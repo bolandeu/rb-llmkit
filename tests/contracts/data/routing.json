@@ -1,7 +1,12 @@
 {
   "providers": {
-    "contract": {"protocol": "openai_compatible", "base_url": "http://127.0.0.1:9/v1", "key_env": "LLM_CONTRACT_API_KEY"}
+    "contract": {
+      "protocol": "openai_compatible",
+      "base_url": "http://127.0.0.1:9/v1",
+      "key_env": "LLM_CONTRACT_API_KEY"
+    }
   },
-  "chain": ["contract/ok"],
-  "prices": {"contract/ok": {"input": 1.0, "output": 2.0}, "contract/ok-2": {"input": 1.0, "output": 2.0}}
+  "chain": [
+    "contract/ok"
+  ]
 }

@@ -9,11 +9,11 @@ truth is the consumer's repo; this repo keeps a copy and runs it in its gate.
   options, documented exit codes, env var names (`x-rb-env`);
 - `run` — the CLI in-process with `argv`, offline: no network (a case that tries
   fails, even when the CLI catches the error), no real keys (every `x-rb-env` var
-  unset, the OS keychain disabled); `{placeholders}` in argv and the offline data
+  unset); `{placeholders}` in argv and the offline data
   come from this repo's `tests/contracts/fixtures.yaml`; then the exit code and
   `stdout_json_schema` (extra fields fine, missing required ones not) or `stdout_regex`;
-- `view` — a `v1` view's columns and type families, in `describe --json` and on
-  the migrated test database (SQLite; PostgreSQL too under scripts/pg_test.sh).
+- `view` — refused: llmkit keeps no database of its own, so a `v1` view's columns
+  cannot be checked (a contract with a `view` case fails, naming it).
 
 `provider_range` limits a contract to those versions of this tool. One test per
 case, id `<consumer>:<section>:<name>`. The gate runs this file as its own step
@@ -275,19 +275,6 @@ def offline(mp: pytest.MonkeyPatch) -> Iterator[list[str]]:
     yield attempts
 
 
-@contextlib.contextmanager
-def _no_keychain() -> Iterator[None]:
-    import keyring
-    from keyring.backends import fail
-
-    previous = keyring.get_keyring()
-    keyring.set_keyring(fail.Keyring())
-    try:
-        yield
-    finally:
-        keyring.set_keyring(previous)
-
-
 def run_case(
     spec: dict,
     request: pytest.FixtureRequest,
@@ -299,7 +286,7 @@ def run_case(
     """A `run` case: offline, no real keys, the provider's offline data in place; then its result."""
     document = document or opencli.document(typer.main.get_command(app))
     argv = expand_argv(spec["argv"], fixtures.get("placeholders") or {})
-    with pytest.MonkeyPatch.context() as mp, _no_keychain():
+    with pytest.MonkeyPatch.context() as mp:
         for name in _env_names(document) | set(spec.get("env_unset", [])):
             mp.delenv(name, raising=False)
         prepare = fixtures.get("offline_cache" if spec.get("offline_cache", True) else "no_cache")
@@ -342,20 +329,8 @@ def described_view_columns(view: str, document: dict) -> dict[str, str]:
 
 
 def database_view_columns(view: str) -> dict[str, str]:
-    """The view's columns (name -> SQL type) on the tests' SQLite journal (migrated on open)."""
-    import sqlalchemy as sa
-
-    from llmkit import config as config_mod
-    from llmkit import db
-
-    engine = db.open_db(config_mod.load().usage_path())
-    try:
-        inspector = sa.inspect(engine)
-        if view not in inspector.get_view_names():
-            raise ContractError(f"no view '{view}' in the migrated {engine.dialect.name} database")
-        return {column["name"]: str(column["type"]) for column in inspector.get_columns(view)}
-    finally:
-        engine.dispose()
+    """Своего журнала у llmkit нет: представлений `v1` больше не существует — контракт на них не проверить."""
+    raise ContractError(f"view '{view}': llmkit keeps no database of its own, so it has no views")
 
 
 # --- the tests ---------------------------------------------------------------------

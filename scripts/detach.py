@@ -11,7 +11,7 @@ terminal, and leaves its state in files the next turn can read.
     scripts/runs_status.sh [<label>] [--json]              # what runs, how it ended
     python3 scripts/detach.py stop <label>                 # SIGTERM to the whole run
 
-Any command: the CLI itself, `uv run pytest`, `scripts/pg_test.sh`, a long import.
+Any command: the CLI itself, `uv run pytest`, the gate, a long import.
 Per run, in `<state dir>/runs/` (the tool's user state dir; RUNS_DIR overrides):
 `<label>.pid`, `<label>.log` (stdout — the progress), `<label>.stderr` (errors and
 tracebacks; empty in a normal run), `<label>.exit` (exit code and end time, written

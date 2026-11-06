@@ -15,7 +15,7 @@ from .render import LenientOption, TemplateOption, VarsOption, prompt_text
 RoutingOption = typer.Option(
     None,
     "--routing",
-    help="Routing v1: JSON-строка или путь к JSON-файлу; без него — LLMKIT_ROUTING_FILE, затем routing.json в каталоге конфигурации (llm config path). Не stdin.",
+    help="Routing v1: JSON-строка или путь к JSON-файлу; без него — LLMKIT_ROUTING_FILE, затем routing.json в каталоге конфигурации. Не stdin.",
 )
 ModelsOption = typer.Option(
     None,
@@ -56,14 +56,13 @@ def _answer_payload(answer, data_key: str) -> dict:
         "billable_requests": answer.billable_requests,
         "cost_total": answer.cost_total,
         "cost_usd": answer.cost_usd,  # устарело (= cost): Windmill читает его до перехода на cost
-        "cache_hit": answer.cache_hit,
         "latency_ms": answer.latency_ms,
         "warnings": answer.warnings,
     }
 
 
 def _task_id() -> str:
-    """Id вызова CLI: попадает в учёт (llmkit_calls.task_id) и в конверт `--json`."""
+    """Id вызова CLI: попадает в конверт `--json` и отличает вызовы в логах."""
     return uuid.uuid4().hex
 
 
@@ -72,7 +71,7 @@ def _echo_warnings(answer) -> None:
         typer.echo(warning, err=True)
 
 
-def _run(prompt, routing, system, tags, no_cache, temperature, max_tokens, timeout, no_retry, schema):
+def _run(prompt, routing, system, tags, temperature, max_tokens, timeout, no_retry, schema):
     text, template_tags = prompt
     kit = runtime.build_kit(routing=routing)
     task = Task(
@@ -83,7 +82,6 @@ def _run(prompt, routing, system, tags, no_cache, temperature, max_tokens, timeo
         temperature=temperature,
         max_tokens=max_tokens,
         timeout=timeout,
-        cache=False if no_cache else None,
         retry=not no_retry,
         id=_task_id(),
     )
@@ -100,8 +98,7 @@ def ask(
     routing: str = RoutingOption,
     model: list[str] = ModelsOption,
     level: str = LevelOption,
-    tag: list[str] = typer.Option(None, "--tag", help="Метка k=v для учёта расходов; можно несколько."),
-    no_cache: bool = typer.Option(False, "--no-cache", help="Не читать и не писать кэш ответов."),
+    tag: list[str] = typer.Option(None, "--tag", help="Метка k=v для строки лога вызова; можно несколько."),
     temperature: float = typer.Option(None, "--temperature", help="Температура; по умолчанию 0."),
     max_tokens: int = typer.Option(None, "--max-tokens", help="Лимит токенов ответа."),
     timeout: float = typer.Option(None, "--timeout", help="Таймаут вызова в секундах."),
@@ -114,20 +111,17 @@ def ask(
     """Задать вопрос шлюзу и напечатать текстовый ответ.
 
     Шлюз — из routing v1 (`--routing` JSON или файл, иначе LLMKIT_ROUTING_FILE,
-    иначе routing.json в каталоге конфигурации — путь в `llm config path`);
-    встроенных нет. Один вызов — один запрос к шлюзу: цепочку и фолбэк
-    исполняет он, llmkit просит первую модель `-m` или `routing.chain`.
-    Модель — строка как в настройке шлюза (комбо тоже). Вместо текста —
-    шаблон: `--template` с `--vars` (в учёт расходов — имя и хэш шаблона,
-    без значений). В `--json`: text, task_id (= task_id в учёте), model
-    (запрошенная строка), served_model (что назвал шлюз), provider, attempts,
-    tokens_in/out, cache_hit и стоимость: cost (usage.cost шлюза),
-    cost_currency "USD", cost_source — provider или null (цены в ответе нет;
-    provider и cost 0 у подписочного провайдера — норма, не ошибка),
+    иначе routing.json в каталоге конфигурации); встроенных нет. Один вызов —
+    один запрос к шлюзу: цепочку и фолбэк исполняет он, llmkit просит первую
+    модель `-m` или `routing.chain`. Модель — строка как в настройке шлюза
+    (комбо тоже). Вместо текста — шаблон: `--template` с `--vars`. В `--json`:
+    text, task_id, model (запрошенная строка), served_model (что назвал шлюз),
+    provider, attempts, tokens_in/out и стоимость: cost (usage.cost шлюза),
+    cost_currency "USD", cost_source — provider или null (цены в ответе нет),
     billable_requests, cost_total. cost_usd = cost, устарело.
     Коды выхода: 0 — ответ получен, 2 — нет routing, routing не по схеме или
-    неверные аргументы, 3 — нет ключа шлюза, 5 — шлюз недоступен, ответил
-    ошибкой или ответ невалиден.
+    неверные аргументы, 3 — нет переменной с ключом шлюза, 5 — шлюз недоступен,
+    ответил ошибкой или ответ невалиден.
 
     Example: llm ask "Столица Франции?" --routing routing.json
     """
@@ -136,7 +130,7 @@ def ask(
         _reject_level(level)
         resolved = runtime.call_routing(routing, model)
         prompt = prompt_text(text, template, variables, lenient)
-        answer = _run(prompt, resolved, system, tag, no_cache, temperature, max_tokens, timeout, no_retry, None)
+        answer = _run(prompt, resolved, system, tag, temperature, max_tokens, timeout, no_retry, None)
         emit(ctx, _answer_payload(answer, "text"), lambda: out.print(answer.data, highlight=False, markup=False))
 
 
@@ -149,8 +143,7 @@ def json_command(
     routing: str = RoutingOption,
     model: list[str] = ModelsOption,
     level: str = LevelOption,
-    tag: list[str] = typer.Option(None, "--tag", help="Метка k=v для учёта расходов; можно несколько."),
-    no_cache: bool = typer.Option(False, "--no-cache", help="Не читать и не писать кэш ответов."),
+    tag: list[str] = typer.Option(None, "--tag", help="Метка k=v для строки лога вызова; можно несколько."),
     temperature: float = typer.Option(None, "--temperature", help="Температура; по умолчанию 0."),
     max_tokens: int = typer.Option(None, "--max-tokens", help="Лимит токенов ответа."),
     timeout: float = typer.Option(None, "--timeout", help="Таймаут вызова в секундах."),
@@ -171,7 +164,7 @@ def json_command(
     Routing, `-m` и `--template/--vars` — как у `llm ask`. Валидацию значения
     по схеме выполняет потребитель. Невалидный ответ шлюз списал: он в
     billable_requests и cost_total. Коды выхода: 0 — ответ получен,
-    2 — неверные аргументы или routing, 3 — нет ключа шлюза, 5 — шлюз
+    2 — неверные аргументы или routing, 3 — нет переменной с ключом шлюза, 5 — шлюз
     недоступен или ответ не разобрался (в error — billable_requests, cost_total).
 
     Example: llm json "Разбери запрос" --schema schema.json --routing routing.json --json
@@ -189,7 +182,7 @@ def json_command(
             raise bad_arguments("схема должна быть JSON-объектом")
         resolved = runtime.call_routing(routing, model)
         prompt = prompt_text(text, template, variables, lenient)
-        answer = _run(prompt, resolved, system, tag, no_cache, temperature, max_tokens, timeout, no_retry, loaded)
+        answer = _run(prompt, resolved, system, tag, temperature, max_tokens, timeout, no_retry, loaded)
         emit(
             ctx,
             _answer_payload(answer, "data"),

@@ -1,3 +1,9 @@
+"""Имена дистрибутива, инструмента и версия шаблона — для `llm describe --json` и тестов.
+
+Версия пакета берётся из тега через importlib.metadata; имя дистрибутива записано
+здесь, потому что editable-установка не отображает пакет на дистрибутив.
+"""
+
 # Имя дистрибутива: [project] name в pyproject.toml (стандарт §10: `rb-<slug>`),
 # отличается от имени импорт-пакета. По нему importlib.metadata находит версию;
 # editable-установку (`uv sync`) по пакету в дистрибутив не отобразить, поэтому
@@ -7,9 +13,9 @@ DIST_NAME = "rb-llmkit"
 # ним (ещё не переустановленная) по-прежнему находит свою версию. Убрать, когда
 # на всех машинах стоит новое имя.
 DIST_NAME_LEGACY: str | None = "llmkit"
-# Имя инструмента для общей базы (cli-generator architecture.md §12): префикс таблиц
-# `llmkit_`, переменная `LLMKIT_DATABASE_URL`. Записано, а не выводится из имени CLI (`llm`).
+# Имя инструмента (cli-generator architecture.md §12) — каталоги пользователя `llmkit`
+# и префикс переменных `LLMKIT_`. Записано, а не выводится из имени CLI (`llm`).
 TOOL = "llmkit"
-# Релиз cli-generator, с которым сверен перенесённый вручную код (слой БД,
-# describe; AGENTS.md) — для `llm describe --json`. copier у llmkit нет.
+# Релиз cli-generator, с которым сверен перенесённый вручную код (describe;
+# AGENTS.md) — для `llm describe --json`. copier у llmkit нет.
 TEMPLATE_VERSION: str | None = "v1.5.6"

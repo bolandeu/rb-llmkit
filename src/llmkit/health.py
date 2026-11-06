@@ -1,20 +1,19 @@
-"""Здоровье доступов: отчёт `llm auth status [--check]` (tools/docs/standard-release.md §8).
+"""Здоровье доступа к шлюзу: отчёт `llm auth status [--check]` (tools/docs/standard-release.md §8).
 
-Форма отчёта — общий контракт инструментов (`tools-watch` читает её, не
-зная провайдеров), её фиксирует `tests/test_health.py`; изменение формы —
-ломающее изменение. Значения ключей и токенов наружу не выходят: они нужны
-только чтобы вычистить их из сообщений.
+Форма отчёта — общий контракт инструментов (`tools-watch` читает её, не зная
+провайдеров), её фиксирует `tests/test_health.py`; изменение формы — ломающее
+изменение. Подписок в отчёте нет: они живут в шлюзе, а у llmkit один доступ —
+ключ шлюза из переменной окружения (`key_env` провайдера routing).
 
-Без `check` отчёт только про наличие доступа (`unchecked` / `missing`).
-С `check` у каждого провайдера один дешёвый вызов без списания денег,
-жёсткий лимит 10 с, без повторов.
+Без `check` отчёт только про наличие ключа (`unchecked` / `missing`).
+С `check` — один дешёвый вызов `/models` шлюза, жёсткий лимит 10 с, без повторов.
+Значение ключа наружу не выходит: им только вычищаются сообщения.
 """
 
 from __future__ import annotations
 
 import concurrent.futures
 import os
-import sys
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -26,39 +25,9 @@ from .version import installed_version
 
 TOOL = "llmkit"
 CHECK_TIMEOUT = 10.0
-# Проблема даже у необязательного провайдера: доступ есть, но неверный.
+# Проблема даже у необязательного провайдера: ключ есть, но неверный.
 ALWAYS_PROBLEMS = frozenset({"invalid", "expired"})
 HEALTHY = frozenset({"ok", "unchecked"})
-
-# Входы в подписки на этой машине: в отчёте всегда, даже без routing (их ведёт `llm auth login`).
-LOCAL_SUBSCRIPTIONS = {"chatgpt": Provider(protocol="chatgpt"), "claude": Provider(protocol="claude_cli")}
-
-# Дешёвый read-only вызов по протоколу провайдера: (метод, адрес, заголовки с ключом).
-# У ollama.com список моделей открыт без ключа, ключ проверяет только /api/me.
-_KEY_CHECKS: dict[str, Callable[[str, str | None], tuple[str, str, dict[str, str]]]] = {
-    "openrouter": lambda key, base: ("GET", "https://openrouter.ai/api/v1/key", {"Authorization": f"Bearer {key}"}),
-    "openai": lambda key, base: ("GET", "https://api.openai.com/v1/models", {"Authorization": f"Bearer {key}"}),
-    "anthropic": lambda key, base: (
-        "GET",
-        "https://api.anthropic.com/v1/models",
-        {"x-api-key": key, "anthropic-version": "2023-06-01"},
-    ),
-    "gemini": lambda key, base: (
-        "GET",
-        "https://generativelanguage.googleapis.com/v1beta/models",
-        {"x-goog-api-key": key},
-    ),
-    "ollama": lambda key, base: (
-        "POST",
-        f"{(base or 'https://ollama.com').rstrip('/')}/api/me",
-        {"Authorization": f"Bearer {key}"},
-    ),
-    "openai_compatible": lambda key, base: (
-        "GET",
-        f"{(base or '').rstrip('/')}/models",
-        {"Authorization": f"Bearer {key}"},
-    ),
-}
 
 
 @dataclass
@@ -105,140 +74,27 @@ def _with_timeout(check: Callable[[], Health]) -> Health:
         pool.shutdown(wait=False, cancel_futures=True)
 
 
-# --- ключи API ------------------------------------------------------------------
-
-
-def _openrouter_quota(body: Any) -> dict[str, Any] | None:
-    data = body.get("data") if isinstance(body, dict) else None
-    if not isinstance(data, dict):
-        return None
-    return {"remaining": data.get("limit_remaining"), "limit": data.get("limit"), "unit": "usd"}
-
-
 def check_key(kind: str, api_key: str, base_url: str | None, *, transport: Any = None) -> Health:
-    """Один дешёвый вызов с ключом: 401/403 — invalid, 429/5xx/сеть — unreachable."""
+    """Один дешёвый GET `/models` шлюза с ключом: 401/403 — invalid, 429/5xx/сеть — unreachable.
+
+    `kind` — протокол провайдера: routing v1 называет только `openai_compatible`,
+    так что проверка одна — список моделей OpenAI-совместимого шлюза.
+    """
     import httpx
 
-    make = _KEY_CHECKS.get(kind)
-    if make is None:
-        return Health("unchecked", message=f"для kind={kind} проверки нет")
-    method, url, headers = make(api_key, base_url)
+    url = f"{(base_url or '').rstrip('/')}/models"
     try:
         with httpx.Client(timeout=CHECK_TIMEOUT, transport=transport) as client:
-            response = client.request(method, url, headers=headers)
+            response = client.get(url, headers={"Authorization": f"Bearer {api_key}"})
     except httpx.HTTPError as exc:
         return Health("unreachable", message=f"{type(exc).__name__}: {exc}")
     if response.status_code in (401, 403):
-        return Health("invalid", message=f"провайдер отверг ключ (HTTP {response.status_code})")
+        return Health("invalid", message=f"шлюз отверг ключ (HTTP {response.status_code})")
     if response.status_code == 429:
         return Health("unreachable", message="лимит запросов (HTTP 429), повторите позже")
     if response.status_code >= 400:
         return Health("unreachable", message=f"HTTP {response.status_code}")
-    if kind == "openrouter":
-        try:
-            quota = _openrouter_quota(response.json())
-        except ValueError:
-            quota = None
-        if quota and quota["remaining"] is not None and quota["remaining"] <= 0:
-            return Health("quota_exhausted", quota=quota, message="лимит ключа OpenRouter исчерпан")
-        return Health(quota=quota)
     return Health()
-
-
-def _key_entry(name: str, cfg: Provider, check: bool, env: Mapping[str, str]) -> dict[str, Any]:
-    env_name = keys.env_var(name, cfg)
-    legacy = keys.legacy_env(name, cfg)
-    keychain_ref = f"keychain service {keys.service_name(name)}"
-    entry = _blank(name, ["api_key"], f"{env_name} or {keychain_ref}")
-    if env.get(env_name):  # порядок как в keys.resolve: env → старое имя → связка
-        value, source, ref = env[env_name], "env", env_name
-    elif legacy != env_name and env.get(legacy):
-        value, source, ref = env[legacy], "env", legacy
-        entry["message"] = f"rename {legacy} to {env_name}"
-    elif found := keys.from_keychain(name):
-        value, source, ref = found, "keychain", keychain_ref
-    else:
-        entry["message"] = f"`llm keys set {name}` или `export {env_name}=...`"
-        return entry
-    entry.update(source=source, source_ref=ref)
-    if not check:
-        entry["status"] = "unchecked"
-        return entry
-    return _apply(entry, _with_timeout(lambda: check_key(cfg.protocol, value, cfg.base_url)), [value])
-
-
-# --- подписки -------------------------------------------------------------------
-
-
-def _chatgpt_entry(name: str, check: bool) -> dict[str, Any]:
-    from .transports import chatgpt_auth
-
-    path = chatgpt_auth.default_path()
-    entry = _blank(name, ["access_token", "refresh_token"], str(path))
-    auth = chatgpt_auth.read_auth(path)
-    if auth is None:
-        entry["message"] = chatgpt_auth.login_hint(name)
-        return entry
-    entry.update(source="file", message=f"план: {auth.plan_type}" if auth.plan_type else None)
-    if not check:
-        entry["status"] = "unchecked"
-        return entry
-    secrets = [auth.access_token, auth.refresh_token or ""]
-    return _apply(entry, _with_timeout(lambda: _check_chatgpt(name, path)), secrets)
-
-
-def _check_chatgpt(name: str, path: Any) -> Health:
-    """Свежий access-токен, обновлённый при нужде тем же путём, что и перед вызовом модели.
-
-    Обновление бесплатное; модель не вызывается, так что квоту подписки
-    проверка не тратит. Свежий токен без обновления сервер не спрашивает.
-    """
-    import asyncio
-
-    import httpx
-
-    from .transports import chatgpt_auth
-
-    async def access() -> chatgpt_auth.Auth:
-        async with httpx.AsyncClient(timeout=CHECK_TIMEOUT) as client:
-            return await chatgpt_auth.store_for(path, name).access(client)
-
-    try:
-        auth = asyncio.run(access())
-    except chatgpt_auth.SubscriptionAuthError as exc:
-        return Health("invalid", message=str(exc))
-    except httpx.HTTPError as exc:
-        return Health("unreachable", message=f"{type(exc).__name__}: {exc}")
-    plan = f"план: {auth.plan_type}; " if auth.plan_type else ""
-    return Health(message=f"{plan}access-токен действителен, при истечении обновляется сам")
-
-
-def _claude_entry(name: str, check: bool) -> dict[str, Any]:
-    import asyncio
-
-    from .transports import claude_cli
-
-    # Вход хранит сам `claude`: на macOS в связке ключей, на Linux в ~/.claude.
-    source = "keychain" if sys.platform == "darwin" else "file"
-    entry = _blank(name, ["login"], "вход `claude` CLI (`claude auth status`)")
-    timeout = CHECK_TIMEOUT if check else 20.0
-    status = asyncio.run(claude_cli.auth_status(timeout=timeout))
-    if not status["installed"]:
-        entry["message"] = "CLI `claude` не найден: установите Claude Code"
-        return entry
-    if not status["loggedIn"]:
-        entry["message"] = status.get("error") or "выполните `claude auth login`"
-        if check and status.get("error"):
-            entry.update(source=source, status="unreachable")
-        return entry
-    parts = [str(status[k]) for k in ("authMethod", "subscriptionType") if status.get(k)]
-    if check:
-        parts.append("проверено локально (`claude auth status`), модель не вызывалась")
-    entry.update(source=source, status="ok" if check else "unchecked", message="; ".join(parts) or None)
-    return entry
-
-
-# --- отчёт ----------------------------------------------------------------------
 
 
 def _blank(name: str, fields: list[str], source_ref: str) -> dict[str, Any]:
@@ -269,27 +125,33 @@ def _apply(entry: dict[str, Any], health: Health, secrets: list[str]) -> dict[st
     return entry
 
 
+def _key_entry(name: str, cfg: Provider, check: bool, env: Mapping[str, str]) -> dict[str, Any]:
+    """Строка отчёта по ключу шлюза: только переменная окружения, другого источника нет."""
+    env_name = keys.env_var(name, cfg)
+    entry = _blank(name, ["api_key"], env_name)
+    value = env.get(env_name)
+    if not value:
+        entry["message"] = f"`export {env_name}=...` — ключ шлюза берётся только из окружения"
+        return entry
+    entry.update(source="env", source_ref=env_name)
+    if not check:
+        entry["status"] = "unchecked"
+        return entry
+    return _apply(entry, _with_timeout(lambda: check_key(cfg.protocol, value, cfg.base_url)), [value])
+
+
 def providers_of(routing: Routing | None) -> dict[str, Provider]:
-    """Провайдеры отчёта: из routing плюс входы в подписки этой машины, если routing их не описал."""
-    found = dict(routing.providers) if routing is not None else {}
-    described = {cfg.protocol for cfg in found.values() if cfg.subscription}
-    for name, cfg in LOCAL_SUBSCRIPTIONS.items():
-        if cfg.protocol not in described and name not in found:
-            found[name] = cfg
-    return found
+    """Провайдеры отчёта — только из routing: своих доступов у llmkit нет."""
+    return dict(routing.providers) if routing is not None else {}
 
 
 def credential_entry(name: str, cfg: Provider, *, check: bool, env: Mapping[str, str] | None = None) -> dict[str, Any]:
     """Строка отчёта §8 для одного провайдера."""
-    if cfg.protocol == "chatgpt":
-        return _chatgpt_entry(name, check)
-    if cfg.protocol == "claude_cli":
-        return _claude_entry(name, check)
     return _key_entry(name, cfg, check, os.environ if env is None else env)
 
 
 def report(routing: Routing | None, *, check: bool, only: str | None = None) -> dict[str, Any]:
-    """Отчёт §8 по провайдерам routing и подпискам машины (или по одному, `only`)."""
+    """Отчёт §8 по провайдерам routing (или по одному, `only`)."""
     return {
         "tool": TOOL,
         "version": _version(),
@@ -303,7 +165,7 @@ def report(routing: Routing | None, *, check: bool, only: str | None = None) -> 
 
 
 def is_problem(item: dict[str, Any]) -> bool:
-    """Код выхода 3: неверный/просроченный доступ у любого, иная беда — у обязательного."""
+    """Код выхода 3: неверный/просроченный ключ у любого, иная беда — у обязательного."""
     if item["status"] in ALWAYS_PROBLEMS:
         return True
     return bool(item["required"]) and item["status"] not in HEALTHY

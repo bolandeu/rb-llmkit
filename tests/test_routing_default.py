@@ -9,31 +9,27 @@ import json
 import os
 from pathlib import Path
 
-import conftest as fakes
 import platformdirs
 import pytest
-from conftest import ROUTING
-from test_routing import OPENROUTER, anonymous
+from conftest import GATEWAY_ROUTING, FakeGateway, json_reply
 from typer.testing import CliRunner
 
 from llmkit import LlmKit
-from llmkit import keys as keys_mod
 from llmkit.cli import runtime
 from llmkit.cli.main import app
 
 runner = CliRunner()
 
-
-@pytest.fixture(autouse=True)
-def no_keychain(monkeypatch):
-    monkeypatch.setattr(keys_mod, "from_keychain", lambda provider: None)
+# Routing без цепочки: модель приходит из `-m`, файл — только провайдеры.
+PROVIDERS = {"providers": GATEWAY_ROUTING["providers"]}
 
 
 @pytest.fixture
 def fake(monkeypatch):
-    completion = fakes.FakeCompletion([anonymous("ответ модели")])
-    monkeypatch.setattr(runtime, "build_kit", lambda **kwargs: LlmKit(completion=completion, **kwargs))
-    return completion
+    gateway = FakeGateway(json_reply("ответ модели"))
+    monkeypatch.setattr(runtime, "build_kit", lambda **kwargs: LlmKit(transport=gateway.transport, **kwargs))
+    monkeypatch.setenv("NINEROUTER_API_KEY", "ключ-шлюза")
+    return gateway
 
 
 def default_path() -> Path:
@@ -56,32 +52,31 @@ def test_default_path_is_routing_json_in_user_config_dir():
     assert runtime.default_routing_path() == default_path()
 
 
-def test_default_file_is_used_without_argument_and_env(fake, monkeypatch):
-    monkeypatch.setenv("LLM_OPENROUTER_API_KEY", "k")
-    write_default(OPENROUTER)
-    result = run("ask", "вопрос", "--json")
+def test_default_file_is_used_without_argument_and_env(fake):
+    write_default(PROVIDERS)
+    result = run("ask", "вопрос", "-m", "Deep Sec", "--json")
     assert result.exit_code == 0, result.output
-    assert fake.models() == ["openrouter/a"]
+    assert fake.models() == ["Deep Sec"]
 
 
-def test_env_file_wins_over_default_file(fake, monkeypatch, tmp_path):
-    write_default(OPENROUTER)
+def test_env_file_wins_over_default_file(fake, tmp_path, monkeypatch):
+    write_default(PROVIDERS)
     path = tmp_path / "env-routing.json"
-    path.write_text(json.dumps(ROUTING), encoding="utf-8")
+    path.write_text(json.dumps(GATEWAY_ROUTING), encoding="utf-8")
     monkeypatch.setenv("LLMKIT_ROUTING_FILE", str(path))
     result = run("ask", "вопрос", "--json")
     assert result.exit_code == 0, result.output
-    assert fake.models() == ["openai/m1"]
+    assert fake.models() == ["Deep Sec"]
 
 
 def test_argument_wins_over_default_file(fake):
-    write_default(OPENROUTER)
-    result = run("ask", "вопрос", "--routing", json.dumps(ROUTING), "--json")
+    write_default(PROVIDERS)
+    result = run("ask", "вопрос", "--routing", json.dumps(GATEWAY_ROUTING), "--json")
     assert result.exit_code == 0, result.output
-    assert fake.models() == ["openai/m1"]
+    assert fake.models() == ["Deep Sec"]
 
 
-def test_missing_everything_names_default_path(fake):
+def test_missing_everything_names_default_path():
     result = run("ask", "вопрос", "--json")
     assert result.exit_code == 2
     error = json.loads(result.stdout)["error"]
@@ -91,36 +86,31 @@ def test_missing_everything_names_default_path(fake):
 
 
 @pytest.mark.skipif(os.name != "posix", reason="права файла — POSIX")
-def test_default_file_wider_than_600_warns_but_works(fake, monkeypatch):
-    monkeypatch.setenv("LLM_OPENROUTER_API_KEY", "k")
-    path = write_default(OPENROUTER, 0o644)
-    result = run("ask", "вопрос", "--json")
+def test_default_file_wider_than_600_warns_but_works(fake):
+    assert fake  # сеть подменена
+    path = write_default(PROVIDERS, 0o644)
+    result = run("ask", "вопрос", "-m", "Deep Sec", "--json")
     assert result.exit_code == 0, result.output
     assert str(path) in result.stderr and "600" in result.stderr
-    assert fake.models() == ["openrouter/a"]
+    assert fake.models() == ["Deep Sec"]
 
 
 @pytest.mark.skipif(os.name != "posix", reason="права файла — POSIX")
-def test_default_file_600_no_warning(fake, monkeypatch):
-    monkeypatch.setenv("LLM_OPENROUTER_API_KEY", "k")
-    path = write_default(OPENROUTER, 0o600)
-    result = run("ask", "вопрос", "--json")
+@pytest.mark.usefixtures("fake")
+def test_default_file_600_no_warning():
+    path = write_default(PROVIDERS, 0o600)
+    result = run("ask", "вопрос", "-m", "Deep Sec", "--json")
     assert result.exit_code == 0, result.output
     assert str(path) not in result.stderr
 
 
-def test_auth_status_reads_default_file(monkeypatch):
-    write_default({"providers": {"openrouter": {"protocol": "openrouter"}}})
+@pytest.mark.usefixtures("fake")
+def test_auth_status_reads_default_file():
+    write_default(PROVIDERS)
     result = run("auth", "status", "--json")
     assert result.exit_code == 0, result.output
     providers = {item["provider"] for item in json.loads(result.stdout)["credentials"]}
-    assert "openrouter" in providers
-
-
-def test_config_path_shows_default_file():
-    path = write_default(OPENROUTER)
-    body = json.loads(run("config", "path", "--json").stdout)
-    assert body["routing_file"] == str(path)
+    assert providers == {"9router"}
 
 
 def test_describe_mentions_default_file():

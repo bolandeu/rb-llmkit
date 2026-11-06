@@ -1,56 +1,85 @@
-"""Журнал вызовов: строки, окна времени, отчёты и бюджеты."""
+"""Своего состояния нет: завершённый вызов не пишет ни строки, ни файла, и кэша в контракте нет.
+
+`ask` ходит только в шлюз: ни журнала расходов, ни кэша ответов — ни файла, ни
+таблицы. `LLMKIT_DATABASE_URL` не читается; в `--json` нет `cache_hit`, у
+`Task` нет поля `cache`, у `Answer` — свойства `cache_hit`.
+"""
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+import dataclasses
+import json
 
+import platformdirs
 import pytest
-import sqlalchemy as sa
+from conftest import GATEWAY_ROUTING, FakeGateway, json_reply
+from typer.testing import CliRunner
 
-from llmkit.db.tables import calls
-from llmkit.usage import Usage, parse_since
+from llmkit import Answer, LlmKit, Task
+from llmkit.cli import runtime
+from llmkit.cli.main import app
+
+runner = CliRunner()
+
+
+@pytest.fixture(autouse=True)
+def user_dirs(tmp_path, monkeypatch):
+    """Каталоги пользователя — во временном: любой записанный файл виден тесту."""
+    for name in ("user_data_dir", "user_cache_dir", "user_config_dir"):
+        monkeypatch.setattr(
+            platformdirs, name, lambda appname=None, *_a, _n=name, **_k: str(tmp_path / _n / str(appname))
+        )
+    return tmp_path
 
 
 @pytest.fixture
-def journal(tmp_path):
-    usage = Usage(tmp_path / "usage.sqlite")
-    yield usage
-    usage.close()
+def routing_file(tmp_path, monkeypatch):
+    path = tmp_path / "routing.json"
+    path.write_text(json.dumps(GATEWAY_ROUTING), encoding="utf-8")
+    monkeypatch.setenv("LLMKIT_ROUTING_FILE", str(path))
+    return path
 
 
-def test_parse_since_accepts_relative_and_absolute():
-    assert parse_since(None) is None
-    moment = datetime.now(UTC) - timedelta(days=1)
-    assert parse_since(moment) == moment.timestamp()
-    assert parse_since("7d") == pytest.approx((datetime.now(UTC) - timedelta(days=7)).timestamp(), abs=2)
-    assert parse_since("12h") == pytest.approx((datetime.now(UTC) - timedelta(hours=12)).timestamp(), abs=2)
-    with pytest.raises(ValueError, match="период"):
-        parse_since("позавчера")
+@pytest.fixture
+def fake_kit(monkeypatch):
+    """Ответ шлюза без сети: httpx-транспорт фейка."""
+    fake = FakeGateway(json_reply("ответ шлюза", provider="deepseek", cost=0.0001))
+
+    def build(**kwargs):
+        kwargs.setdefault("routing", GATEWAY_ROUTING)
+        return LlmKit(transport=fake.transport, **kwargs)
+
+    monkeypatch.setattr(runtime, "build_kit", build)
+    monkeypatch.setenv("NINEROUTER_API_KEY", "ключ-шлюза")
+    return fake
 
 
-def test_report_counts_statuses(journal):
-    journal.record(model="a/m1", provider="a", status="ok", tags={"tool": "t"}, prompt_tokens=10, cost_usd=0.5)
-    journal.record(model="a/m1", provider="a", status="cache", tags={"tool": "t"})
-    journal.record(model="a/m1", provider="a", status="failed", tags={"tool": "t"}, error_type="timeout")
-    journal.record(model="b/m2", provider="b", status="ok", tags={"tool": "другой"}, cost_usd=0.25)
-    rows = {row.keys["tool"]: row for row in journal.report(("tool",))}
-    assert rows["t"].calls == 3 and rows["t"].cached == 1 and rows["t"].failed == 1
-    assert rows["t"].prompt_tokens == 10 and rows["t"].cost_usd == 0.5
-    total = journal.total()
-    assert total.calls == 4 and total.cost_usd == 0.75
+def test_completed_ask_leaves_no_row_and_no_file(routing_file, fake_kit, tmp_path):
+    result = runner.invoke(app, ["ask", "вопрос", "--json"])
+    assert result.exit_code == 0, result.output
+    body = json.loads(result.stdout)
+    assert body["ok"] is True and body["text"] == "ответ шлюза"
+    assert "cache_hit" not in body
+    # Ни журнала, ни кэша: после вызова в каталогах пользователя нет ни одного файла.
+    written = [path for path in tmp_path.rglob("*") if path.is_file() and path.name != routing_file.name]
+    assert written == []
 
 
-def test_report_window_filters_old_rows(journal):
-    journal.record(model="a/m1", provider="a", status="ok", cost_usd=1.0)
-    with journal._db().begin() as connection:
-        connection.execute(sa.update(calls).values(ts=calls.c.ts - 10 * 86400))
-    assert journal.total(since="7d").calls == 0
-    assert journal.total().calls == 1
+@pytest.mark.usefixtures("routing_file", "fake_kit")
+def test_database_url_is_not_read(monkeypatch):
+    # Своей базы больше нет: строка подключения ни на что не влияет и не ломает вызов.
+    monkeypatch.setenv("LLMKIT_DATABASE_URL", "postgresql+psycopg://нет-никакой-базы/llmkit")
+    result = runner.invoke(app, ["ask", "вопрос", "--json"])
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.stdout)["ok"] is True
 
 
-def test_spent_today_by_tag(journal):
-    journal.record(model="a/m1", provider="a", status="ok", tags={"tool": "t"}, cost_usd=1.5)
-    journal.record(model="a/m1", provider="a", status="ok", tags={"tool": "другой"}, cost_usd=2.0)
-    assert journal.spent_today() == 3.5
-    assert journal.spent_today(tag="tool=t") == 1.5
-    assert journal.spent_today(tag="tool=нет") == 0.0
+@pytest.mark.usefixtures("routing_file", "fake_kit")
+def test_no_cache_flag():
+    result = runner.invoke(app, ["ask", "вопрос", "--no-cache", "--json"])
+    assert result.exit_code == 2
+
+
+def test_answer_and_task_have_no_cache_fields():
+    assert "cache_hit" not in {field.name for field in dataclasses.fields(Answer)}
+    assert "cache" not in {field.name for field in dataclasses.fields(Task)}

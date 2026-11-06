@@ -5,8 +5,8 @@ stdout — только данные (в режиме `--json` там же ле�
 stderr — диагностика: строки `Ошибка:`, предупреждения, логи.
 
 Коды выхода (conventions.md cli-builder): 0 — успех, 1 — непредвиденная
-ошибка (и база не смигрирована), 2 — неверные аргументы, 3 — нет авторизации,
-5 — ошибка провайдера или база недоступна, 6 — базу смигрировал более новый релиз.
+ошибка, 2 — неверные аргументы, 3 — нет ключа шлюза, 5 — ошибка шлюза или его
+журнал не читается.
 """
 
 import json
@@ -23,10 +23,8 @@ from typer.core import TyperGroup
 from ..errors import (
     AllModelsFailed,
     ConfigError,
-    DatabaseError,
     GatewayUnavailable,
     KeyMissing,
-    LoginMissing,
     RoutingInvalid,
     RoutingMissing,
     TemplateError,
@@ -100,15 +98,11 @@ def emit(ctx: typer.Context, payload: dict, render: Callable[[], None] | None = 
 
 def _classify(exc: Exception) -> CliError:
     """Ошибки ядра → коды конверта (см. conventions.md)."""
-    if isinstance(exc, DatabaseError):
-        return CliError(exc.code, exc.message, exc.action, exc.exit_code)
-    if isinstance(exc, LoginMissing):
-        return CliError("AUTH_REQUIRED", f"нет входа в подписку для провайдера {exc.provider}", exc.action, exit_code=3)
     if isinstance(exc, KeyMissing):
         return CliError(
             "AUTH_MISSING",
             f"нет ключа для провайдера {exc.provider}: переменная {exc.env_var}",
-            f"`export {exc.env_var}=...` или `llm keys set {exc.provider}`",
+            f"`export {exc.env_var}=...` — ключ шлюза берётся только из окружения",
             exit_code=3,
             details={"variable": exc.env_var},
         )

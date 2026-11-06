@@ -158,17 +158,17 @@ def _summary() -> str:
 
 
 def env_vars() -> list[dict]:
-    """Все env, которые читает llmkit: ключи провайдеров routing, файл routing, база, внешний CLI."""
-    from . import db
+    """Все env, которые читает llmkit: ключ шлюза, файл routing, журнал шлюза, уровень логов."""
+    from . import usage
 
-    # Встроенных провайдеров нет: ключ провайдера из routing — LLM_<ПРОВАЙДЕР>_API_KEY или его key_env.
+    # Встроенных провайдеров нет: ключ провайдера routing — LLM_<ПРОВАЙДЕР>_API_KEY или его key_env.
     found: list[dict] = [
         {
             "name": "LLM_<PROVIDER>_API_KEY",
             "purpose": "credential",
             "field": "api_key",
             "description": "Ключ провайдера routing (имя в верхнем регистре, не буквы и не цифры → _) "
-            "или переменная из его key_env; старые имена (OPENROUTER_API_KEY…) — один цикл с предупреждением",
+            "или переменная из его key_env; значение берётся только из окружения",
             "required": False,  # нужен, только если цепочка идёт через этого провайдера
         }
     ]
@@ -180,32 +180,19 @@ def env_vars() -> list[dict]:
             "required": False,
         },
         {
-            "name": "LLMKIT_CACHE",
+            "name": usage.ENV_VAR,
             "purpose": "config",
-            "description": "0/false/no — выключить кэш ответов",
+            "description": f"SQLite-журнал расходов шлюза для `llm cost` (только чтение); без неё — {usage.DEFAULT_PATH}",
             "required": False,
         },
         {"name": "LLMKIT_LOG_LEVEL", "purpose": "config", "description": "Уровень логов библиотеки", "required": False},
     ]
-    found += [
-        {"name": name, "purpose": "database", "description": description, "required": False}
-        for name, description in db.ENV_VARS.items()
-    ]
-    found.append(
-        {
-            "name": "CLAUDE_COMMAND",
-            "purpose": "external",
-            "description": "Команда CLI Claude (можно с аргументами) вместо `claude` из PATH",
-            "required": False,
-        }
-    )
     return found
 
 
 def data() -> dict:
-    """Таблицы, представления `llmkit_v1_*` и файлы в каталогах пользователя."""
+    """Файлы в каталогах пользователя: своего состояния у llmkit нет — ни таблиц, ни представлений."""
     from .data_files import DATA_FILES
-    from .db import tables
 
     def files(where: str) -> list[dict]:
         return [
@@ -215,42 +202,8 @@ def data() -> dict:
         ]
 
     return {
-        "tables": [
-            {
-                "name": table.name,
-                "kind": table.info.get("kind"),
-                **({"description": table.comment} if table.comment else {}),
-                "columns": [
-                    {
-                        "name": column.name,
-                        "type": str(column.type),
-                        "nullable": bool(column.nullable),
-                        **({"primary_key": True} if column.primary_key else {}),
-                    }
-                    for column in table.columns
-                ],
-            }
-            for table in tables.metadata.tables.values()
-        ],
-        "views": [
-            {
-                "name": view.name,
-                **({"description": view.comment} if view.comment else {}),
-                "columns": [
-                    {
-                        "name": column.name,
-                        "type": str(column.type),
-                        **({"description": column.comment} if column.comment else {}),
-                    }
-                    for column in view.columns
-                ],
-            }
-            for view in tables.views.tables.values()
-        ],
         "user_data_dir": {"appname": TOOL, "files": files("data")},
-        # Каталога кэша в шаблоне нет; кэш ответов llmkit — таблица в базе, файлов там нет.
         "user_cache_dir": {"appname": TOOL, "files": files("cache")},
-        # Каталога конфигурации в шаблоне нет: у llmkit там routing по умолчанию.
         "user_config_dir": {"appname": TOOL, "files": files("config")},
     }
 

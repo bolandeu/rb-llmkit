@@ -22,7 +22,6 @@ class Task:
     temperature: float | None = None
     max_tokens: int | None = None
     timeout: float | None = None
-    cache: bool | None = None
     retry: bool = True
     id: str | None = None
 
@@ -48,14 +47,14 @@ class Answer:
     """Результат задачи и откуда он взялся."""
 
     data: Any
-    source: str  # llm | cache | default
+    source: str  # llm | default
     model: str = ""  # запрошенная строка модели — как в настройке шлюза
     provider: str | None = None  # имя провайдера из ответа шлюза; подписка его не называет
     attempts: list[Attempt] = field(default_factory=list)
     prompt_tokens: int = 0
     completion_tokens: int = 0
     cost_usd: float | None = 0.0  # стоимость ответившей попытки; None — цена неизвестна
-    cost_source: str | None = "provider"  # provider (usage.cost шлюза) | cache | None (цены нет)
+    cost_source: str | None = "provider"  # provider (usage.cost шлюза) | None (цены нет)
     latency_ms: int = 0
     warnings: list[str] = field(default_factory=list)
     error: str | None = None
@@ -68,11 +67,7 @@ class Answer:
 
     @property
     def ok(self) -> bool:
-        return self.source in ("llm", "cache")
-
-    @property
-    def cache_hit(self) -> bool:
-        return self.source == "cache"
+        return self.source == "llm"
 
     @property
     def cost_known(self) -> bool:
@@ -84,9 +79,7 @@ class Stats:
     """Итоги за время жизни экземпляра `LlmKit`."""
 
     calls: int = 0
-    cached: int = 0
     failed: int = 0
-    fallbacks: int = 0
     prompt_tokens: int = 0
     completion_tokens: int = 0
     cost_usd: float = 0.0
@@ -99,7 +92,6 @@ class Outcome:
     """Успешный ответ шлюза: данные и всё для учёта."""
 
     data: Any
-    cache_value: Any
     prompt_tokens: int = 0
     completion_tokens: int = 0
     cost_usd: float | None = 0.0

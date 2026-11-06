@@ -10,17 +10,14 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import ValidationError
 
-from . import cache as cache_mod
 from . import config as config_mod
 from . import keys as keys_mod
 from . import routing as routing_mod
-from .cache import Cache
-from .callutil import mask, messages_of, parse_json
+from .callutil import messages_of, parse_json
 from .config import Config
-from .errors import AllModelsFailed, GatewayUnavailable, LlmKitError, RoutingInvalid, RoutingMissing
+from .errors import AllModelsFailed, LlmKitError, RoutingInvalid, RoutingMissing
 from .models import Answer, Attempt, Outcome, Stats, Task, totals
 from .routing import Routing
-from .usage import Usage
 
 if TYPE_CHECKING:  # pragma: no cover
     from .gateway import GatewayClient
@@ -28,44 +25,12 @@ if TYPE_CHECKING:  # pragma: no cover
 
 log = logging.getLogger("llmkit.core")
 
-# Бюджеты, о превышении которых уже написали в лог — раз на процесс.
-_warned_budgets: set[str] = set()
-
-# Цен в llmkit больше нет (ADR-0001), но набор остаётся: фикстура tests/conftest.py чистит его перед каждым тестом.
-_warned_prices: set[str] = set()
-
 # Повтор невалидного ответа несёт текст ошибки проверки: иначе модель повторит тот же ответ.
 RETRY_PROMPT = "Ответ не прошёл проверку схемы: {error}. Верни JSON по схеме."
 
 
-class _BudgetTracker:
-    """Бюджеты задачи: журнал читается один раз, дальше считаем в памяти."""
-
-    def __init__(self, items: list[tuple[str, str, float, float]]) -> None:
-        # (ключ бюджета, человеческое описание, лимит, потрачено сегодня)
-        self._items = items
-        self._reported: set[str] = set()
-
-    def add(self, cost_usd: float) -> None:
-        self._items = [(key, what, limit, spent + cost_usd) for key, what, limit, spent in self._items]
-
-    def check(self) -> list[str]:
-        """Новые предупреждения о превышении — по одному на бюджет за задачу."""
-        fresh = []
-        for key, what, limit, spent in self._items:
-            if spent <= limit or key in self._reported:
-                continue
-            self._reported.add(key)
-            text = f"{what} превышен: потрачено ${spent:.4f} за сегодня"
-            if key not in _warned_budgets:
-                _warned_budgets.add(key)
-                log.warning("%s", text)
-            fresh.append(text)
-        return fresh
-
-
 class LlmKit:
-    """Точка входа: routing (адрес шлюза и модели), настройки, кэш, журнал."""
+    """Точка входа: routing (адрес шлюза и модели), настройки вызова, подмена сети в тестах."""
 
     def __init__(
         self,
@@ -78,7 +43,6 @@ class LlmKit:
         max_tokens: int | None = None,
         timeout: float | None = None,
         concurrency: int | None = None,
-        cache: bool | None = None,
     ) -> None:
         # Без routing экземпляр создаётся, а первый вызов бросит RoutingMissing.
         self.routing = None if routing is None else routing_mod.parse(routing, require_chain=False)
@@ -92,8 +56,6 @@ class LlmKit:
         defaults = {key: value for key, value in defaults.items() if value is not None}
         if defaults:
             overrides["defaults"] = defaults
-        if cache is not None:
-            overrides["cache"] = {"enabled": cache}
         if config is None:
             self.config = config_mod.load(overrides=overrides)
         else:
@@ -103,17 +65,9 @@ class LlmKit:
         if self.config.log_level:
             logging.getLogger("llmkit").setLevel(self.config.log_level)
         self.tags = dict(tags or {})
-        self.usage = Usage(self.config.usage_path())
-        self.cache = Cache(
-            self.usage._db,
-            ttl_days=self.config.cache.ttl_days,
-            enabled=self.config.cache.enabled,
-        )
         # Подмена сети в тестах: httpx.MockTransport вместо настоящего шлюза.
         self._transport = transport
         self._stats = Stats()
-        # Подготовка вызова (кэш, бюджеты) идёт в порядке задач пачки: запросы уходят тем же порядком.
-        self._prep = asyncio.Lock()
 
     # --- публичный API ---
 
@@ -124,87 +78,29 @@ class LlmKit:
     async def ask(self, task: Task) -> Answer:
         """Спросить шлюз и вернуть ответ: текст, значение схемы или `default`.
 
-        Кэш — по запрошенной модели и сообщениям. Сбой шлюза (`GatewayUnavailable`)
-        и невалидный ответ (`AllModelsFailed`) бросаются, если `default` не задан;
-        повторов на другой модели и фолбэка у llmkit нет — это дело шлюза.
+        Сбой шлюза (`GatewayUnavailable`) и невалидный ответ (`AllModelsFailed`)
+        бросаются, если `default` не задан; повторов на другой модели и фолбэка
+        у llmkit нет — это дело шлюза.
         """
         started = time.perf_counter()
         provider, cfg, model = self._route()
         messages = messages_of(task)
         settings = self._settings(task)
         tags = {**self.tags, **task.tags}
-        warnings: list[str] = []
-        key = cache_mod.make_key(
-            model=model,
-            api_base=cfg.base_url,
-            messages=messages,
-            schema=task.schema,
-            temperature=settings["temperature"],
-            max_tokens=settings["max_tokens"],
-        )
-        cache_enabled = self.config.cache.enabled if task.cache is None else task.cache
-        async with self._prep:
-            cached = await self.cache.aget_safe(key, warnings) if cache_enabled else None
-            if cached is not None:
-                data, reply = self._replay(cached)
-                await self._record(
-                    task,
-                    tags,
-                    Attempt(
-                        model=model, provider=reply.get("provider") or provider, cost_source="cache", billable=False
-                    ),
-                    status="cache",
-                )
-                answer = Answer(
-                    data=self._decode(data, task.schema),
-                    source="cache",
-                    model=model,
-                    provider=reply.get("provider") or provider,
-                    cost_usd=reply.get("cost_usd"),
-                    cost_source="cache",
-                    prompt_tokens=reply.get("prompt_tokens", 0),
-                    completion_tokens=reply.get("completion_tokens", 0),
-                    billable_requests=0,
-                    cost_total=0.0,
-                    warnings=warnings,
-                    task_id=task.id,
-                    served_model=reply.get("served_model") or model,
-                )
-                return self._done(answer, started, tags)
-            # Бюджеты читаются там же: задачи пачки не должны обгонять друг друга до самого запроса.
-            budget = await self._budget_tracker(tags)
 
         from .gateway import GatewayClient  # httpx тянет rich и click: импорт отложен ради быстрого старта
 
-        secret = keys_mod.resolve(provider, cfg, warnings=warnings)
+        warnings: list[str] = []
+        secret = keys_mod.resolve(provider, cfg)
         client = GatewayClient(
             cfg.base_url or "", api_key=secret, transport=self._transport, timeout=settings["timeout"]
         )
         begun = time.perf_counter()
-        try:
-            outcome, spent = await self._call(client, task, messages, model, settings)
-        except AllModelsFailed as exc:
-            for attempt in exc.attempts:
-                await self._record(task, tags, attempt, status="failed")
-            raise
-        except GatewayUnavailable as exc:
-            attempt = Attempt(
-                model=model,
-                provider=provider,
-                error_type=exc.kind,
-                error=mask(str(exc), secret),
-                latency_ms=int((time.perf_counter() - begun) * 1000),
-            )
-            await self._record(task, tags, attempt, status="failed")
-            raise
+        outcome, spent = await self._call(client, task, messages, model, settings)
         latency = int((time.perf_counter() - begun) * 1000)
-        budget.add(outcome.cost_usd or 0.0)
-        warnings.extend(budget.check())
         if outcome.cost_usd is None:
-            # Цены в ответе шлюза нет — одно предупреждение на модель и вызов.
-            message = f"price unknown for {model}"
-            if message not in warnings:
-                warnings.append(message)
+            # Цены в ответе шлюза нет — одно предупреждение на вызов.
+            warnings.append(f"price unknown for {model}")
         attempt = Attempt(
             model=model,
             provider=outcome.provider,
@@ -215,12 +111,6 @@ class LlmKit:
             cost_source=outcome.cost_source,
             billable=True,
         )
-        served = outcome.served_model or model
-        for failed in spent:
-            await self._record(task, tags, failed, status="failed")
-        await self._record(task, tags, attempt, status="ok", served_model=served)
-        if cache_enabled:
-            await self.cache.aset_safe(key, model, self._cache_value(outcome), warnings)
         billable_requests, cost_total = totals([*spent, attempt])
         answer = Answer(
             data=outcome.data,
@@ -234,7 +124,7 @@ class LlmKit:
             cost_source=outcome.cost_source,
             warnings=warnings,
             task_id=task.id,
-            served_model=served,
+            served_model=outcome.served_model or model,
             billable_requests=billable_requests,
             cost_total=cost_total,
         )
@@ -337,14 +227,6 @@ class LlmKit:
 
         return run(self.ask_many(tasks, **kwargs))
 
-    async def aclose(self) -> None:
-        """Закрыть соединения журнала с базой (`Usage.close`)."""
-        self.usage.close()
-
-    def close(self) -> None:
-        """Закрыть соединения журнала с базой (`Usage.close`)."""
-        self.usage.close()
-
     # --- внутреннее ---
 
     def _route(self) -> tuple[str, routing_mod.Provider, str]:
@@ -370,7 +252,7 @@ class LlmKit:
     ) -> tuple[Outcome, list[Attempt]]:
         """Запрос к шлюзу; невалидный ответ повторяется с текстом ошибки, не больше retry.invalid_output.
 
-        Возвращает результат и уже оплаченные неудачные попытки — их тоже пишем в журнал.
+        Возвращает результат и уже оплаченные неудачные попытки.
         """
         retries = self.config.retry.invalid_output if task.retry else 0
         sent = messages
@@ -458,33 +340,9 @@ class LlmKit:
             billable=bool(reply.completion_tokens or reply.cost_usd),
         )
 
-    @staticmethod
-    def _cache_value(outcome: Outcome) -> dict[str, Any]:
-        """Запись кэша: данные плюс поля ответа шлюза — попадание в кэш отвечает так же, как шлюз."""
-        return {
-            "data": outcome.cache_value,
-            "reply": {
-                "served_model": outcome.served_model,
-                "provider": outcome.provider,
-                "cost_usd": outcome.cost_usd,
-                "prompt_tokens": outcome.prompt_tokens,
-                "completion_tokens": outcome.completion_tokens,
-            },
-        }
-
-    @staticmethod
-    def _replay(cached: Any) -> tuple[Any, dict[str, Any]]:
-        """Запись кэша → (данные, поля ответа шлюза); запись старого вида — только данные."""
-        if isinstance(cached, dict) and set(cached) == {"data", "reply"}:
-            return cached["data"], cached["reply"]
-        return cached, {}
-
     def _outcome(self, reply: Reply, data: Any) -> Outcome:
-        dump = getattr(data, "model_dump", None)
-        cache_value = dump(mode="json") if callable(dump) else data
         return Outcome(
             data=data,
-            cache_value=cache_value,
             prompt_tokens=reply.prompt_tokens,
             completion_tokens=reply.completion_tokens,
             cost_usd=reply.cost_usd,
@@ -498,9 +356,7 @@ class LlmKit:
         answer.latency_ms = int((time.perf_counter() - started) * 1000)
         self._stats.seconds += time.perf_counter() - started
         self._stats.calls += 1
-        if answer.source == "cache":
-            self._stats.cached += 1
-        elif answer.source == "default":
+        if answer.source == "default":
             self._stats.failed += 1
         self._stats.prompt_tokens += answer.prompt_tokens
         self._stats.completion_tokens += answer.completion_tokens
@@ -518,52 +374,3 @@ class LlmKit:
             tags,
         )
         return answer
-
-    async def _record(
-        self,
-        task: Task,
-        tags: dict[str, str],
-        attempt: Attempt,
-        *,
-        status: str,
-        served_model: str | None = None,
-    ) -> None:
-        await self.usage.arecord(
-            model=attempt.model,
-            provider=attempt.provider or "",
-            status=status,
-            task_id=task.id,
-            tags=tags,
-            attempt=0,
-            error_type=attempt.error_type,
-            prompt_tokens=attempt.prompt_tokens,
-            completion_tokens=attempt.completion_tokens,
-            cost_usd=attempt.cost_usd or 0.0,
-            cost_known=attempt.cost_source is not None,
-            cost_source=attempt.cost_source,
-            billable=attempt.billable,
-            latency_ms=attempt.latency_ms,
-            served_model=served_model or attempt.model,
-        )
-
-    async def _budget_tracker(self, tags: dict[str, str]) -> _BudgetTracker:
-        """Прочитать потраченное за сегодня — один раз на задачу."""
-        budget = self.config.budget
-        items: list[tuple[str, str, float, float]] = []
-        if budget.daily_usd is not None:
-            items.append(
-                ("daily", f"дневной бюджет ${budget.daily_usd}", budget.daily_usd, await self.usage.aspent_today())
-            )
-        for tag, limit in budget.tags.items():
-            name, _, value = tag.partition("=")
-            if tags.get(name) == value:
-                items.append((tag, f"бюджет метки {tag} ${limit}", limit, await self.usage.aspent_today(tag=tag)))
-        return _BudgetTracker(items)
-
-    @staticmethod
-    def _decode(cached: Any, schema: Any) -> Any:
-        """Развернуть значение из кэша обратно в тип, который ждёт задача."""
-        validate = getattr(schema, "model_validate", None)
-        if callable(validate) and isinstance(cached, dict):
-            return validate(cached)
-        return cached

@@ -1,35 +1,19 @@
-"""Команда `llm cost`: отчёт о расходах из журнала вызовов."""
-
-from datetime import UTC, datetime
+"""Команда `llm cost`: расходы из журнала шлюза 9router (только чтение)."""
 
 import typer
 from rich.table import Table
 
-from .. import config as config_mod
-from ..usage import Usage
+from .. import usage
 from .app import app
-from .output import JsonOption, bad_arguments, emit, enable_json, guard, out
+from .output import CliError, JsonOption, bad_arguments, emit, enable_json, guard, out
+
+PERIOD_HINT = "ожидается 7d, 12h, 2w или ГГГГ-ММ-ДД"
 
 
-def _period(value: str | None, what: str):
-    """`7d` отдаём журналу как есть, `ГГГГ-ММ-ДД` превращаем в дату."""
-    if not value:
-        return None
-    try:
-        return datetime.strptime(value, "%Y-%m-%d").replace(tzinfo=UTC)
-    except ValueError:
-        pass
-    if value[:-1].isdigit() and value[-1] in "dhw":
-        return value
-    raise bad_arguments(f"не понимаю {what}={value!r}", "ожидается 7d, 12h, 2w или ГГГГ-ММ-ДД")
-
-
-def _row_payload(row) -> dict:
+def _row_payload(row: usage.Row) -> dict:
     return {
-        "keys": row.keys,
+        "key": row.key,
         "calls": row.calls,
-        "cached": row.cached,
-        "failed": row.failed,
         "prompt_tokens": row.prompt_tokens,
         "completion_tokens": row.completion_tokens,
         "cost_usd": round(row.cost_usd, 6),
@@ -39,49 +23,54 @@ def _row_payload(row) -> dict:
 @app.command("cost")
 def cost(
     ctx: typer.Context,
-    by: str = typer.Option(None, "--by", help="Метки для группировки через запятую, например tool,niche."),
     since: str = typer.Option(None, "--since", help="Начало периода: 7d, 12h, 2w или ГГГГ-ММ-ДД."),
     until: str = typer.Option(None, "--until", help="Конец периода в том же формате."),
     json_output: bool = JsonOption,
 ) -> None:
-    """Показать расходы из журнала вызовов.
+    """Показать расходы из журнала шлюза по ключам потребителей.
 
-    Без `--by` печатается одна итоговая строка. На пустом журнале — пустая
-    таблица и код выхода 0; 2 — неверный период.
+    Журнал шлюза (`usageHistory`) открывается только на чтение: путь —
+    `LLMKIT_GATEWAY_DB`, по умолчанию `~/.9router/db/data.sqlite`. Строки — по
+    ключу шлюза, от большего расхода к меньшему; `total` — сумма по всем. На
+    пустом журнале — пустая таблица и код выхода 0. Коды выхода: 0 — готово,
+    2 — неверный период, 5 — журнала нет или он не читается (`error.path`).
 
-    Example: llm cost --by tool --since 7d
+    Example: llm cost --since 7d --json
     """
     enable_json(ctx, json_output)
     with guard(ctx):
-        group_by = tuple(name.strip() for name in by.split(",") if name.strip()) if by else ()
-        start, end = _period(since, "--since"), _period(until, "--until")
-        journal = Usage(config_mod.load().usage_path())
-        rows = journal.report(group_by, since=start, until=end) if group_by else []
-        total = journal.total(since=start, until=end)
+        try:
+            rows = usage.report(since=since, until=until)
+        except ValueError as exc:
+            raise bad_arguments(str(exc), PERIOD_HINT) from exc
+        except usage.JournalUnavailable as exc:
+            raise CliError(
+                "GATEWAY_DB_UNAVAILABLE",
+                str(exc),
+                f"задайте путь к журналу шлюза: `export {usage.ENV_VAR}=/путь/к/data.sqlite`",
+                exit_code=5,
+                details={"path": str(exc.path)},
+            ) from exc
+        total = usage.Row(
+            calls=sum(row.calls for row in rows),
+            prompt_tokens=sum(row.prompt_tokens for row in rows),
+            completion_tokens=sum(row.completion_tokens for row in rows),
+            cost_usd=sum(row.cost_usd for row in rows),
+        )
 
         def render() -> None:
-            table = Table(title="Расходы")
-            for name in group_by:
-                table.add_column(name)
-            for column in ("вызовов", "из кэша", "ошибок", "токены", "$"):
-                table.add_column(column, justify="right")
+            table = Table(title="Расходы шлюза")
+            for column in ("Ключ", "Вызовов", "Токены", "$"):
+                table.add_column(column, justify="left" if column == "Ключ" else "right")
             for row in rows:
                 table.add_row(
-                    *[str(row.keys.get(name) or "—") for name in group_by],
+                    row.key or "—",
                     str(row.calls),
-                    str(row.cached),
-                    str(row.failed),
                     f"{row.prompt_tokens}/{row.completion_tokens}",
                     f"{row.cost_usd:.6f}",
                 )
-            labels = ["итого"] + [""] * (len(group_by) - 1) if group_by else []
             table.add_row(
-                *labels,
-                str(total.calls),
-                str(total.cached),
-                str(total.failed),
-                f"{total.prompt_tokens}/{total.completion_tokens}",
-                f"{total.cost_usd:.6f}",
+                "итого", str(total.calls), f"{total.prompt_tokens}/{total.completion_tokens}", f"{total.cost_usd:.6f}"
             )
             out.print(table)
 
