@@ -61,6 +61,26 @@ image, imageToText, video, music, tts, stt, search, fetch):
 запрос и возвращает ответ типизированно (файл или URL, а не разбор форматов),
 свой список провайдеров и ключей не ведёт.
 
+## Журнал расходов — у шлюза
+
+Свой журнал llmkit не пишет: шлюз уже пишет его сам — `usageHistory` (строка на
+запрос: timestamp, provider, model, connectionId, apiKey, endpoint,
+promptTokens, completionTokens, cost, status, tokens), `usageDaily` (агрегат дня
+с `byProvider`, `byModel`, `byAccount`, `byApiKey`, `byEndpoint`), цена считается
+самой 9router.
+
+- Чтение — только SQLite шлюза в режиме read-only:
+  `~/.9router/db/data.sqlite` (`mode=ro`); схема — его внутреннее дело, llmkit
+  читает только `usageHistory` и `usageDaily` и не пишет туда ничего.
+- HTTP `/api/usage/*` (stats, history, logs, chart, providers) существует, но
+  требует сессии дашборда: API-ключ даёт 401. Пока шлюз не даст ключевой доступ,
+  llmkit его не использует.
+- Атрибуция по потребителям — ключом: у каждого потребителя свой API-ключ
+  9router, в журнале он в колонке `apiKey`, в дне — в `byApiKey`.
+- Уходят: таблицы `llmkit_calls` и `llmkit_cache`, миграции, слой БД
+  (PostgreSQL/SQLite), `LLMKIT_DATABASE_URL`, `llm db *`, `llm cost` в текущем
+  виде, метки и бюджеты, представление `llmkit_v1_calls`.
+
 ## Кэша ответов нет
 
 Кэширование ответов — не задача llmkit (пользователь, 2026-11-06): убираются
@@ -85,3 +105,7 @@ image, imageToText, video, music, tts, stt, search, fetch):
   выпуска они работают на прежних тегах llmkit.
 - Кэш ответов убран — `--no-cache`, `cache_hit` и статус `cache` исчезают из
   контракта CLI (ломающее — minor).
+- `llmkit_v1_calls` больше нет: `marketer/windmill` и `wordpress-bulk-editor`
+  переходят на `usageHistory`/`usageDaily` шлюза (или на его `/api/usage/*`,
+  когда тот откроется по ключу). Метки `tool`/`stage`/`niche` не сохраняются:
+  группировка — по API-ключу потребителя.
