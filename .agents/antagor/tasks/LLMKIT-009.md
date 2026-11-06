@@ -1,7 +1,7 @@
 ---
 id: LLMKIT-009
 title: 'Gateway client: ask, generate and ask_many through 9router over httpx'
-status: ideas
+status: queue
 attempts: 0
 blocked: false
 blocked_reason: null
@@ -9,7 +9,8 @@ phase: null
 tests_hash: null
 publish_stage: null
 created_by: architect
-approved_by: null
+approved_by: human
+approved_words: Tvrdí
 worker: pi
 type: feature
 owns_paths:
