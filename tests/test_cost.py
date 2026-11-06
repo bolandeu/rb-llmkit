@@ -115,3 +115,53 @@ def test_missing_gateway_database_is_unavailable(tmp_path, monkeypatch):
 def test_tags_grouping_is_gone():
     result, _ = cost("--by", "tool")
     assert result.exit_code == 2
+
+
+# --- период: смещение назад, дата и метка времени -----------------------------------
+
+DATED_ROWS = [
+    # (timestamp шлюза, цена): даты фиксированы, ожидаемые суммы посчитаны руками.
+    ("2026-10-31T23:59:59.000Z", 0.10),
+    ("2026-11-01T00:00:00.000Z", 0.01),
+    ("2026-11-01T12:00:00.000Z", 0.02),
+    ("2026-11-02T12:00:00.000Z", 0.20),
+]
+
+
+@pytest.fixture
+def dated_gateway_db(tmp_path, monkeypatch) -> Path:
+    """Журнал с фиксированными датами (ноябрь 2026): период не зависит от «сейчас»."""
+    path = tmp_path / "dated.sqlite"
+    with sqlite3.connect(path) as connection:
+        connection.executescript(SCHEMA)
+        connection.executemany(
+            "INSERT INTO usageHistory (timestamp, provider, model, apiKey, promptTokens, completionTokens, cost,"
+            " status) VALUES (?, 'openrouter', 'deepseek/deepseek-v4.1-flash-1017', ?, 1, 1, ?, 'ok')",
+            [(stamp, KEY_A, price) for stamp, price in DATED_ROWS],
+        )
+    monkeypatch.setenv("LLMKIT_GATEWAY_DB", str(path))
+    return path
+
+
+def test_date_only_period_selects_the_whole_day(dated_gateway_db):
+    """`--since 2026-11-01 --until 2026-11-01` — день 1 ноября целиком, без INVALID_ARGUMENTS."""
+    result, body = cost("--since", "2026-11-01", "--until", "2026-11-01")
+    assert result.exit_code == 0, result.output
+    assert body["total"]["calls"] == 2
+    assert body["total"]["cost_usd"] == pytest.approx(0.03)
+
+
+def test_iso_timestamp_bounds_cut_inside_a_day(dated_gateway_db):
+    """Граница меткой времени ISO 8601 режет день по часам, а не только по датам."""
+    result, body = cost("--since", "2026-11-01T06:00:00Z", "--until", "2026-11-01T23:00:00Z")
+    assert result.exit_code == 0, result.output
+    assert body["total"]["calls"] == 1
+    assert body["total"]["cost_usd"] == pytest.approx(0.02)
+
+
+def test_a_period_in_neither_form_is_rejected(dated_gateway_db):
+    """Ниже обещанного формата — код 2 и подсказка с форматом."""
+    result, body = cost("--since", "вчера")
+    assert result.exit_code == 2
+    assert body["error"]["code"] == "INVALID_ARGUMENTS"
+    assert "7d" in body["error"].get("action", "")
