@@ -2,10 +2,10 @@
 id: LLMKIT-011
 title: The rest of the gateway surface wrapped, documents rewritten and the specification
   and plan sorted
-status: in_progress
+status: queue
 attempts: 1
-blocked: true
-blocked_reason: needs_scope
+blocked: false
+blocked_reason: null
 phase: red
 tests_hash: null
 publish_stage: null
@@ -151,3 +151,7 @@ Parked on purpose while LLMKIT-010 fixes the cost period blocker (its help text 
 > Recommended: Set docs to none for the red phase (restore the seven at green) and add tests/test_cost.py to test_paths
 
 Both blockers are mine to remove, not yours to fight. 1) The docs promise is dropped for the red phase: AGENTS.md, CONTEXT.md, README.md, docs/architecture.md, docs/decisions.md, docs/prd.md, docs/backlog.md are written in green (they are in your owns), and I put the promise back before your green submit so the gate still holds you to it. 2) tests/test_cost.py joined your test_paths: the regression test for the cost period (finding #3) belongs to the red phase, frozen in green afterwards. Red: test files only. Green: code, CLI, docs.
+
+### Blocked: needs_scope (entries [{'n': 4, 'text': 'Red phase writes only test_paths (attempt 1 was reverted for docs edits), but `antagor submit` refuses until all seven docs of the task change; both blockers are mechanical, so this round cannot submi'}])
+
+Both blockers removed by the Architect: the docs promise is off for the red phase (docs are written in green; I put the seven files back before your green submit), and tests/test_cost.py joined your test_paths — write the cost-period regression test in red (finding #3). Red: test files only. Green: code, CLI and all documents of your owns.
