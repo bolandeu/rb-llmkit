@@ -10,7 +10,7 @@ from pathlib import Path
 
 import httpx
 import pytest
-from conftest import ROUTING, FakeGateway, json_reply
+from conftest import GATEWAY_ROUTING, FakeGateway, json_reply
 from typer.testing import CliRunner
 
 from llmkit import LlmKit
@@ -32,7 +32,7 @@ def no_keychain(monkeypatch):
 def routing_file(tmp_path, monkeypatch):
     """Routing из файла пользователя (LLMKIT_ROUTING_FILE), как у CLI на Mac."""
     path = tmp_path / "routing.json"
-    path.write_text(json.dumps(ROUTING), encoding="utf-8")
+    path.write_text(json.dumps(GATEWAY_ROUTING), encoding="utf-8")
     monkeypatch.setenv("LLMKIT_ROUTING_FILE", str(path))
     return path
 
@@ -45,10 +45,11 @@ def fake_kit(monkeypatch):
         fake = FakeGateway(*replies)
 
         def build(**kwargs):
-            kwargs.setdefault("routing", ROUTING)
+            kwargs.setdefault("routing", GATEWAY_ROUTING)
             return LlmKit(transport=fake.transport, **kwargs)
 
         monkeypatch.setattr(runtime, "build_kit", build)
+        monkeypatch.setenv("NINEROUTER_API_KEY", "ключ-шлюза")
         return fake
 
     return install
@@ -115,15 +116,16 @@ def test_config_init_is_removed():
     assert run("config", "init", "--json").exit_code == 2
 
 
-def test_models_json_lists_providers_and_chain():
+def test_models_json_lists_providers_and_chain(monkeypatch):
+    monkeypatch.setenv("NINEROUTER_API_KEY", "ключ-шлюза")
     body = payload(run("models", "--json"))
     # Только провайдеры routing: встроенных нет.
     providers = {row["provider"]: row for row in body["providers"]}
-    assert set(providers) == {"a", "b"}
-    assert providers["a"]["protocol"] == "openai_compatible"
-    assert providers["a"]["base_url"] == "http://localhost:11111/v1"
-    assert providers["a"]["has_key"] is True and providers["a"]["key_source"] == "env"
-    assert body["chain"] == ["a/m1", "b/m2"]
+    assert set(providers) == {"9router"}
+    assert providers["9router"]["protocol"] == "openai_compatible"
+    assert providers["9router"]["base_url"] == "http://gateway.test/v1"
+    assert providers["9router"]["has_key"] is True and providers["9router"]["key_source"] == "env"
+    assert body["chain"] == ["Deep Sec", "opencode-go"]
 
 
 def test_ask_json_envelope(fake_kit):
@@ -132,7 +134,7 @@ def test_ask_json_envelope(fake_kit):
     assert result.exit_code == 0
     body = payload(result)
     assert body["ok"] is True and body["text"] == "ответ модели"
-    assert body["model"] == "a/m1" and body["cache_hit"] is False
+    assert body["model"] == "Deep Sec" and body["cache_hit"] is False
     assert body["tokens_in"] == 10 and body["cost_usd"] > 0
     # Вызов попал в журнал и виден в отчёте по метке.
     report = payload(run("cost", "--by", "tool", "--json"))
@@ -166,10 +168,10 @@ def test_ask_rejects_bad_tag(fake_kit):
 
 
 def test_ask_model_flag_sets_chain(fake_kit, routing_file):
-    routing_file.write_text(json.dumps({"providers": ROUTING["providers"]}), encoding="utf-8")
+    routing_file.write_text(json.dumps({"providers": GATEWAY_ROUTING["providers"]}), encoding="utf-8")
     fake = fake_kit()
-    assert run("ask", "вопрос", "--model", "b/m2", "--no-cache").exit_code == 0
-    assert fake.models() == ["b/m2"]
+    assert run("ask", "вопрос", "--model", "opencode-go", "--no-cache").exit_code == 0
+    assert fake.models() == ["opencode-go"]
 
 
 def test_ask_no_retry_flag_disables_retries(fake_kit):
@@ -181,13 +183,12 @@ def test_ask_no_retry_flag_disables_retries(fake_kit):
 
 
 def test_ask_reports_missing_key(monkeypatch):
-    monkeypatch.delenv("TEST_A_KEY")
-    monkeypatch.delenv("TEST_B_KEY")
+    monkeypatch.delenv("NINEROUTER_API_KEY", raising=False)
     result = run("ask", "вопрос", "--json")
     assert result.exit_code == 3  # нет ключа — код 3 по conventions.md
     error = payload(result)["error"]
     assert error["code"] == "AUTH_MISSING" and "llm keys set" in error["action"]
-    assert error["variable"] == "TEST_A_KEY"
+    assert error["variable"] == "NINEROUTER_API_KEY"
 
 
 def test_json_command_prints_only_the_object(fake_kit, tmp_path):
@@ -210,14 +211,13 @@ def test_json_command_rejects_broken_schema(fake_kit, tmp_path):
 
 
 def test_keys_status_without_and_with_env(monkeypatch):
-    monkeypatch.delenv("TEST_A_KEY")
-    monkeypatch.delenv("TEST_B_KEY")
+    monkeypatch.delenv("NINEROUTER_API_KEY", raising=False)
     empty = {row["provider"]: row for row in payload(run("keys", "status", "--json"))["providers"]}
-    assert empty["a"]["source"] == "none" and empty["b"]["source"] == "none"
-    assert empty["a"]["env_var"] == "TEST_A_KEY"
-    monkeypatch.setenv("TEST_A_KEY", "ключ")
+    assert empty["9router"]["source"] == "none"
+    assert empty["9router"]["env_var"] == "NINEROUTER_API_KEY"
+    monkeypatch.setenv("NINEROUTER_API_KEY", "ключ")
     filled = payload(run("keys", "status", "--json"))
-    assert {row["provider"]: row["source"] for row in filled["providers"]}["a"] == "env"
+    assert {row["provider"]: row["source"] for row in filled["providers"]}["9router"] == "env"
     assert "ключ" not in json.dumps(filled, ensure_ascii=False)
 
 
@@ -225,10 +225,10 @@ def test_keys_set_and_rm(monkeypatch):
     stored = {}
     monkeypatch.setattr(keys_mod, "store", lambda provider, secret: stored.update({provider: secret}))
     monkeypatch.setattr(keys_mod, "delete", lambda provider: stored.pop(provider, None))
-    result = run("keys", "set", "a", "--stdin", "--json", input="секретный-ключ\n")
-    assert result.exit_code == 0 and stored == {"a": "секретный-ключ"}
+    result = run("keys", "set", "9router", "--stdin", "--json", input="секретный-ключ\n")
+    assert result.exit_code == 0 and stored == {"9router": "секретный-ключ"}
     assert "секретный-ключ" not in result.stdout
-    assert run("keys", "rm", "a", "--json").exit_code == 0 and stored == {}
+    assert run("keys", "rm", "9router", "--json").exit_code == 0 and stored == {}
 
 
 def test_keys_set_unknown_provider():
