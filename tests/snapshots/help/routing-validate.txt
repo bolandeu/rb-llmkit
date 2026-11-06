@@ -3,13 +3,14 @@
 
  Проверить routing v1 перед сохранением (Windmill, Directus).
 
- Та же проверка, что перед вызовом модели: схема плюс ссылки цепочки и
- цен на описанных провайдеров. Ключи не проверяются (`llm auth status`).
+ Та же проверка, что перед вызовом модели: схема и ссылки цепочки.
+ Ключи не проверяются (`llm auth status`).
  Коды выхода: 0 — routing годен, 2 — ROUTING_INVALID с `error.path`
  (JSON Pointer поля).
 
- Example: llm routing validate '{"providers": {"openrouter": {"protocol": "openrouter"}}, "chain":
- ["openrouter/openai/gpt-4o-mini"]}'
+ Example: llm routing validate '{"providers": {"9router": {"protocol": "openai_compatible",
+ "base_url": "http://localhost:20128/v1", "key_env": "NINEROUTER_API_KEY"}}, "chain": ["Deep
+ Sec"]}'
 
 ╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
 │ *    routing      <str>  Routing v1: путь к JSON-файлу или JSON-строка. [required]               │

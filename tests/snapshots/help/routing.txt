@@ -1,7 +1,7 @@
 
  Usage: llm routing [OPTIONS] COMMAND [ARGS]...
 
- Routing v1: провайдеры, цепочка и цены данными — проверка и перенос старого config.toml.
+ Routing v1: провайдеры и цепочка данными — проверка и перенос старого config.toml.
 
 ╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
 │ --help          Show this message and exit.                                                      │

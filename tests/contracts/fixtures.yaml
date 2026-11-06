@@ -3,16 +3,14 @@
 #
 # placeholders: values for {name} in a case's argv, chosen to match the offline data.
 # offline_cache: the pytest fixture (tests/conftest.py) that puts that data in place —
-#   recorded responses, a filled cache, fake keys — for every case unless it says
-#   `offline_cache: false`; those get `no_cache` (if set) and must fail before
-#   reaching the provider.
+#   a recorded gateway response and a fake key — for every case unless it says
+#   `offline_cache: false`; those must fail before reaching the gateway.
 #
 # llmkit: офлайн-данные — tests/contracts/data/ (пути от корня репо: гейт и pytest
 # запускаются оттуда). Провайдер `contract` в routing — фейк из фикстуры
 # `contract_offline`: модели contract/broken* отвечают 503, остальные — ответом.
 placeholders:
   fixture_routing: tests/contracts/data/routing.json
-  fixture_routing_first_broken: tests/contracts/data/routing_first_broken.json
   fixture_routing_all_broken: tests/contracts/data/routing_all_broken.json
   fixture_judge_schema: tests/contracts/data/judge_schema.json
   fixture_template: tests/contracts/data/template.md

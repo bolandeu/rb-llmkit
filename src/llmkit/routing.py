@@ -37,10 +37,6 @@ class Provider(BaseModel):
     base_url: str | None = Field(default=None, min_length=1)
     key_env: str | None = Field(default=None, pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
 
-    @property
-    def subscription(self) -> bool:
-        return self.protocol in SUBSCRIPTION_PROTOCOLS
-
 
 class Routing(BaseModel):
     model_config = ConfigDict(extra="forbid")

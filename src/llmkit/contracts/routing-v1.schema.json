@@ -51,7 +51,7 @@
       "required": ["protocol"],
       "properties": {
         "protocol": {
-          "description": "Как говорить с провайдером. chatgpt и claude_cli — подписки: вход `llm auth login`, ключ не нужен.",
+          "description": "Как говорить с провайдером. llmkit принимает только openai_compatible — шлюз 9router; остальные имена остались в схеме как история.",
           "enum": ["openrouter", "openai", "anthropic", "gemini", "ollama", "openai_compatible", "chatgpt", "claude_cli"]
         },
         "base_url": {

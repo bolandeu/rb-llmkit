@@ -2,45 +2,33 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
-import sqlite3
 
 import pytest
-from conftest import ROUTING, FakeCompletion, response
-from test_decide import DECIDE_ROUTING, QUESTIONS, FakeDecisions
+from conftest import GATEWAY_ROUTING, FakeGateway, json_reply
 from typer.testing import CliRunner
 
 from llmkit import LlmKit
-from llmkit import keys as keys_mod
 from llmkit.cli import runtime
 from llmkit.cli.main import app
 
 runner = CliRunner()
 
-SECRET = "секрет-клиента-42"
-
-
-@pytest.fixture(autouse=True)
-def no_keychain(monkeypatch):
-    monkeypatch.setattr(keys_mod, "from_keychain", lambda provider: None)
-
 
 @pytest.fixture(autouse=True)
 def routing_file(tmp_path, monkeypatch):
     path = tmp_path / "routing.json"
-    path.write_text(json.dumps(ROUTING), encoding="utf-8")
+    path.write_text(json.dumps(GATEWAY_ROUTING), encoding="utf-8")
     monkeypatch.setenv("LLMKIT_ROUTING_FILE", str(path))
 
 
 @pytest.fixture
 def fake_kit(monkeypatch):
-    def install(script=None):
-        completion = FakeCompletion(script if script is not None else [response("ответ модели")])
-        monkeypatch.setattr(runtime, "build_kit", lambda **kwargs: LlmKit(completion=completion, **kwargs))
-        return completion
-
-    return install
+    """Подменяет фабрику ядра: сеть — httpx-транспорт фейкового шлюза."""
+    gateway = FakeGateway(json_reply("ответ модели"))
+    monkeypatch.setattr(runtime, "build_kit", lambda **kwargs: LlmKit(transport=gateway.transport, **kwargs))
+    monkeypatch.setenv("NINEROUTER_API_KEY", "ключ-шлюза")
+    return gateway
 
 
 def run(*args, **kwargs):
@@ -152,102 +140,43 @@ def test_render_broken_template_is_exit_2():
 
 
 def test_ask_renders_template_before_request(fake_kit, template_file):
-    completion = fake_kit()
     result = run("ask", "--template", str(template_file), "--vars", '{"name": "Мир"}', "--json")
     assert result.exit_code == 0, result.output
-    assert completion.calls[0]["messages"][-1]["content"] == "Привет, Мир!"
+    assert fake_kit.bodies()[0]["messages"][-1]["content"] == "Привет, Мир!"
     assert payload(result)["text"] == "ответ модели"
 
 
 def test_ask_missing_variable_does_not_call_model(fake_kit, template_file):
-    completion = fake_kit()
     result = run("ask", "--template", str(template_file), "--vars", "{}", "--json")
     assert result.exit_code == 2
     assert payload(result)["error"]["variable"] == "name"
-    assert completion.calls == []
+    assert fake_kit.requests == []
 
 
 def test_ask_lenient(fake_kit, template_file):
-    completion = fake_kit()
-    result = run("ask", "--template", str(template_file), "--lenient", "--no-cache")
+    result = run("ask", "--template", str(template_file), "--lenient")
     assert result.exit_code == 0, result.output
-    assert completion.calls[0]["messages"][-1]["content"] == "Привет, !"
+    assert fake_kit.bodies()[0]["messages"][-1]["content"] == "Привет, !"
 
 
 def test_ask_template_and_text_together_is_exit_2(fake_kit, template_file):
-    completion = fake_kit()
     result = run("ask", "вопрос", "--template", str(template_file), "--vars", '{"name": "x"}', "--json")
     assert result.exit_code == 2 and payload(result)["error"]["code"] == "INVALID_ARGUMENTS"
-    assert completion.calls == []
+    assert fake_kit.requests == []
 
 
 def test_ask_vars_without_template_is_exit_2(fake_kit):
-    fake_kit()
     result = run("ask", "вопрос", "--vars", '{"name": "x"}', "--json")
     assert result.exit_code == 2 and payload(result)["error"]["code"] == "INVALID_ARGUMENTS"
 
 
-def _usage_dump(tmp_path) -> str:
-    with sqlite3.connect(tmp_path / "usage.sqlite") as connection:
-        rows = connection.execute("SELECT * FROM llmkit_calls").fetchall()
-    assert rows
-    return json.dumps(rows, ensure_ascii=False)
-
-
-def test_ask_usage_has_template_name_and_hash_not_values(fake_kit, template_file, tmp_path):
-    fake_kit()
-    result = run(
-        "ask", "--template", str(template_file), "--vars", json.dumps({"name": SECRET}), "--tag", "tool=t", "--json"
-    )
-    assert result.exit_code == 0, result.output
-    digest = hashlib.sha256(template_file.read_bytes()).hexdigest()[:12]
-    with sqlite3.connect(tmp_path / "usage.sqlite") as connection:
-        (tags,) = connection.execute("SELECT tags FROM llmkit_calls").fetchone()
-    assert json.loads(tags) == {"tool": "t", "template": "greet.md", "template_sha256": digest}
-    assert SECRET not in _usage_dump(tmp_path)
-
-
-def test_ask_inline_template_is_named_inline(fake_kit, tmp_path):
-    fake_kit()
-    template = "Привет, {{name}}!"
-    result = run("ask", "--template", template, "--vars", json.dumps({"name": SECRET}), "--json")
-    assert result.exit_code == 0, result.output
-    with sqlite3.connect(tmp_path / "usage.sqlite") as connection:
-        (tags,) = connection.execute("SELECT tags FROM llmkit_calls").fetchone()
-    assert json.loads(tags) == {
-        "template": "inline",
-        "template_sha256": hashlib.sha256(template.encode()).hexdigest()[:12],
-    }
-    assert SECRET not in _usage_dump(tmp_path)
-
-
-def test_json_command_renders_template(fake_kit, template_file, tmp_path):
-    completion = fake_kit([response('{"x": 1}')])
+def test_json_command_renders_template(fake_kit, template_file, tmp_path, monkeypatch):
+    gateway = FakeGateway(json_reply('{"x": 1}'))
+    monkeypatch.setattr(runtime, "build_kit", lambda **kwargs: LlmKit(transport=gateway.transport, **kwargs))
     schema = tmp_path / "schema.json"
     schema.write_text(json.dumps({"type": "object", "properties": {"x": {"type": "integer"}}}), encoding="utf-8")
     result = run("json", "--schema", str(schema), "--template", str(template_file), "--vars", '{"name": "Мир"}')
     assert result.exit_code == 0, result.output
     assert json.loads(result.stdout) == {"x": 1}
-    assert completion.calls[0]["messages"][-1]["content"] == "Привет, Мир!"
-
-
-def test_decide_renders_template(monkeypatch, template_file, tmp_path):
-    monkeypatch.setenv("LLM_OPENROUTER_API_KEY", "ключ-or")
-    fake = FakeDecisions()
-    monkeypatch.setattr(runtime, "build_kit", lambda **kwargs: LlmKit(decisions=fake, **kwargs))
-    questions = tmp_path / "q.json"
-    questions.write_text(json.dumps(QUESTIONS), encoding="utf-8")
-    result = run(
-        "decide",
-        "--questions",
-        str(questions),
-        "--template",
-        str(template_file),
-        "--vars",
-        '{"name": "Мир"}',
-        "--routing",
-        json.dumps(DECIDE_ROUTING),
-        "--json",
-    )
-    assert result.exit_code == 0, result.output
-    assert fake.calls[0]["state"] == "Привет, Мир!"
+    assert gateway.bodies()[0]["messages"][-1]["content"] == "Привет, Мир!"
+    assert fake_kit  # фикстура уже поставила ключ шлюза в окружение

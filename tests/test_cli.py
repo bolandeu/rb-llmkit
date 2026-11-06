@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.metadata
 import json
 import re
+import sqlite3
 import tomllib
 from pathlib import Path
 
@@ -14,18 +15,11 @@ from conftest import GATEWAY_ROUTING, FakeGateway, json_reply
 from typer.testing import CliRunner
 
 from llmkit import LlmKit
-from llmkit import keys as keys_mod
 from llmkit._distribution import DIST_NAME
 from llmkit.cli import runtime
 from llmkit.cli.main import app
 
 runner = CliRunner()
-
-
-@pytest.fixture(autouse=True)
-def no_keychain(monkeypatch):
-    """Связку ключей ОС тесты не трогают."""
-    monkeypatch.setattr(keys_mod, "from_keychain", lambda provider: None)
 
 
 @pytest.fixture(autouse=True)
@@ -55,6 +49,24 @@ def fake_kit(monkeypatch):
     return install
 
 
+@pytest.fixture
+def gateway_journal(tmp_path, monkeypatch):
+    """Журнал шлюза с одной строкой расхода: `llm cost` читает его."""
+    path = tmp_path / "gateway.sqlite"
+    with sqlite3.connect(path) as connection:
+        connection.execute(
+            "CREATE TABLE usageHistory (id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT NOT NULL,"
+            " provider TEXT, model TEXT, connectionId TEXT, apiKey TEXT, endpoint TEXT, promptTokens INTEGER,"
+            " completionTokens INTEGER, cost REAL, status TEXT, tokens TEXT, meta TEXT)"
+        )
+        connection.execute(
+            "INSERT INTO usageHistory (timestamp, provider, model, apiKey, promptTokens, completionTokens, cost,"
+            " status) VALUES ('2999-01-01T00:00:00.000Z', 'openrouter', 'Deep Sec', 'sk-consumer', 10, 5, 0.02, 'ok')"
+        )
+    monkeypatch.setenv("LLMKIT_GATEWAY_DB", str(path))
+    return path
+
+
 def run(*args, **kwargs):
     return runner.invoke(app, list(args), **kwargs)
 
@@ -75,7 +87,7 @@ def test_bare_call_prints_help_with_zero():
 
 
 def test_group_without_subcommand_prints_help():
-    result = run("keys")
+    result = run("auth")
     assert result.exit_code == 0 and "status" in result.stdout
 
 
@@ -85,30 +97,20 @@ def test_version():
     assert result.exit_code == 0 and result.stdout.strip() == importlib.metadata.version("rb-llmkit")
 
 
-def test_cost_on_empty_journal():
+def test_cost_reads_the_gateway_journal(gateway_journal):
     result = run("cost", "--json")
     assert result.exit_code == 0
     body = payload(result)
-    assert body["ok"] is True and body["rows"] == [] and body["total"]["calls"] == 0
+    assert body["ok"] is True and body["rows"] == [
+        {"key": "sk-consumer", "calls": 1, "prompt_tokens": 10, "completion_tokens": 5, "cost_usd": 0.02}
+    ]
+    assert body["total"]["calls"] == 1
 
 
-def test_cost_rejects_bad_period():
+def test_cost_rejects_bad_period(gateway_journal):
     result = run("cost", "--since", "позавчера", "--json")
     assert result.exit_code == 2
     assert payload(result)["error"]["code"] == "INVALID_ARGUMENTS"
-
-
-def test_config_path_lists_files():
-    body = payload(run("config", "path", "--json"))
-    assert body["ok"] is True and body["cache"] == body["usage"]  # кэш — в базе, не в файле cache.sqlite
-    assert body["routing_file"].endswith("routing.json")
-
-
-def test_config_path_reports_the_database_without_password(monkeypatch):
-    monkeypatch.setenv("LLMKIT_DATABASE_URL", "postgresql+psycopg://user:s3cret@db.example:5432/llmkit")
-    body = payload(run("config", "path", "--json"))
-    assert body["cache"] == "postgresql+psycopg://user:***@db.example:5432/llmkit"
-    assert "s3cret" not in json.dumps(body)
 
 
 def test_config_init_is_removed():
@@ -134,11 +136,8 @@ def test_ask_json_envelope(fake_kit):
     assert result.exit_code == 0
     body = payload(result)
     assert body["ok"] is True and body["text"] == "ответ модели"
-    assert body["model"] == "Deep Sec" and body["cache_hit"] is False
+    assert body["model"] == "Deep Sec" and "cache_hit" not in body
     assert body["tokens_in"] == 10 and body["cost_usd"] > 0
-    # Вызов попал в журнал и виден в отчёте по метке.
-    report = payload(run("cost", "--by", "tool", "--json"))
-    assert report["rows"][0]["keys"] == {"tool": "cli"} and report["rows"][0]["calls"] == 1
 
 
 def test_ask_human_output_is_text_only(fake_kit):
@@ -170,13 +169,13 @@ def test_ask_rejects_bad_tag(fake_kit):
 def test_ask_model_flag_sets_chain(fake_kit, routing_file):
     routing_file.write_text(json.dumps({"providers": GATEWAY_ROUTING["providers"]}), encoding="utf-8")
     fake = fake_kit()
-    assert run("ask", "вопрос", "--model", "opencode-go", "--no-cache").exit_code == 0
+    assert run("ask", "вопрос", "--model", "opencode-go").exit_code == 0
     assert fake.models() == ["opencode-go"]
 
 
 def test_ask_no_retry_flag_disables_retries(fake_kit):
     fake = fake_kit(json_reply("  "))
-    result = run("ask", "вопрос", "--no-retry", "--no-cache", "--json")
+    result = run("ask", "вопрос", "--no-retry", "--json")
     assert result.exit_code == 5
     # Без --no-retry тот же пустой ответ повторяется retry.invalid_output раз.
     assert len(fake.requests) == 1
@@ -187,8 +186,9 @@ def test_ask_reports_missing_key(monkeypatch):
     result = run("ask", "вопрос", "--json")
     assert result.exit_code == 3  # нет ключа — код 3 по conventions.md
     error = payload(result)["error"]
-    assert error["code"] == "AUTH_MISSING" and "llm keys set" in error["action"]
+    assert error["code"] == "AUTH_MISSING" and "NINEROUTER_API_KEY" in error["action"]
     assert error["variable"] == "NINEROUTER_API_KEY"
+    assert "llm keys set" not in error["action"]
 
 
 def test_json_command_prints_only_the_object(fake_kit, tmp_path):
@@ -199,7 +199,7 @@ def test_json_command_prints_only_the_object(fake_kit, tmp_path):
     assert result.exit_code == 0 and json.loads(result.stdout) == {"x": 1}
     enveloped = run("json", "вопрос", "--schema", str(schema), "--json")
     body = payload(enveloped)
-    assert body["ok"] is True and body["data"] == {"x": 1} and body["cache_hit"] is True
+    assert body["ok"] is True and body["data"] == {"x": 1} and "cache_hit" not in body
 
 
 def test_json_command_rejects_broken_schema(fake_kit, tmp_path):
@@ -208,38 +208,6 @@ def test_json_command_rejects_broken_schema(fake_kit, tmp_path):
     broken.write_text("{не json", encoding="utf-8")
     result = run("json", "вопрос", "--schema", str(broken), "--json")
     assert result.exit_code == 2 and payload(result)["error"]["code"] == "INVALID_ARGUMENTS"
-
-
-def test_keys_status_without_and_with_env(monkeypatch):
-    monkeypatch.delenv("NINEROUTER_API_KEY", raising=False)
-    empty = {row["provider"]: row for row in payload(run("keys", "status", "--json"))["providers"]}
-    assert empty["9router"]["source"] == "none"
-    assert empty["9router"]["env_var"] == "NINEROUTER_API_KEY"
-    monkeypatch.setenv("NINEROUTER_API_KEY", "ключ")
-    filled = payload(run("keys", "status", "--json"))
-    assert {row["provider"]: row["source"] for row in filled["providers"]}["9router"] == "env"
-    assert "ключ" not in json.dumps(filled, ensure_ascii=False)
-
-
-def test_keys_set_and_rm(monkeypatch):
-    stored = {}
-    monkeypatch.setattr(keys_mod, "store", lambda provider, secret: stored.update({provider: secret}))
-    monkeypatch.setattr(keys_mod, "delete", lambda provider: stored.pop(provider, None))
-    result = run("keys", "set", "9router", "--stdin", "--json", input="секретный-ключ\n")
-    assert result.exit_code == 0 and stored == {"9router": "секретный-ключ"}
-    assert "секретный-ключ" not in result.stdout
-    assert run("keys", "rm", "9router", "--json").exit_code == 0 and stored == {}
-
-
-def test_keys_set_unknown_provider():
-    result = run("keys", "set", "нет-такого", "--stdin", "--json", input="ключ\n")
-    assert result.exit_code == 2 and payload(result)["error"]["code"] == "INVALID_ARGUMENTS"
-
-
-def test_serve_is_not_implemented_yet():
-    result = run("serve", "--json")
-    assert result.exit_code == 2
-    assert payload(result)["error"]["code"] == "NOT_IMPLEMENTED"
 
 
 def test_provider_failure_exit_code(fake_kit):

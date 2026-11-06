@@ -21,7 +21,6 @@ static:
   exit_codes: [0, 1, 2, 3, 5]   # 3 — нет ключа, 5 — все модели цепочки упали
   env:                          # Windmill кладёт в env процесса (f/shared/tools → llmkit)
     - LLM_<PROVIDER>_API_KEY    # T86: Windmill передаёт LLM_OPENROUTER_API_KEY (имя по x-rb-env)
-    - LLMKIT_DATABASE_URL
     - LLMKIT_ROUTING_FILE       # routing_missing_is_exit_2 опирается на него
   # HTTPS_PROXY / NO_PROXY Windmill тоже кладёт, но это стандартные переменные HTTP-клиента, не llmkit (x-rb-env)
 
@@ -44,11 +43,6 @@ run:
         chain_position: {type: integer}
       anyOf: [{required: [text]}, {required: [data]}]
 
-  - name: fallback_to_second_model
-    # первая модель цепочки фикстуры падает → ответила вторая, attempts содержит упавшую
-    argv: [ask, тест, --routing, "{fixture_routing_first_broken}", --json]
-    exit: 0
-    stdout_json_schema: *answer
 
   - name: json_with_schema
     argv: [json, тест, --schema, "{fixture_judge_schema}", --routing, "{fixture_routing}", --json]

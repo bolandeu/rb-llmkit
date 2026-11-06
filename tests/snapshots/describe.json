@@ -3,11 +3,11 @@
   "info": {
     "title": "llm",
     "version": "<version>",
-    "summary": "Общий LLM-слой: цепочки моделей, кэш, учёт расходов"
+    "summary": "Общий LLM-слой: вызовы моделей через шлюз 9router"
   },
   "command": {
     "name": "llm",
-    "description": "llmkit: вызовы LLM с цепочками моделей, кэшем и учётом расходов.\n\nУ всех команд есть `--json` (конверт в stdout), диагностика идёт в stderr.\nКоды выхода: 0 — успех, 1 — непредвиденная ошибка, 2 — неверные аргументы,\n3 — нет ключа или входа в подписку, 5 — все модели упали или база недоступна,\n6 — базу расходов смигрировал более новый релиз (`llm db`).\n\nПровайдеры и цепочка — routing v1 (данные, встроенных нет):\n\n  --routing JSON|ФАЙЛ             routing аргументом или файлом; иначе LLMKIT_ROUTING_FILE,\n                                 иначе routing.json в каталоге конфигурации (`llm config path`)\n\n  -m ПРОВАЙДЕР/МОДЕЛЬ             цепочка из CLI, можно несколько: -m a/x -m b/y\n\n  -s, --system ТЕКСТ             системное сообщение\n\n  --schema ФАЙЛ                  JSON Schema ответа (только llm json)\n\n  --template ФАЙЛ --vars JSON     шаблон промпта mustache вместо текста\n\n  --temperature, --max-tokens, --timeout   перекрыть значения по умолчанию\n\n  --tag k=v                      метка для учёта расходов, можно несколько\n\n  --no-cache, --no-retry         без кэша; без повторов на сбойной модели\n\nКлюч провайдера — LLM_<ПРОВАЙДЕР>_API_KEY или связка ключей (`llm keys set`).\nСтарый config.toml не читается: `llm routing import config.toml`.\n\nПровайдеры routing и источник ключей: `llm models`. Все параметры\nкоманды: `llm <команда> --help`, например `llm ask --help`.\n\nПримеры:\n\n  llm ask \"Столица Франции?\" --routing routing.json\n\n  llm ask \"Привет\" -m ccode/gpt-5.6-sol -m openrouter/openai/gpt-4o-mini\n\n  llm json \"Разбери запрос\" --schema schema.json\n\n  llm routing validate routing.json · llm models · llm cost --since 7d · llm auth status",
+    "description": "llmkit: вызовы LLM только через шлюз 9router.\n\nУ всех команд есть `--json` (конверт в stdout), диагностика идёт в stderr.\nКоды выхода: 0 — успех, 1 — непредвиденная ошибка, 2 — неверные аргументы,\n3 — нет переменной с ключом шлюза, 5 — шлюз недоступен, ответил ошибкой или\nего журнал расходов не читается.\n\nПровайдеры и цепочка — routing v1 (данные, встроенных нет):\n\n  --routing JSON|ФАЙЛ             routing аргументом или файлом; иначе LLMKIT_ROUTING_FILE,\n                                 иначе routing.json в каталоге конфигурации\n\n  -m ПРОВАЙДЕР/МОДЕЛЬ             цепочка из CLI, можно несколько: -m a/x -m b/y\n\n  -s, --system ТЕКСТ             системное сообщение\n\n  --schema ФАЙЛ                  JSON Schema ответа (только llm json)\n\n  --template ФАЙЛ --vars JSON     шаблон промпта mustache вместо текста\n\n  --temperature, --max-tokens, --timeout   перекрыть значения по умолчанию\n\n  --tag k=v                      метка k=v в строке лога вызова, можно несколько\n\n  --no-retry                     без повтора невалидного ответа\n\nКлюч шлюза — переменная из routing (`key_env`), только из окружения.\nСтарый config.toml не читается: `llm routing import config.toml`.\n\nПровайдеры routing и источник ключа: `llm models`. Все параметры\nкоманды: `llm <команда> --help`, например `llm ask --help`.\n\nПримеры:\n\n  llm ask \"Столица Франции?\" --routing routing.json\n\n  llm ask \"Привет\" -m \"Deep Sec\"\n\n  llm json \"Разбери запрос\" --schema schema.json\n\n  llm routing validate routing.json · llm models · llm cost --since 7d · llm auth status",
     "options": [
       {
         "name": "--json",
@@ -138,7 +138,7 @@
       },
       {
         "name": "ask",
-        "description": "Задать вопрос модели и напечатать текстовый ответ.\n\nПровайдеры и цепочка — из routing v1 (`--routing` JSON или файл, иначе\nLLMKIT_ROUTING_FILE, иначе routing.json в каталоге конфигурации — путь\nв `llm config path`); встроенных нет. Упавшая модель уступает следующей.\nВместо текста — шаблон: `--template` с `--vars` (в учёт расходов — имя и\nхэш шаблона, без значений). В `--json`: text, task_id (= task_id в учёте),\nmodel, served_model, chain_position, attempts, tokens_in/out, cache_hit и\nстоимость: cost (ответившей попытки), cost_currency \"USD\", cost_source —\nprovider (списано, из ответа OpenRouter), price_table (цена × токены:\nrouting.prices, затем справочник LiteLLM), subscription, cache (0) или\nnull (цена неизвестна: cost null, предупреждение); billable_requests —\nплатные вызовы провайдера (ответ получен, в т.ч. неразобранный; отказы\n429/5xx/4xx не списываются); cost_total — по всем платным попыткам.\ncost_usd = cost, устарело (уйдёт в 0.11).\nКоды выхода: 0 — ответ получен, 2 — нет routing, routing не по схеме или\nневерные аргументы, 3 — нет ключа провайдера, 5 — все модели упали.\n\nExample: llm ask \"Столица Франции?\" --routing routing.json",
+        "description": "Задать вопрос шлюзу и напечатать текстовый ответ.\n\nШлюз — из routing v1 (`--routing` JSON или файл, иначе LLMKIT_ROUTING_FILE,\nиначе routing.json в каталоге конфигурации); встроенных нет. Один вызов —\nодин запрос к шлюзу: цепочку и фолбэк исполняет он, llmkit просит первую\nмодель `-m` или `routing.chain`. Модель — строка как в настройке шлюза\n(комбо тоже). Вместо текста — шаблон: `--template` с `--vars`. В `--json`:\ntext, task_id, model (запрошенная строка), served_model (что назвал шлюз),\nprovider, attempts, tokens_in/out и стоимость: cost (usage.cost шлюза),\ncost_currency \"USD\", cost_source — provider или null (цены в ответе нет),\nbillable_requests, cost_total. cost_usd = cost, устарело.\nКоды выхода: 0 — ответ получен, 2 — нет routing, routing не по схеме или\nневерные аргументы, 3 — нет переменной с ключом шлюза, 5 — шлюз недоступен,\nответил ошибкой или ответ невалиден.\n\nExample: llm ask \"Столица Франции?\" --routing routing.json",
         "options": [
           {
             "name": "--system",
@@ -167,7 +167,7 @@
                 "required": true
               }
             ],
-            "description": "Routing v1: JSON-строка или путь к JSON-файлу; без него — LLMKIT_ROUTING_FILE, затем routing.json в каталоге конфигурации (llm config path). Не stdin.",
+            "description": "Routing v1: JSON-строка или путь к JSON-файлу; без него — LLMKIT_ROUTING_FILE, затем routing.json в каталоге конфигурации. Не stdin.",
             "metadata": [
               {
                 "name": "x-rb-type",
@@ -186,7 +186,7 @@
                 "required": true
               }
             ],
-            "description": "Модель 'провайдер/модель'; повторяется — цепочка с фолбэком по порядку (вместо routing.chain).",
+            "description": "Модель или комбо шлюза строкой как в его настройке; повторяется — цепочка (вместо routing.chain). Фолбэк исполняет шлюз.",
             "metadata": [
               {
                 "name": "x-rb-type",
@@ -226,7 +226,7 @@
                 "required": true
               }
             ],
-            "description": "Метка k=v для учёта расходов; можно несколько.",
+            "description": "Метка k=v для строки лога вызова; можно несколько.",
             "metadata": [
               {
                 "name": "x-rb-type",
@@ -235,20 +235,6 @@
               {
                 "name": "x-rb-multiple",
                 "value": true
-              }
-            ]
-          },
-          {
-            "name": "--no-cache",
-            "description": "Не читать и не писать кэш ответов.",
-            "metadata": [
-              {
-                "name": "x-rb-type",
-                "value": "boolean"
-              },
-              {
-                "name": "x-rb-default",
-                "value": false
               }
             ]
           },
@@ -302,7 +288,7 @@
           },
           {
             "name": "--no-retry",
-            "description": "Не повторять на сбойной модели, сразу к следующей.",
+            "description": "Не повторять вызов, если ответ не прошёл проверку схемы.",
             "metadata": [
               {
                 "name": "x-rb-type",
@@ -398,7 +384,7 @@
       },
       {
         "name": "json",
-        "description": "Получить ответ модели как JSON по схеме.\n\nВ обычном режиме в stdout попадает только сам объект ответа, в режиме\n`--json` — конверт с полем `data` и метаданными вызова, как у `llm ask`.\nRouting, `-m` и `--template/--vars` — как у `llm ask`. Валидацию по\nсхеме выполняет потребитель. Неразобранный ответ платный: он в\nbillable_requests и cost_total. Коды выхода: 0 — ответ получен,\n2 — неверные аргументы или routing, 3 — нет ключа провайдера, 5 — все\nмодели упали или ответ не разобрался (в error — billable_requests, cost_total).\n\nExample: llm json \"Разбери запрос\" --schema schema.json --routing routing.json --json",
+        "description": "Получить ответ модели как JSON по схеме.\n\nСхема уходит в шлюз как `response_format` json_schema; невалидный или\nнеразобранный ответ повторяется с текстом ошибки проверки (retry.invalid_output).\nВ обычном режиме в stdout попадает только сам объект ответа, в режиме\n`--json` — конверт с полем `data` и метаданными вызова, как у `llm ask`.\nRouting, `-m` и `--template/--vars` — как у `llm ask`. Валидацию значения\nпо схеме выполняет потребитель. Невалидный ответ шлюз списал: он в\nbillable_requests и cost_total. Коды выхода: 0 — ответ получен,\n2 — неверные аргументы или routing, 3 — нет переменной с ключом шлюза, 5 — шлюз\nнедоступен или ответ не разобрался (в error — billable_requests, cost_total).\n\nExample: llm json \"Разбери запрос\" --schema schema.json --routing routing.json --json",
         "options": [
           {
             "name": "--schema",
@@ -444,7 +430,7 @@
                 "required": true
               }
             ],
-            "description": "Routing v1: JSON-строка или путь к JSON-файлу; без него — LLMKIT_ROUTING_FILE, затем routing.json в каталоге конфигурации (llm config path). Не stdin.",
+            "description": "Routing v1: JSON-строка или путь к JSON-файлу; без него — LLMKIT_ROUTING_FILE, затем routing.json в каталоге конфигурации. Не stdin.",
             "metadata": [
               {
                 "name": "x-rb-type",
@@ -463,7 +449,7 @@
                 "required": true
               }
             ],
-            "description": "Модель 'провайдер/модель'; повторяется — цепочка с фолбэком по порядку (вместо routing.chain).",
+            "description": "Модель или комбо шлюза строкой как в его настройке; повторяется — цепочка (вместо routing.chain). Фолбэк исполняет шлюз.",
             "metadata": [
               {
                 "name": "x-rb-type",
@@ -503,7 +489,7 @@
                 "required": true
               }
             ],
-            "description": "Метка k=v для учёта расходов; можно несколько.",
+            "description": "Метка k=v для строки лога вызова; можно несколько.",
             "metadata": [
               {
                 "name": "x-rb-type",
@@ -512,20 +498,6 @@
               {
                 "name": "x-rb-multiple",
                 "value": true
-              }
-            ]
-          },
-          {
-            "name": "--no-cache",
-            "description": "Не читать и не писать кэш ответов.",
-            "metadata": [
-              {
-                "name": "x-rb-type",
-                "value": "boolean"
-              },
-              {
-                "name": "x-rb-default",
-                "value": false
               }
             ]
           },
@@ -579,7 +551,7 @@
           },
           {
             "name": "--no-retry",
-            "description": "Не повторять на сбойной модели, сразу к следующей.",
+            "description": "Не повторять вызов, если ответ не разобрался как JSON по схеме.",
             "metadata": [
               {
                 "name": "x-rb-type",
@@ -674,223 +646,8 @@
         ]
       },
       {
-        "name": "decide",
-        "description": "Спросить модель решений OpenRouter: вероятности вместо текста.\n\nВопросы типов noul (да/нет), choice и score описываются в JSON-файле, как\nв API `/api/alpha/decisions`. Цепочка — из routing или `-m`, только\nпровайдеры с protocol=openrouter. Состояние можно собрать шаблоном:\n`--template` с `--vars`. В stdout — словарь answers; в режиме `--json` —\nконверт с `data`, `task_id` (= task_id в учёте) и стоимостью, как у\n`llm ask` (cost_source обычно provider). Коды выхода: 0 — ответ получен,\n2 — неверные аргументы, routing или модель не OpenRouter, 3 — нет ключа,\n5 — все модели упали.\n\nExample: llm decide \"Payouts failing for 3 days\" --questions q.json --routing routing.json --json",
-        "options": [
-          {
-            "name": "--questions",
-            "aliases": [
-              "-q"
-            ],
-            "required": true,
-            "arguments": [
-              {
-                "name": "QUESTIONS",
-                "required": true
-              }
-            ],
-            "description": "JSON-файл вопросов: имя → type/instructions/criteria.",
-            "metadata": [
-              {
-                "name": "x-rb-type",
-                "value": "path"
-              }
-            ]
-          },
-          {
-            "name": "--routing",
-            "arguments": [
-              {
-                "name": "ROUTING",
-                "required": true
-              }
-            ],
-            "description": "Routing v1: JSON-строка или путь к JSON-файлу; без него — LLMKIT_ROUTING_FILE, затем routing.json в каталоге конфигурации (llm config path). Не stdin.",
-            "metadata": [
-              {
-                "name": "x-rb-type",
-                "value": "str"
-              }
-            ]
-          },
-          {
-            "name": "--model",
-            "aliases": [
-              "-m"
-            ],
-            "arguments": [
-              {
-                "name": "MODEL",
-                "required": true
-              }
-            ],
-            "description": "Модель 'провайдер/модель'; повторяется — цепочка с фолбэком по порядку (вместо routing.chain).",
-            "metadata": [
-              {
-                "name": "x-rb-type",
-                "value": "str"
-              },
-              {
-                "name": "x-rb-multiple",
-                "value": true
-              }
-            ]
-          },
-          {
-            "name": "--level",
-            "aliases": [
-              "-l"
-            ],
-            "arguments": [
-              {
-                "name": "LEVEL",
-                "required": true
-              }
-            ],
-            "description": "Удалён: передайте цепочку.",
-            "hidden": true,
-            "metadata": [
-              {
-                "name": "x-rb-type",
-                "value": "str"
-              }
-            ]
-          },
-          {
-            "name": "--tag",
-            "arguments": [
-              {
-                "name": "TAG",
-                "required": true
-              }
-            ],
-            "description": "Метка k=v для учёта расходов; можно несколько.",
-            "metadata": [
-              {
-                "name": "x-rb-type",
-                "value": "str"
-              },
-              {
-                "name": "x-rb-multiple",
-                "value": true
-              }
-            ]
-          },
-          {
-            "name": "--timeout",
-            "arguments": [
-              {
-                "name": "TIMEOUT",
-                "required": true
-              }
-            ],
-            "description": "Таймаут вызова в секундах.",
-            "metadata": [
-              {
-                "name": "x-rb-type",
-                "value": "float"
-              }
-            ]
-          },
-          {
-            "name": "--no-retry",
-            "description": "Не повторять на сбойной модели, сразу к следующей.",
-            "metadata": [
-              {
-                "name": "x-rb-type",
-                "value": "boolean"
-              },
-              {
-                "name": "x-rb-default",
-                "value": false
-              }
-            ]
-          },
-          {
-            "name": "--template",
-            "aliases": [
-              "-t"
-            ],
-            "arguments": [
-              {
-                "name": "TEMPLATE",
-                "required": true
-              }
-            ],
-            "description": "Шаблон mustache: файл, сам текст или '-' (stdin); заменяет текст запроса.",
-            "metadata": [
-              {
-                "name": "x-rb-type",
-                "value": "str"
-              }
-            ]
-          },
-          {
-            "name": "--vars",
-            "arguments": [
-              {
-                "name": "VARIABLES",
-                "required": true
-              }
-            ],
-            "description": "Переменные шаблона: JSON-файл или JSON-строка с объектом.",
-            "metadata": [
-              {
-                "name": "x-rb-type",
-                "value": "str"
-              }
-            ]
-          },
-          {
-            "name": "--lenient",
-            "description": "Отсутствующая переменная — пустая строка, а не ошибка (для отладки).",
-            "metadata": [
-              {
-                "name": "x-rb-type",
-                "value": "boolean"
-              },
-              {
-                "name": "x-rb-default",
-                "value": false
-              }
-            ]
-          },
-          {
-            "name": "--json",
-            "description": "Машинный вывод: JSON-конверт в stdout.",
-            "metadata": [
-              {
-                "name": "x-rb-type",
-                "value": "boolean"
-              },
-              {
-                "name": "x-rb-default",
-                "value": false
-              }
-            ]
-          }
-        ],
-        "arguments": [
-          {
-            "name": "text",
-            "required": false,
-            "arity": {
-              "minimum": 0,
-              "maximum": 1
-            },
-            "description": "Состояние, о котором спрашиваем; без него читается stdin.",
-            "metadata": [
-              {
-                "name": "x-rb-type",
-                "value": "str"
-              }
-            ]
-          }
-        ]
-      },
-      {
         "name": "models",
-        "description": "Показать провайдеров routing, источник их ключей и цепочку моделей.\n\nЗначения ключей не печатаются. Встроенных провайдеров нет: всё — из\nrouting (`--routing`, иначе LLMKIT_ROUTING_FILE, иначе routing.json в\nкаталоге конфигурации — `llm config path`). Коды выхода: 0 — готово, 2 — нет routing, или он не по схеме\n(например, цепочка ссылается на неописанного провайдера).\n\nExample: llm models --routing routing.json --json",
+        "description": "Показать провайдеров routing, источник их ключей и цепочку моделей.\n\nЗначения ключей не печатаются. Встроенных провайдеров нет: всё — из\nrouting (`--routing`, иначе LLMKIT_ROUTING_FILE, иначе routing.json в\nкаталоге конфигурации). Коды выхода: 0 — готово, 2 — нет routing, или он не по схеме\n(например, цепочка ссылается на неописанного провайдера).\n\nExample: llm models --routing routing.json --json",
         "options": [
           {
             "name": "--routing",
@@ -926,24 +683,8 @@
       },
       {
         "name": "cost",
-        "description": "Показать расходы из журнала вызовов.\n\nБез `--by` печатается одна итоговая строка. На пустом журнале — пустая\nтаблица и код выхода 0; 2 — неверный период.\n\nExample: llm cost --by tool --since 7d",
+        "description": "Показать расходы из журнала шлюза по ключам потребителей.\n\nЖурнал шлюза (`usageHistory`) открывается только на чтение: путь —\n`LLMKIT_GATEWAY_DB`, по умолчанию `~/.9router/db/data.sqlite`. Строки — по\nключу шлюза, от большего расхода к меньшему; `total` — сумма по всем. На\nпустом журнале — пустая таблица и код выхода 0. Коды выхода: 0 — готово,\n2 — неверный период, 5 — журнала нет или он не читается (`error.path`).\n\nExample: llm cost --since 7d --json",
         "options": [
-          {
-            "name": "--by",
-            "arguments": [
-              {
-                "name": "BY",
-                "required": true
-              }
-            ],
-            "description": "Метки для группировки через запятую, например tool,niche.",
-            "metadata": [
-              {
-                "name": "x-rb-type",
-                "value": "str"
-              }
-            ]
-          },
           {
             "name": "--since",
             "arguments": [
@@ -993,48 +734,8 @@
         ]
       },
       {
-        "name": "serve",
-        "description": "Запустить локальный HTTP-прокси (фаза 4, ещё не реализовано).\n\nКод выхода 2 — команда пока не работает.\n\nExample: llm serve --port 8765",
-        "options": [
-          {
-            "name": "--port",
-            "arguments": [
-              {
-                "name": "PORT",
-                "required": true
-              }
-            ],
-            "description": "Порт локального прокси.",
-            "metadata": [
-              {
-                "name": "x-rb-type",
-                "value": "int"
-              },
-              {
-                "name": "x-rb-default",
-                "value": 8765
-              }
-            ]
-          },
-          {
-            "name": "--json",
-            "description": "Машинный вывод: JSON-конверт в stdout.",
-            "metadata": [
-              {
-                "name": "x-rb-type",
-                "value": "boolean"
-              },
-              {
-                "name": "x-rb-default",
-                "value": false
-              }
-            ]
-          }
-        ]
-      },
-      {
         "name": "describe",
-        "description": "Показать машиночитаемый контракт CLI: документ OpenCLI (opencli.org).\n\nКоманды, опции, аргументы, коды выхода и метаданные `x-rb-*`: env, таблицы,\nпредставления v1, файлы данных и кэша, внешние программы. С --json — сам\nдокумент одной строкой (без конверта {\"ok\": ...}), без него — тот же с отступами.\n\nExample: llm describe --json",
+        "description": "Показать машиночитаемый контракт CLI: документ OpenCLI (opencli.org).\n\nКоманды, опции, аргументы, коды выхода и метаданные `x-rb-*`: env и файлы\nв каталогах пользователя. С --json — сам документ одной строкой (без\nконверта {\"ok\": ...}), без него — тот же с отступами.\n\nExample: llm describe --json",
         "options": [
           {
             "name": "--json",
@@ -1054,7 +755,7 @@
       },
       {
         "name": "doctor",
-        "description": "Проверить, готов ли llm к работе: версия, конфиг, routing, база расходов, внешние программы.\n\nПроверки локальные, без сети и без вызовов моделей (доступы провайдеров — `llm auth status`).\nОтчёт — результат команды: код выхода 0, даже если `healthy` ложно.\nФорма `--json`: `healthy` и `checks[]` с `name`, `ok`, `detail`.\n\nExample: llm doctor --json",
+        "description": "Проверить, готов ли llm к работе: версия, конфиг, routing, шлюз.\n\nПроверки локальные, без сети и без вызовов моделей (доступы провайдеров — `llm auth status`).\nОтчёт — результат команды: код выхода 0, даже если `healthy` ложно.\nФорма `--json`: `healthy` и `checks[]` с `name`, `ok`, `detail`.\n\nExample: llm doctor --json",
         "options": [
           {
             "name": "--json",
@@ -1073,146 +774,16 @@
         ]
       },
       {
-        "name": "keys",
-        "description": "Ключи провайдеров: связка ключей ОС и переменные окружения.",
-        "commands": [
-          {
-            "name": "set",
-            "description": "Положить ключ провайдера в связку ключей ОС.\n\nКлюч нигде не печатается; он читается, когда в env нет\nLLM_<ПРОВАЙДЕР>_API_KEY. Коды выхода: 0 — сохранён, 1 — связка ключей\nнедоступна, 2 — неверное имя провайдера или пустой ключ.\n\nExample: echo \"$KEY\" | llm keys set openrouter --stdin",
-            "options": [
-              {
-                "name": "--stdin",
-                "description": "Прочитать ключ из stdin вместо скрытого ввода.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              },
-              {
-                "name": "--json",
-                "description": "Машинный вывод: JSON-конверт в stdout.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              }
-            ],
-            "arguments": [
-              {
-                "name": "provider",
-                "required": true,
-                "arity": {
-                  "minimum": 1,
-                  "maximum": 1
-                },
-                "description": "Имя провайдера из routing, например openrouter.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "str"
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "name": "status",
-            "description": "Показать, откуда берётся ключ каждого провайдера routing.\n\nRouting — `--routing`, иначе LLMKIT_ROUTING_FILE, иначе routing.json в\nкаталоге конфигурации (`llm config path`).\n\nЗначения ключей не печатаются — только источник: env, legacy_env\n(старое имя переменной), keychain, subscription или none. Коды выхода:\n0 — готово (даже если ключей нет), 2 — нет routing или он не по схеме.\n\nExample: llm keys status --json",
-            "options": [
-              {
-                "name": "--routing",
-                "arguments": [
-                  {
-                    "name": "ROUTING",
-                    "required": true
-                  }
-                ],
-                "description": "Routing v1: JSON или файл; иначе LLMKIT_ROUTING_FILE, иначе файл по умолчанию.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "str"
-                  }
-                ]
-              },
-              {
-                "name": "--json",
-                "description": "Машинный вывод: JSON-конверт в stdout.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "name": "rm",
-            "description": "Удалить ключ провайдера из связки ключей.\n\nУдаление отсутствующего ключа не ошибка. Коды выхода: 0 — готово,\n2 — неверное имя провайдера.\n\nExample: llm keys rm openrouter",
-            "options": [
-              {
-                "name": "--json",
-                "description": "Машинный вывод: JSON-конверт в stdout.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              }
-            ],
-            "arguments": [
-              {
-                "name": "provider",
-                "required": true,
-                "arity": {
-                  "minimum": 1,
-                  "maximum": 1
-                },
-                "description": "Имя провайдера из routing.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "str"
-                  }
-                ]
-              }
-            ]
-          }
-        ]
-      },
-      {
         "name": "auth",
-        "description": "Вход в подписки (protocol = chatgpt | claude_cli) и проверка всех доступов: `llm auth status`.",
+        "description": "Проверка доступа: ключ шлюза 9router — `llm auth status`.",
         "commands": [
           {
             "name": "status",
-            "description": "Показать доступ каждого провайдера: откуда берётся и работает ли. Значения не печатаются.\n\nКлючи API и подписки (chatgpt, claude_cli) — в одном отчёте. Без `--check`\nтолько наличие (`unchecked` / `missing`); с ним: openrouter, openai,\nanthropic, gemini, ollama и OpenAI-совместимые шлюзы — один бесплатный\nзапрос с ключом; chatgpt — свежесть токена (с обновлением, если истёк);\nclaude — локальный `claude auth status`. Модели не вызываются.\nПровайдеры — из routing (`--routing`, LLMKIT_ROUTING_FILE или файл по умолчанию) плюс входы\nв подписки chatgpt и claude на этой машине; без routing — только они.\nОбязательных провайдеров у llmkit нет (`required: false`).\nКоды выхода: 0 — нет неверных и просроченных доступов, 3 — есть\n(`error.code: CREDENTIALS_UNHEALTHY`, отчёт всё равно выводится),\n2 — неизвестный `--provider`. Форма `--json` — общий контракт инструментов:\n`tool`, `version`, `checked_at`, `credentials[]` с `provider`, `required`,\n`fields`, `source`, `source_ref`, `status`, `expires_at`, `quota`, `message`.\n\nExample: llm auth status --check --json",
+            "description": "Показать доступ к шлюзу: откуда берётся ключ и работает ли он. Значение ключа не печатается.\n\nПровайдеры — из routing (`--routing`, LLMKIT_ROUTING_FILE или файл по\nумолчанию): у llmkit это шлюз 9router, подписки живут в нём. Без `--check`\nтолько наличие ключа (`unchecked` / `missing`); с ним — один бесплатный\nзапрос `/models` шлюза с ключом. Модели не вызываются. Обязательных\nпровайдеров у llmkit нет (`required: false`).\nКоды выхода: 0 — нет неверных ключей, 3 — ключ не принят\n(`error.code: CREDENTIALS_UNHEALTHY`, отчёт всё равно выводится),\n2 — неизвестный `--provider`. Форма `--json` — общий контракт инструментов:\n`tool`, `version`, `checked_at`, `credentials[]` с `provider`, `required`,\n`fields`, `source`, `source_ref`, `status`, `expires_at`, `quota`, `message`.\n\nExample: llm auth status --check --json",
             "options": [
               {
                 "name": "--check",
-                "description": "Сделать по одному дешёвому read-only вызову на провайдера (лимит 10 с).",
+                "description": "Сделать один дешёвый read-only вызов шлюза (лимит 10 с).",
                 "metadata": [
                   {
                     "name": "x-rb-type",
@@ -1271,138 +842,16 @@
                 ]
               }
             ]
-          },
-          {
-            "name": "login",
-            "description": "Войти в подписку.\n\nChatGPT: по умолчанию вход по коду устройства (ссылка и код, браузер может\nбыть на другой машине); `--browser` — через локальный redirect на порт 1455.\nClaude: запускается `claude auth login`. Провайдер — chatgpt, claude или\nпровайдер routing (LLMKIT_ROUTING_FILE или файл по умолчанию) с protocol chatgpt | claude_cli.\nПодсказки идут в stderr. Коды выхода: 0 — вход выполнен, 2 — не провайдер\nпо подписке, 3 — вход не удался.\n\nExample: llm auth login chatgpt",
-            "options": [
-              {
-                "name": "--browser",
-                "description": "ChatGPT: вход через браузер вместо кода устройства.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              },
-              {
-                "name": "--no-open",
-                "description": "ChatGPT --browser: не открывать браузер самому.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              },
-              {
-                "name": "--json",
-                "description": "Машинный вывод: JSON-конверт в stdout.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              }
-            ],
-            "arguments": [
-              {
-                "name": "provider",
-                "required": true,
-                "arity": {
-                  "minimum": 1,
-                  "maximum": 1
-                },
-                "description": "Провайдер по подписке: chatgpt, claude или из routing.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "str"
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "name": "logout",
-            "description": "Выйти из подписки: ChatGPT — удалить файл токенов, Claude — `claude auth logout`.\n\nПровайдер — как у `llm auth login`. Выход без входа не ошибка. Коды\nвыхода: 0 — готово, 2 — не провайдер по подписке.\n\nExample: llm auth logout chatgpt",
-            "options": [
-              {
-                "name": "--json",
-                "description": "Машинный вывод: JSON-конверт в stdout.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              }
-            ],
-            "arguments": [
-              {
-                "name": "provider",
-                "required": true,
-                "arity": {
-                  "minimum": 1,
-                  "maximum": 1
-                },
-                "description": "Провайдер по подписке: chatgpt, claude или из routing.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "str"
-                  }
-                ]
-              }
-            ]
           }
         ]
       },
       {
         "name": "config",
-        "description": "Настройки llmkit: где лежат кэш и журнал (база), файл routing, что получилось в итоге.",
+        "description": "Настройки вызова: дефолты кода и LLMKIT_* — что получилось в итоге.",
         "commands": [
-          {
-            "name": "path",
-            "description": "Показать, где лежат кэш и журнал вызовов (база) и файл routing (LLMKIT_ROUTING_FILE или файл по умолчанию).\n\nКод выхода всегда 0.\n\nExample: llm config path",
-            "options": [
-              {
-                "name": "--json",
-                "description": "Машинный вывод: JSON-конверт в stdout.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              }
-            ]
-          },
           {
             "name": "show",
-            "description": "Показать итоговые настройки вызовов: дефолты кода и LLMKIT_*, где лежит кэш.\n\nПровайдеров и цепочек здесь нет — они в routing (`llm models`).\nКоды выхода: 0 — готово, 2 — настройки не проходят проверку.\n\nExample: llm config show --json",
+            "description": "Показать итоговые настройки вызова: дефолты кода и переменные LLMKIT_*.\n\nПровайдеров и цепочек здесь нет — они в routing (`llm models`).\nКоды выхода: 0 — готово, 2 — настройки не проходят проверку.\n\nExample: llm config show --json",
             "options": [
               {
                 "name": "--json",
@@ -1415,117 +864,6 @@
                   {
                     "name": "x-rb-default",
                     "value": false
-                  }
-                ]
-              }
-            ]
-          }
-        ]
-      },
-      {
-        "name": "db",
-        "description": "База журнала расходов: общая PostgreSQL (LLMKIT_DATABASE_URL) или локальная SQLite.",
-        "commands": [
-          {
-            "name": "status",
-            "description": "Показать, какая база используется и её ревизию схемы против ревизии этой версии.\n\nКоды выхода: 0 — готово, 5 — база из LLMKIT_DATABASE_URL недоступна.\n\nExample: llm db status --json",
-            "options": [
-              {
-                "name": "--json",
-                "description": "Машинный вывод: JSON-конверт в stdout.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "name": "upgrade",
-            "description": "Применить недостающие миграции схемы к базе.\n\nОбщая PostgreSQL неявно не мигрируется: запускайте выпущенной версией после\nобновления, которое несёт миграции. Одновременные запуски ждут друг друга.\nЛокальная SQLite и так мигрируется при каждом открытии. Коды выхода: 0 —\nготово, 5 — база недоступна, 6 — базу смигрировал более новый релиз.\n\nExample: llm db upgrade --dry-run",
-            "options": [
-              {
-                "name": "--dry-run",
-                "description": "Показать, что будет сделано, ничего не меняя.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              },
-              {
-                "name": "--json",
-                "description": "Машинный вывод: JSON-конверт в stdout.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "name": "import-sqlite",
-            "description": "Скопировать локальную SQLite в настроенную базу, один раз.\n\nДля переезда в общую PostgreSQL: задайте LLMKIT_DATABASE_URL и запустите.\nКаждая целевая таблица должна быть пустой; все строки — одной транзакцией.\nКоды выхода: 0 — готово, 1 — база не смигрирована, 2 — нет файла или\nтаблица не пуста, 5 — база недоступна.\n\nExample: llm db import-sqlite --dry-run",
-            "options": [
-              {
-                "name": "--dry-run",
-                "description": "Показать, что будет сделано, ничего не меняя.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              },
-              {
-                "name": "--json",
-                "description": "Машинный вывод: JSON-конверт в stdout.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              }
-            ],
-            "arguments": [
-              {
-                "name": "path",
-                "required": false,
-                "arity": {
-                  "minimum": 0,
-                  "maximum": 1
-                },
-                "description": "Файл SQLite для импорта (по умолчанию — локальный журнал, usage.path).",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "path"
                   }
                 ]
               }
@@ -1535,11 +873,11 @@
       },
       {
         "name": "routing",
-        "description": "Routing v1: провайдеры, цепочка и цены данными — проверка и перенос старого config.toml.",
+        "description": "Routing v1: провайдеры и цепочка данными — проверка и перенос старого config.toml.",
         "commands": [
           {
             "name": "import",
-            "description": "Перенести старый config.toml в routing v1.\n\nПровайдеры (с адресами бывших встроенных) и цены — в `routing`, без\nцепочки: её задаёт вызов (`-m …`) или вы. Уровни — отдельно в `levels`,\nподсказкой для своих цепочек. Ключи не переносятся: `key_env` —\nLLM_<ПРОВАЙДЕР>_API_KEY. Секции defaults, cache, budget, retry\nперечислены в `dropped`. В stdout — JSON {routing, levels, warnings,\ndropped}. Коды выхода: 0 — готово, 2 — файл не читается или не TOML.\n\nExample: llm routing import config.toml > routing.json",
+            "description": "Перенести старый config.toml в routing v1.\n\nПровайдеры (с адресами бывших встроенных) — в `routing`, без цепочки:\nеё задаёт вызов (`-m …`) или вы. Уровни — отдельно в `levels`, подсказкой\nдля своих цепочек. Ключи не переносятся: `key_env` — LLM_<ПРОВАЙДЕР>_API_KEY.\nЦены, режимы и подписки не переносятся (`warnings`): ими владеет шлюз;\nсекции defaults, cache, budget, retry перечислены в `dropped`. В stdout —\nJSON {routing, levels, warnings, dropped}. Коды выхода: 0 — готово,\n2 — файл не читается или не TOML.\n\nExample: llm routing import config.toml > routing.json",
             "options": [
               {
                 "name": "--json",
@@ -1576,7 +914,7 @@
           },
           {
             "name": "validate",
-            "description": "Проверить routing v1 перед сохранением (Windmill, Directus).\n\nТа же проверка, что перед вызовом модели: схема плюс ссылки цепочки и\nцен на описанных провайдеров. Ключи не проверяются (`llm auth status`).\nКоды выхода: 0 — routing годен, 2 — ROUTING_INVALID с `error.path`\n(JSON Pointer поля).\n\nExample: llm routing validate '{\"providers\": {\"openrouter\": {\"protocol\": \"openrouter\"}}, \"chain\": [\"openrouter/openai/gpt-4o-mini\"]}'",
+            "description": "Проверить routing v1 перед сохранением (Windmill, Directus).\n\nТа же проверка, что перед вызовом модели: схема и ссылки цепочки.\nКлючи не проверяются (`llm auth status`).\nКоды выхода: 0 — routing годен, 2 — ROUTING_INVALID с `error.path`\n(JSON Pointer поля).\n\nExample: llm routing validate '{\"providers\": {\"9router\": {\"protocol\": \"openai_compatible\", \"base_url\": \"http://localhost:20128/v1\", \"key_env\": \"NINEROUTER_API_KEY\"}}, \"chain\": [\"Deep Sec\"]}'",
             "options": [
               {
                 "name": "--providers-only",
@@ -1635,7 +973,7 @@
       },
       {
         "code": 1,
-        "description": "Непредвиденная ошибка; база расходов не смигрирована"
+        "description": "Непредвиденная ошибка"
       },
       {
         "code": 2,
@@ -1643,15 +981,11 @@
       },
       {
         "code": 3,
-        "description": "Нет ключа провайдера или входа в подписку"
+        "description": "Нет ключа шлюза"
       },
       {
         "code": 5,
-        "description": "Все модели цепочки упали (сбой провайдера) или база расходов недоступна"
-      },
-      {
-        "code": 6,
-        "description": "Базу расходов смигрировал более новый релиз llmkit"
+        "description": "Шлюз недоступен, шлюз ответил ошибкой или ответ невалиден; журнал шлюза не читается"
       }
     ],
     "metadata": [
@@ -1674,7 +1008,7 @@
             "name": "LLM_<PROVIDER>_API_KEY",
             "purpose": "credential",
             "field": "api_key",
-            "description": "Ключ провайдера routing (имя в верхнем регистре, не буквы и не цифры → _) или переменная из его key_env; старые имена (OPENROUTER_API_KEY…) — один цикл с предупреждением",
+            "description": "Ключ провайдера routing (имя в верхнем регистре, не буквы и не цифры → _) или переменная из его key_env; значение берётся только из окружения",
             "required": false
           },
           {
@@ -1684,9 +1018,9 @@
             "required": false
           },
           {
-            "name": "LLMKIT_CACHE",
+            "name": "LLMKIT_GATEWAY_DB",
             "purpose": "config",
-            "description": "0/false/no — выключить кэш ответов",
+            "description": "SQLite-журнал расходов шлюза для `llm cost` (только чтение); без неё — ~/.9router/db/data.sqlite",
             "required": false
           },
           {
@@ -1694,272 +1028,15 @@
             "purpose": "config",
             "description": "Уровень логов библиотеки",
             "required": false
-          },
-          {
-            "name": "LLMKIT_DATABASE_URL",
-            "purpose": "database",
-            "description": "Общая PostgreSQL для журнала расходов и кэша ответов; не задана → локальная SQLite (usage.path)",
-            "required": false
-          },
-          {
-            "name": "CLAUDE_COMMAND",
-            "purpose": "external",
-            "description": "Команда CLI Claude (можно с аргументами) вместо `claude` из PATH",
-            "required": false
           }
         ]
       },
       {
         "name": "x-rb-data",
         "value": {
-          "tables": [
-            {
-              "name": "llmkit_calls",
-              "kind": "data",
-              "columns": [
-                {
-                  "name": "id",
-                  "type": "INTEGER",
-                  "nullable": false,
-                  "primary_key": true
-                },
-                {
-                  "name": "ts",
-                  "type": "FLOAT",
-                  "nullable": true
-                },
-                {
-                  "name": "task_id",
-                  "type": "TEXT",
-                  "nullable": true
-                },
-                {
-                  "name": "tags",
-                  "type": "JSON",
-                  "nullable": true
-                },
-                {
-                  "name": "level",
-                  "type": "TEXT",
-                  "nullable": true
-                },
-                {
-                  "name": "model",
-                  "type": "TEXT",
-                  "nullable": true
-                },
-                {
-                  "name": "provider",
-                  "type": "TEXT",
-                  "nullable": true
-                },
-                {
-                  "name": "status",
-                  "type": "TEXT",
-                  "nullable": true
-                },
-                {
-                  "name": "error_type",
-                  "type": "TEXT",
-                  "nullable": true
-                },
-                {
-                  "name": "attempt",
-                  "type": "INTEGER",
-                  "nullable": true
-                },
-                {
-                  "name": "prompt_tokens",
-                  "type": "INTEGER",
-                  "nullable": true
-                },
-                {
-                  "name": "completion_tokens",
-                  "type": "INTEGER",
-                  "nullable": true
-                },
-                {
-                  "name": "cost_usd",
-                  "type": "FLOAT",
-                  "nullable": true
-                },
-                {
-                  "name": "cost_known",
-                  "type": "INTEGER",
-                  "nullable": true
-                },
-                {
-                  "name": "latency_ms",
-                  "type": "INTEGER",
-                  "nullable": true
-                },
-                {
-                  "name": "pid",
-                  "type": "INTEGER",
-                  "nullable": true
-                },
-                {
-                  "name": "served_model",
-                  "type": "TEXT",
-                  "nullable": true
-                },
-                {
-                  "name": "cost_source",
-                  "type": "TEXT",
-                  "nullable": true
-                },
-                {
-                  "name": "billable",
-                  "type": "INTEGER",
-                  "nullable": true
-                }
-              ]
-            },
-            {
-              "name": "llmkit_cache",
-              "kind": "cache",
-              "columns": [
-                {
-                  "name": "id",
-                  "type": "INTEGER",
-                  "nullable": false,
-                  "primary_key": true
-                },
-                {
-                  "name": "key",
-                  "type": "TEXT",
-                  "nullable": false
-                },
-                {
-                  "name": "model",
-                  "type": "TEXT",
-                  "nullable": true
-                },
-                {
-                  "name": "created_at",
-                  "type": "FLOAT",
-                  "nullable": true
-                },
-                {
-                  "name": "response",
-                  "type": "TEXT",
-                  "nullable": true
-                }
-              ]
-            }
-          ],
-          "views": [
-            {
-              "name": "llmkit_v1_calls",
-              "description": "Журнал вызовов LLM: одна строка на попытку",
-              "columns": [
-                {
-                  "name": "id",
-                  "type": "INTEGER",
-                  "description": "Номер попытки в журнале"
-                },
-                {
-                  "name": "called_at",
-                  "type": "DATETIME",
-                  "description": "Когда сделан вызов (UTC)"
-                },
-                {
-                  "name": "task_id",
-                  "type": "TEXT",
-                  "description": "Id задачи: попытки одного вызова по цепочке моделей"
-                },
-                {
-                  "name": "tags",
-                  "type": "JSON",
-                  "description": "Метки вызывающего для учёта расходов: {\"метка\": \"значение\"}"
-                },
-                {
-                  "name": "level",
-                  "type": "TEXT",
-                  "description": "Уровень цепочки моделей из конфига (cheap, judge…)"
-                },
-                {
-                  "name": "model",
-                  "type": "TEXT",
-                  "description": "Запрошенная модель: провайдер/модель"
-                },
-                {
-                  "name": "served_model",
-                  "type": "TEXT",
-                  "description": "Модель, которую назвал провайдер в ответе"
-                },
-                {
-                  "name": "provider",
-                  "type": "TEXT",
-                  "description": "Провайдер из конфига"
-                },
-                {
-                  "name": "status",
-                  "type": "TEXT",
-                  "description": "Итог попытки: ok, failed или cache (ответ из кэша)"
-                },
-                {
-                  "name": "error_type",
-                  "type": "TEXT",
-                  "description": "Класс ошибки, если попытка упала"
-                },
-                {
-                  "name": "attempt",
-                  "type": "INTEGER",
-                  "description": "Номер повтора на этой модели (0 — первая попытка или кэш)"
-                },
-                {
-                  "name": "prompt_tokens",
-                  "type": "INTEGER",
-                  "description": "Токены запроса"
-                },
-                {
-                  "name": "completion_tokens",
-                  "type": "INTEGER",
-                  "description": "Токены ответа"
-                },
-                {
-                  "name": "cost_usd",
-                  "type": "FLOAT",
-                  "description": "Стоимость, USD"
-                },
-                {
-                  "name": "cost_known",
-                  "type": "INTEGER",
-                  "description": "1 — стоимость известна, 0 — цены нет"
-                },
-                {
-                  "name": "latency_ms",
-                  "type": "INTEGER",
-                  "description": "Длительность вызова, мс"
-                },
-                {
-                  "name": "cost_source",
-                  "type": "TEXT",
-                  "description": "Откуда стоимость: provider (списано, из ответа), price_table (цена × токены), subscription, cache; NULL — неизвестна или ответа не было (и все строки до llmkit 0.10)"
-                },
-                {
-                  "name": "billable",
-                  "type": "INTEGER",
-                  "description": "1 — провайдер списал вызов (ответ получен, в т.ч. неразобранный; подписка), 0 — нет; NULL — строки до llmkit 0.10"
-                }
-              ]
-            }
-          ],
           "user_data_dir": {
             "appname": "llmkit",
-            "files": [
-              {
-                "path": "usage.sqlite",
-                "kind": "data",
-                "description": "Локальная SQLite журнала расходов (llmkit_calls), когда LLMKIT_DATABASE_URL не задан; usage.path"
-              },
-              {
-                "path": "chatgpt-auth.json",
-                "kind": "data",
-                "description": "Токены входа в подписку ChatGPT (`llm auth login chatgpt`); без него — вход заново"
-              }
-            ]
+            "files": []
           },
           "user_cache_dir": {
             "appname": "llmkit",
@@ -1979,18 +1056,7 @@
       },
       {
         "name": "x-rb-external",
-        "value": [
-          {
-            "name": "claude",
-            "required": false,
-            "why": "провайдер claude-cli (подписка Claude): transports/claude_cli.py, `llm auth login/logout claude`; путь переопределяет CLAUDE_COMMAND",
-            "min_version": null,
-            "check": "claude --version",
-            "detect": true,
-            "dist": null,
-            "url": null
-          }
-        ]
+        "value": []
       }
     ]
   }

@@ -10,7 +10,7 @@ from .. import legacy
 from .. import routing as routing_mod
 from .output import JsonOption, bad_arguments, emit, enable_json, err, group, guard, out
 
-app = group("routing", "Routing v1: провайдеры, цепочка и цены данными — проверка и перенос старого config.toml.")
+app = group("routing", "Routing v1: провайдеры и цепочка данными — проверка и перенос старого config.toml.")
 
 
 @app.command("import")
@@ -21,12 +21,13 @@ def import_config(
 ) -> None:
     """Перенести старый config.toml в routing v1.
 
-    Провайдеры (с адресами бывших встроенных) и цены — в `routing`, без
-    цепочки: её задаёт вызов (`-m …`) или вы. Уровни — отдельно в `levels`,
-    подсказкой для своих цепочек. Ключи не переносятся: `key_env` —
-    LLM_<ПРОВАЙДЕР>_API_KEY. Секции defaults, cache, budget, retry
-    перечислены в `dropped`. В stdout — JSON {routing, levels, warnings,
-    dropped}. Коды выхода: 0 — готово, 2 — файл не читается или не TOML.
+    Провайдеры (с адресами бывших встроенных) — в `routing`, без цепочки:
+    её задаёт вызов (`-m …`) или вы. Уровни — отдельно в `levels`, подсказкой
+    для своих цепочек. Ключи не переносятся: `key_env` — LLM_<ПРОВАЙДЕР>_API_KEY.
+    Цены, режимы и подписки не переносятся (`warnings`): ими владеет шлюз;
+    секции defaults, cache, budget, retry перечислены в `dropped`. В stdout —
+    JSON {routing, levels, warnings, dropped}. Коды выхода: 0 — готово,
+    2 — файл не читается или не TOML.
 
     Example: llm routing import config.toml > routing.json
     """
@@ -59,12 +60,12 @@ def validate(
 ) -> None:
     """Проверить routing v1 перед сохранением (Windmill, Directus).
 
-    Та же проверка, что перед вызовом модели: схема плюс ссылки цепочки и
-    цен на описанных провайдеров. Ключи не проверяются (`llm auth status`).
+    Та же проверка, что перед вызовом модели: схема и ссылки цепочки.
+    Ключи не проверяются (`llm auth status`).
     Коды выхода: 0 — routing годен, 2 — ROUTING_INVALID с `error.path`
     (JSON Pointer поля).
 
-    Example: llm routing validate '{"providers": {"openrouter": {"protocol": "openrouter"}}, "chain": ["openrouter/openai/gpt-4o-mini"]}'
+    Example: llm routing validate '{"providers": {"9router": {"protocol": "openai_compatible", "base_url": "http://localhost:20128/v1", "key_env": "NINEROUTER_API_KEY"}}, "chain": ["Deep Sec"]}'
     """
     enable_json(ctx, json_output)
     with guard(ctx):

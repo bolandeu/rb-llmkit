@@ -1,4 +1,4 @@
-"""Мелкие помощники вызова шлюза: сообщения задачи, JSON и маскирование ключа."""
+"""Мелкие помощники вызова шлюза: сообщения задачи и JSON."""
 
 from __future__ import annotations
 
@@ -9,11 +9,6 @@ from .errors import LlmKitError
 
 if TYPE_CHECKING:  # pragma: no cover
     from .models import Task
-
-
-def mask(text: str, secret: str | None) -> str:
-    """Убрать ключ шлюза из текста ошибки перед записью куда бы то ни было."""
-    return text.replace(secret, "***") if secret else text
 
 
 def parse_json(text: str) -> Any:

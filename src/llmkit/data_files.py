@@ -1,10 +1,9 @@
 """Файлы llmkit в каталогах пользователя — для `llm describe --json` (x-rb-data).
 
-Шаблон cli-generator v1.5.6 (`core/data_files.py`); отличие — поле `dir`: файлы
-лежат в каталоге данных, кэша или конфигурации пользователя. Кэш ответов — таблица
-`llmkit_cache` в базе, не файл. Пути — по умолчанию, настройка
-`LlmKit(config=...)` (`usage.path`) может их перенести. Новый файл, который пишет
-llmkit, — новая запись здесь.
+Шаблон cli-generator (`core/data_files.py`); отличие — поле `dir`: файлы лежат
+в каталоге данных, кэша или конфигурации пользователя. Своего состояния у llmkit
+нет: ни базы, ни кэша, ни токенов подписок — в каталогах пользователя один файл
+routing. Новый файл, который пишет llmkit, — новая запись здесь.
 """
 
 from __future__ import annotations
@@ -22,16 +21,6 @@ class DataFile:
 
 
 DATA_FILES: tuple[DataFile, ...] = (
-    DataFile(
-        "usage.sqlite",
-        "data",
-        "Локальная SQLite журнала расходов (llmkit_calls), когда LLMKIT_DATABASE_URL не задан; usage.path",
-    ),
-    DataFile(
-        "chatgpt-auth.json",
-        "data",
-        "Токены входа в подписку ChatGPT (`llm auth login chatgpt`); без него — вход заново",
-    ),
     DataFile(
         "routing.json",
         "data",
