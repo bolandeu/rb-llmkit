@@ -4,8 +4,8 @@ title: The rest of the gateway surface wrapped, documents rewritten and the spec
   and plan sorted
 status: queue
 attempts: 2
-blocked: true
-blocked_reason: aborted
+blocked: false
+blocked_reason: null
 phase: green
 tests_hash: 859586cd55093a6731dccf70edae010f17573bc4f0a5daf547de87b83d6d424b
 publish_stage: null
@@ -157,3 +157,7 @@ Minor remarks of the review: optional, if they do not widen the task:
 
 - [minor] [missing] The layout check and memory-check results are near the end of the report but not the last lines: a status line ("`On the main checkout now: 2 docs to sort`") follows them. — «The result of antagor layout check and antagor memory-check as the last lines of the report»
 - [minor] [missing] The three `antagor idea add` commands in the report carry `--text "..."` placeholders, so they are not ready to run; the real texts live in `.agents/antagor/ideas/LLMKIT-IDEA-00{5,6,7}.md` (I checked: the files exist in the main checkout). — «an idea (with the ready antagor idea add command)»
+
+### Blocked: aborted
+
+src/llmkit/usage.py is in your owns now. The blocker: the merge with LLMKIT-010 took 010's date-only parser and dropped your ISO-timestamp support, so tests/test_cost.py::test_iso_timestamp_bounds_cut_inside_a_day fails at HEAD (--since 2026-11-01T06:00:00Z exits 2). Re-apply _moment/_bound on top of 010's version: date-only and full ISO with Z both parse, the day range stays correct. The rest of the round stands — do not redo the documents.
