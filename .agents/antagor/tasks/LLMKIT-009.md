@@ -1,10 +1,10 @@
 ---
 id: LLMKIT-009
 title: 'Gateway client: ask, generate and ask_many through 9router over httpx'
-status: queue
-attempts: 2
-blocked: false
-blocked_reason: null
+status: in_progress
+attempts: 3
+blocked: true
+blocked_reason: attempts
 phase: green
 tests_hash: 6b82e19ada9d10a3add888ab5e17b61d5e6897b83a2efdb4b11fe5d9f655e977
 publish_stage: null
@@ -181,3 +181,15 @@ Check narrowed for this task: the state layer (providers, transports.decisions, 
 ### Blocked: aborted
 
 The six defective cases of tests/test_gateway.py were fixed by the Architect and committed on this branch (65bfa7e): kit() takes routing as a keyword, the cli fixture writes routing.json and sets LLMKIT_ROUTING_FILE, the duplicated call line is gone. Nothing else of yours was reverted. Finish the green phase: the narrowed checks must be green, then submit.
+
+### Attempt 3: tests fail
+
+```
+no tests ran in 0.02s
+   Building rb-llmkit @ file:///Users/bolandau/Work/tools/llmkit.worktrees/LLMKIT-009
+      Built rb-llmkit @ file:///Users/bolandau/Work/tools/llmkit.worktrees/LLMKIT-009
+Uninstalled 1 package in 0.63ms
+Installed 1 package in 1ms
+ERROR: not found: /Users/bolandau/Work/tools/llmkit.worktrees/LLMKIT-009/tests/data/gateway_combo.sse
+(no match in any of [<Dir data>])
+```
