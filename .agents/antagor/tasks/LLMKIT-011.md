@@ -30,15 +30,9 @@ test_paths:
 - tests/test_describe.py
 - tests/test_doctor.py
 - tests/test_help.py
+- tests/test_cost.py
 - tests/conftest.py
-docs:
-- README.md
-- CONTEXT.md
-- AGENTS.md
-- docs/architecture.md
-- docs/decisions.md
-- docs/prd.md
-- docs/backlog.md
+docs: none
 tools: []
 worker_args: null
 class: hard
