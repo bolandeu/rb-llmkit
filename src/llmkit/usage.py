@@ -56,7 +56,7 @@ def _stamp(moment: datetime) -> str:
 
 
 def _moment(value: str | datetime) -> datetime:
-    """Момент из смещения назад (`7d`, `12h`, `2w`) или даты `ГГГГ-ММ-ДД` — по контракту `--help`."""
+    """Момент из смещения назад (`7d`, `12h`, `2w`), даты `ГГГГ-ММ-ДД` или метки ISO 8601."""
     if isinstance(value, datetime):
         return value
     text = value.strip()
@@ -64,9 +64,15 @@ def _moment(value: str | datetime) -> datetime:
     if text[:-1].isdigit() and unit in _HOURS:
         return datetime.now(UTC) - timedelta(hours=_HOURS[unit] * int(text[:-1]))
     try:
-        return datetime.strptime(text, "%Y-%m-%d").replace(tzinfo=UTC)
+        moment = datetime.strptime(text, "%Y-%m-%d")
     except ValueError:
-        raise ValueError(f"не понимаю период {value!r}: ожидается '7d', '12h', '2w' или дата") from None
+        try:
+            moment = datetime.fromisoformat(text.upper())
+        except ValueError:
+            raise ValueError(
+                f"не понимаю период {value!r}: ожидается '7d', '12h', '2w', 'ГГГГ-ММ-ДД' или метка ISO 8601"
+            ) from None
+    return moment.astimezone(UTC) if moment.tzinfo else moment.replace(tzinfo=UTC)
 
 
 def _bound(value: str | datetime | None, *, end: bool) -> str:
