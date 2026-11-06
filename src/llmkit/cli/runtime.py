@@ -48,10 +48,13 @@ def load_routing(spec: str | None, *, require_chain: bool = True) -> Routing:
     return routing_mod.parse(routing_mod.load(spec), require_chain=require_chain)
 
 
-def call_routing(spec: str | None, models: list[str] | None) -> Routing:
-    """Routing команды вызова модели: цепочка — из routing или из повторяемого `-m`, но не из обоих."""
+def call_routing(spec: str | None, models: list[str] | None) -> Routing | None:
+    """Routing команды вызова модели: цепочка — из routing или из повторяемого `-m`, но не из обоих.
+
+    Без `--routing`, файла и `-m` — None: об отсутствии routing скажет `LlmKit` на самом вызове.
+    """
     if not models:
-        return load_routing(spec)
+        return None if routing_spec(spec) is None else load_routing(spec)
     return load_routing(spec, require_chain=False).with_chain(list(models))
 
 

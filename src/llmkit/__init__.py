@@ -1,6 +1,6 @@
-"""llmkit — общий LLM-слой: цепочки моделей, кэш, учёт расходов.
+"""llmkit — общий LLM-слой: вызовы моделей через шлюз 9router, типизированный ответ, учёт расходов.
 
-Быстрый импорт: litellm и instructor подтягиваются лениво, уже в пути вызова.
+Быстрый импорт: HTTP-клиент шлюза (httpx) и тяжёлые части журнала подтягиваются лениво.
 """
 
 from __future__ import annotations
@@ -10,6 +10,7 @@ from .core import Answer, Attempt, LlmKit, Stats, Task
 from .errors import (
     AllModelsFailed,
     ConfigError,
+    GatewayUnavailable,
     KeyMissing,
     LlmKitError,
     RoutingInvalid,
@@ -27,6 +28,7 @@ __all__ = [
     "Attempt",
     "Config",
     "ConfigError",
+    "GatewayUnavailable",
     "KeyMissing",
     "LlmKit",
     "LlmKitError",

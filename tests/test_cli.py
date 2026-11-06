@@ -8,9 +8,9 @@ import re
 import tomllib
 from pathlib import Path
 
-import conftest as fakes_module
+import httpx
 import pytest
-from conftest import ROUTING, FakeCompletion, response
+from conftest import ROUTING, FakeGateway, json_reply
 from typer.testing import CliRunner
 
 from llmkit import LlmKit
@@ -39,12 +39,17 @@ def routing_file(tmp_path, monkeypatch):
 
 @pytest.fixture
 def fake_kit(monkeypatch):
-    """Подменяет фабрику ядра: вызовы модели не уходят в сеть."""
+    """Подменяет фабрику ядра: сеть — httpx-транспорт фейкового шлюза."""
 
-    def install(script=None):
-        completion = FakeCompletion(script if script is not None else [response("ответ модели")])
-        monkeypatch.setattr(runtime, "build_kit", lambda **kwargs: LlmKit(completion=completion, **kwargs))
-        return completion
+    def install(*replies):
+        fake = FakeGateway(*replies)
+
+        def build(**kwargs):
+            kwargs.setdefault("routing", ROUTING)
+            return LlmKit(transport=fake.transport, **kwargs)
+
+        monkeypatch.setattr(runtime, "build_kit", build)
+        return fake
 
     return install
 
@@ -122,7 +127,7 @@ def test_models_json_lists_providers_and_chain():
 
 
 def test_ask_json_envelope(fake_kit):
-    fake_kit()
+    fake_kit(json_reply("ответ модели", provider="deepseek", cost=0.0001))
     result = run("ask", "вопрос", "--tag", "tool=cli", "--json")
     assert result.exit_code == 0
     body = payload(result)
@@ -135,16 +140,16 @@ def test_ask_json_envelope(fake_kit):
 
 
 def test_ask_human_output_is_text_only(fake_kit):
-    fake_kit()
+    fake_kit(json_reply("ответ модели"))
     result = run("ask", "вопрос")
     assert result.exit_code == 0 and result.stdout.strip() == "ответ модели"
 
 
 def test_ask_reads_stdin(fake_kit):
-    completion = fake_kit()
+    fake = fake_kit()
     result = run("ask", "--json", input="вопрос из stdin\n")
     assert result.exit_code == 0
-    assert completion.calls[0]["messages"][-1]["content"] == "вопрос из stdin"
+    assert fake.bodies()[0]["messages"][-1]["content"] == "вопрос из stdin"
 
 
 def test_ask_without_text_and_without_stdin_is_invalid(fake_kit):
@@ -162,23 +167,17 @@ def test_ask_rejects_bad_tag(fake_kit):
 
 def test_ask_model_flag_sets_chain(fake_kit, routing_file):
     routing_file.write_text(json.dumps({"providers": ROUTING["providers"]}), encoding="utf-8")
-    completion = fake_kit()
+    fake = fake_kit()
     assert run("ask", "вопрос", "--model", "b/m2", "--no-cache").exit_code == 0
-    assert completion.calls[0]["model"] == "openai/m2"
-
-
-def test_ask_timeout_flag_overrides_default(fake_kit):
-    completion = fake_kit()
-    assert run("ask", "вопрос", "--timeout", "5", "--no-cache").exit_code == 0
-    assert completion.calls[0]["timeout"] == 5.0
+    assert fake.models() == ["b/m2"]
 
 
 def test_ask_no_retry_flag_disables_retries(fake_kit):
-    completion = fake_kit({"openai/m1": [fakes_module.RateLimitError("429")], "openai/m2": [response("вторая")]})
-    result = run("ask", "вопрос", "--no-retry", "--no-cache")
-    assert result.exit_code == 0
-    # Без --no-retry было бы три попытки a/m1 (retry.rate_limit=2) перед фолбэком.
-    assert completion.models() == ["openai/m1", "openai/m2"]
+    fake = fake_kit(json_reply("  "))
+    result = run("ask", "вопрос", "--no-retry", "--no-cache", "--json")
+    assert result.exit_code == 5
+    # Без --no-retry тот же пустой ответ повторяется retry.invalid_output раз.
+    assert len(fake.requests) == 1
 
 
 def test_ask_reports_missing_key(monkeypatch):
@@ -192,7 +191,7 @@ def test_ask_reports_missing_key(monkeypatch):
 
 
 def test_json_command_prints_only_the_object(fake_kit, tmp_path):
-    fake_kit([response('{"x": 1}')])
+    fake_kit(json_reply('{"x": 1}'))
     schema = tmp_path / "schema.json"
     schema.write_text(json.dumps({"type": "object", "properties": {"x": {"type": "integer"}}}), encoding="utf-8")
     result = run("json", "вопрос", "--schema", str(schema))
@@ -243,16 +242,8 @@ def test_serve_is_not_implemented_yet():
     assert payload(result)["error"]["code"] == "NOT_IMPLEMENTED"
 
 
-def test_models_explains_unknown_provider_in_chain(routing_file):
-    routing_file.write_text(json.dumps({**ROUTING, "chain": ["нет-такого/m1"]}), encoding="utf-8")
-    result = run("models", "--json")
-    assert result.exit_code == 2
-    error = payload(result)["error"]
-    assert error["code"] == "ROUTING_INVALID" and "нет-такого" in error["message"]
-
-
 def test_provider_failure_exit_code(fake_kit):
-    fake_kit([fakes_module.BadRequestError("нет")])
+    fake_kit(httpx.Response(503, json={"error": "нет аккаунта"}))
     result = run("ask", "вопрос", "--json")
     assert result.exit_code == 5  # PROVIDER_ERROR по conventions.md
     assert payload(result)["error"]["code"] == "PROVIDER_ERROR"

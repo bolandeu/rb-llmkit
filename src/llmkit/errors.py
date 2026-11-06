@@ -1,4 +1,7 @@
-"""Исключения llmkit."""
+"""Исключения llmkit: общий `LlmKitError` и его наследники — ошибки конфига и routing, отсутствие ключа или входа
+(`KeyMissing`, `LoginMissing`), недоступность шлюза (`GatewayUnavailable`), исчерпанная цепочка (`AllModelsFailed`),
+шаблоны промптов и слой базы. Класс ошибки задаёт код выхода CLI (`EXIT_CODES`).
+"""
 
 from __future__ import annotations
 
@@ -15,7 +18,7 @@ EXIT_CODES: dict[int, str] = {
     1: "Непредвиденная ошибка; база расходов не смигрирована",
     2: "Неверные аргументы или конфиг",
     3: "Нет ключа провайдера или входа в подписку",
-    5: "Все модели цепочки упали (сбой провайдера) или база расходов недоступна",
+    5: "Шлюз недоступен, шлюз ответил ошибкой или ответ невалиден",
     6: "Базу расходов смигрировал более новый релиз llmkit",
 }
 
@@ -74,6 +77,20 @@ class TemplateVariableMissing(TemplateError):
     def __init__(self, name: str) -> None:
         self.name = name
         super().__init__(f"в переменных шаблона нет {name!r}")
+
+
+class GatewayUnavailable(LlmKitError):
+    """Шлюз не ответил, ответил ошибкой или превысил таймаут.
+
+    `url` — адрес шлюза из routing (`base_url`), `kind` — вид сбоя: `server`
+    (нет соединения, HTTP-ошибка) или `timeout`. Оба — код выхода 5.
+    """
+
+    def __init__(self, url: str, kind: str = "server", detail: str | None = None) -> None:
+        self.url = url
+        self.kind = kind
+        reason = "истёк таймаут" if kind == "timeout" else "запрос не прошёл"
+        super().__init__(f"шлюз {url} недоступен: {reason}" + (f" ({detail})" if detail else ""))
 
 
 class AllModelsFailed(LlmKitError):

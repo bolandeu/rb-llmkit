@@ -11,13 +11,12 @@ from pydantic import BaseModel
 
 @dataclass(frozen=True)
 class Task:
-    """Один вызов LLM: что спрашиваем, по какой схеме, чем платим."""
+    """Один вызов LLM: что спрашиваем, по какой схеме, с какими метками."""
 
     user: str | None = None
     system: str | None = None
     messages: list[dict] | None = None
     schema: type[BaseModel] | dict | None = None  # None = обычный текст
-    chain: list[str] | None = None  # вместо routing.chain; провайдеры — из routing
     tags: dict[str, str] = field(default_factory=dict)
     default: Any = None
     temperature: float | None = None
@@ -30,18 +29,18 @@ class Task:
 
 @dataclass
 class Attempt:
-    """Одна попытка одной модели."""
+    """Один запрос к шлюзу: ответ или ошибка."""
 
     model: str
-    provider: str
+    provider: str | None = None
     error_type: str | None = None
     error: str | None = None
     latency_ms: int = 0
     prompt_tokens: int = 0
     completion_tokens: int = 0
-    cost_usd: float | None = 0.0  # None — цена неизвестна
+    cost_usd: float | None = 0.0  # None — цены в ответе нет
     cost_source: str | None = None  # как у Answer
-    billable: bool = False  # провайдер списал вызов: ответ получен (в т.ч. неразобранный) или подписка
+    billable: bool = False  # шлюз списал вызов: ответ получен (в т.ч. невалидный)
 
 
 @dataclass
@@ -50,23 +49,21 @@ class Answer:
 
     data: Any
     source: str  # llm | cache | default
-    model: str = ""  # элемент цепочки, который ответил: "провайдер/модель"
-    provider: str = ""
+    model: str = ""  # запрошенная строка модели — как в настройке шлюза
+    provider: str | None = None  # имя провайдера из ответа шлюза; подписка его не называет
     attempts: list[Attempt] = field(default_factory=list)
     prompt_tokens: int = 0
     completion_tokens: int = 0
     cost_usd: float | None = 0.0  # стоимость ответившей попытки; None — цена неизвестна
-    # provider (списано, из ответа) | price_table (цена × токены: routing.prices, затем LiteLLM)
-    # | subscription | cache | None (неизвестно)
-    cost_source: str | None = "price_table"
+    cost_source: str | None = "provider"  # provider (usage.cost шлюза) | cache | None (цены нет)
     latency_ms: int = 0
     warnings: list[str] = field(default_factory=list)
     error: str | None = None
     task_id: str | None = None
-    # Версия, которую назвал провайдер (за алиасом вида `~…-latest`); не назвал — `model`.
+    # Модель, которую назвал шлюз (за комбо стоит настоящая модель); не назвал — запрошенная.
     served_model: str = ""
-    chain_position: int = 0  # 0-based номер ответившей модели в цепочке
-    billable_requests: int = 0  # платные вызовы провайдера за задачу: все попытки с `billable`
+    chain_position: int = 0
+    billable_requests: int = 0  # платные вызовы шлюза за задачу
     cost_total: float | None = 0.0  # сумма по платным попыткам; None — цена хоть одной неизвестна
 
     @property
@@ -99,22 +96,16 @@ class Stats:
 
 @dataclass
 class Outcome:
-    """Успешный сетевой вызов: данные плюс всё для учёта."""
+    """Успешный ответ шлюза: данные и всё для учёта."""
 
     data: Any
     cache_value: Any
     prompt_tokens: int = 0
     completion_tokens: int = 0
     cost_usd: float | None = 0.0
-    cost_source: str | None = "price_table"
+    cost_source: str | None = "provider"
     served_model: str = ""
-
-    @property
-    def billable(self) -> bool:
-        """Провайдер списал ответ. Ответ без токенов ответа не списывается (zero completion insurance OpenRouter)."""
-        if self.cost_source == "provider":
-            return bool(self.cost_usd)
-        return self.cost_source == "subscription" or self.completion_tokens > 0
+    provider: str | None = None
 
 
 def totals(attempts: list[Attempt]) -> tuple[int, float | None]:
