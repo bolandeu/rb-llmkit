@@ -35,7 +35,9 @@ worker_args: null
 class: standard
 decision: false
 visual: null
-depends_on: []
+depends_on:
+- LLMKIT-006
+- LLMKIT-007
 budget_usd: null
 epic: E-002
 spec_refs: []
