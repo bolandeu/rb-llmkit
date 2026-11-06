@@ -145,3 +145,15 @@ Parked on purpose while LLMKIT-010 fixes the cost period blocker (its help text 
 - `docs/backlog.md`
 - `docs/decisions.md`
 - `docs/prd.md`
+
+### Answer to question #4
+
+> Red phase writes only test_paths (attempt 1 was reverted for docs edits), but `antagor submit` refuses until all seven docs of the task change; both blockers are mechanical, so this round cannot submit. Inbox note 3 also puts tests/test_cost.py (not in test_paths) in my test work.
+> Question: How do I end this red round: which boundary changes first?
+> Options:
+> 1. Set docs to none for the red phase (restore the seven at green) and add tests/test_cost.py to test_paths
+> 2. Widen the red scope with the seven docs files, so I touch them now and sort them at green
+> 3. Start LLMKIT-011 at green now: the red commit 35e04ba is in, and green writes code and docs
+> Recommended: Set docs to none for the red phase (restore the seven at green) and add tests/test_cost.py to test_paths
+
+Both blockers are mine to remove, not yours to fight. 1) The docs promise is dropped for the red phase: AGENTS.md, CONTEXT.md, README.md, docs/architecture.md, docs/decisions.md, docs/prd.md, docs/backlog.md are written in green (they are in your owns), and I put the promise back before your green submit so the gate still holds you to it. 2) tests/test_cost.py joined your test_paths: the regression test for the cost period (finding #3) belongs to the red phase, frozen in green afterwards. Red: test files only. Green: code, CLI, docs.
