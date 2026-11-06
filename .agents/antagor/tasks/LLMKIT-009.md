@@ -2,7 +2,7 @@
 id: LLMKIT-009
 title: 'Gateway client: ask, generate and ask_many through 9router over httpx'
 status: queue
-attempts: 0
+attempts: 1
 blocked: false
 blocked_reason: null
 phase: green
@@ -211,3 +211,41 @@ Option 1: the two recordings stay in owns (tests/data/), not in test_paths. Root
 ### Blocked: needs_scope (entries [{'n': 3, 'text': 'Green phase is done and the three narrowed checks are green, but the protocol runner cannot pass: Antagor hands tests/data/gateway_combo.sse to pytest (its _TEST_DATA has .json but not .sse) and pytes'}])
 
 test_paths no longer carry the recordings: tests/data/gateway_combo.sse and tests/data/gateway_opencode_go.json stay owned and untouched. The failure was Antagor's runnable_tests: its _TEST_DATA filter has .json but not .sse, so the recording went to pytest as an argument (exit 4). Nothing to change in the work: your green phase is accepted, submit again.
+
+### Attempt 1: tests fail
+
+```
+..............................................F.........                 [100%]
+=================================== FAILURES ===================================
+_____________ test_import_stays_light_and_free_of_the_old_clients ______________
+
+    def test_import_stays_light_and_free_of_the_old_clients() -> None:
+        """Импорт пакета не тянет LiteLLM и Instructor и остаётся под 300 мс (AGENTS.md)."""
+        script = (
+            "import json, sys, time\n"
+            "started = time.perf_counter()\n"
+            "import llmkit\n"
+            "print(json.dumps({\n"
+            "    'seconds': time.perf_counter() - started,\n"
+            "    'heavy': sorted(\n"
+            "        name for name in sys.modules\n"
+            "        if name.split('.')[0] in ('litellm', 'instructor')\n"
+            "    ),\n"
+            "}))\n"
+        )
+        result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, check=False)  # noqa: S603
+        assert result.returncode == 0, result.stderr
+        report = json.loads(result.stdout)
+        assert report["heavy"] == []
+>       assert report["seconds"] < 0.3
+E       assert 0.3405462919618003 < 0.3
+
+tests/test_ci.py:81: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_ci.py::test_import_stays_light_and_free_of_the_old_clients
+1 failed, 55 passed in 4.53s
+   Building rb-llmkit @ file:///Users/bolandau/Work/tools/llmkit.worktrees/LLMKIT-009
+      Built rb-llmkit @ file:///Users/bolandau/Work/tools/llmkit.worktrees/LLMKIT-009
+Uninstalled 1 package in 2ms
+Installed 1 package in 11ms
+```
