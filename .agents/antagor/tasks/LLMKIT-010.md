@@ -2,7 +2,7 @@
 id: LLMKIT-010
 title: 'Nothing of its own left: state, transports and their commands out, dependencies
   pruned'
-status: in_review
+status: queue
 attempts: 2
 blocked: false
 blocked_reason: null
@@ -157,3 +157,13 @@ Minor remarks of the review: optional, if they do not widen the task:
 - [minor] usage.py: `with _open(target) as connection` never closes the sqlite3 connection (context manager only manages transactions); harmless per-process but leaks a fd per call.
 - [minor] [missing] Task names both journal tables — «the gateway SQLite (usageHistory and usageDaily)» — but usage.py reads only `usageHistory`; `usageDaily` appears only in the test fixture and the journal glossary. Grouping by API key is met without it, so acceptable if the Architect agrees the daily aggregate is unused.
 - [minor] [missing] Acceptance «Then spend is grouped by the gateway API key» quoted against `_daily`/`byApiKey`: fixture builds `usageDaily.byApiKey`, but no code path ever reads it (same point as above, list once for decision).
+
+### Attempt 2: the Architect's verdict
+
+The review found blockers; close each:
+
+- [blocker] T5 tests/test_cost.py (absent): the Attempt-1 blocker was a reported bug (`--since 2026-11-01` failed with INVALID_ARGUMENTS). The fix in src/llmkit/usage.py (`_moment`, `_bound`) closes it and I verified live (`llm cost --since 2026-11-01 --json`, exit 0), but no test goes red on that symptom: the new range touches only usage.py and core.py, no test file. T5 and the project's TDD rule require a regression test (date-only `--since`/`--until` and the ISO-timestamp case).
+
+Minor remarks of the review: optional, if they do not widen the task:
+
+- [minor] C4 src/llmkit/usage.py: `_moment` also accepts ISO timestamps the contract never promises («7d, 12h, 2w или ГГГГ-ММ-ДД»), and `.replace(tzinfo=UTC)` reinterprets any non-UTC offset: `2026-11-05T05:00:00+03:00` is read as 05:00 UTC, not as its instantaneous moment. Either restrict to the promised formats (drop `replace`) or convert with `.astimezone(UTC)`.
