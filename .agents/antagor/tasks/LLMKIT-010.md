@@ -2,12 +2,12 @@
 id: LLMKIT-010
 title: 'Nothing of its own left: state, transports and their commands out, dependencies
   pruned'
-status: queue
+status: in_review
 attempts: 0
 blocked: false
 blocked_reason: null
-phase: null
-tests_hash: null
+phase: green
+tests_hash: 1b126407241df7a1ebb3486954a4b6f850b6fe7b2e733c7ece62c885b3d7f661
 publish_stage: null
 created_by: architect
 approved_by: human
@@ -34,6 +34,21 @@ owns_paths:
 - scripts/pg_test.sh
 - .gitea/workflows/ci.yml
 - tests/
+- AGENTS.md
+- CONTEXT.md
+- README.md
+- docs/architecture.md
+- docs/cli-conventions.md
+- docs/testing.md
+- scripts/detach.py
+- scripts/smoke.py
+- src/llmkit/_distribution.py
+- src/llmkit/callutil.py
+- src/llmkit/config.py
+- src/llmkit/contracts/routing-v1.schema.json
+- src/llmkit/errors.py
+- src/llmkit/models.py
+- src/llmkit/routing.py
 test_paths:
 - tests/test_cost.py
 - tests/test_usage.py
