@@ -197,3 +197,15 @@ ERROR: not found: /Users/bolandau/Work/tools/llmkit.worktrees/LLMKIT-009/tests/d
 ### Blocked: attempts (max_attempts 3)
 
 Reason of the three rejections was not your work: [protocol] test_command ran the task's test_paths with the project's coverage gate (50% on a subset), so 'uv run pytest -q tests/...' exited 1 with every test green. Fixed in antagor.toml: the protocol command is now 'uv run pytest -q --no-cov'; the coverage gate stays in the project checks. Also fixed earlier by the Architect and committed on this branch (65bfa7e): the six defective cases in tests/test_gateway.py. Submit again.
+
+### Answer to question #3
+
+> Green phase is done and the three narrowed checks are green, but the protocol runner cannot pass: Antagor hands tests/data/gateway_combo.sse to pytest (its _TEST_DATA has .json but not .sse) and pytest exits 4 with nothing wrong in the work.
+> Question: How do we unblock the protocol runner for LLMKIT-009?
+> Options:
+> 1. Drop the two data files from the task's test_paths, tests/data/ stays owned and untouched: antagor -C /Users/bolandau/Work/tools/llmkit task-update LLMKIT-009 --tests tests/test_gateway.py tests/test_core.py tests/test_routing.py tests/test_chain.py tests/test_ci.py tests/test_doctor.py tests/conftest.py
+> 2. Add .sse to _TEST_DATA in /Users/bolandau/Work/antagor/src/antagor/scope.py (needs the Human, outside this repo)
+> 3. Rename the recording to gateway_combo.sse.txt and update the two reads in tests/test_gateway.py (blocked: test files are frozen in this phase)
+> Recommended: Drop the two data files from the task's test_paths, tests/data/ stays owned and untouched: antagor -C /Users/bolandau/Work/tools/llmkit task-update LLMKIT-009 --tests tests/test_gateway.py tests/test_core.py tests/test_routing.py tests/test_chain.py tests/test_ci.py tests/test_doctor.py tests/conftest.py
+
+Option 1: the two recordings stay in owns (tests/data/), not in test_paths. Root cause is Antagor: _TEST_DATA in scope.py lacks .sse, so runnable_tests hands the recording to pytest (exit 4); .json was already filtered. Idea filed for Antagor.
