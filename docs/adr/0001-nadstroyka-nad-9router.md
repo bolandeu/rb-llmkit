@@ -41,6 +41,19 @@
 значат провайдера, поэтому разбор ссылки (`routing.py`, `providers.py`,
 `core.py`) уходит.
 
+## Вся поверхность шлюза, включая медиа
+
+llmkit оборачивает не только чат, а все эндпоинты 9router, чтобы были доступны
+все его провайдеры: `/v1/chat/completions`, `/v1/responses`, `/v1/messages`,
+`/v1/embeddings`, `/v1/search`, `/v1/models` (+ `/info`, `/{model}`),
+`/v1/images/generations`, `/v1/audio/speech`, `/v1/audio/transcriptions`,
+`/v1/audio/voices`, `/v1/videos/generations`, `/v1/videos/edits`,
+`/v1/videos/extensions`, `/v1/videos/{id}`, `/v1/web/fetch`.
+
+Медиа-провайдеры (картинки, речь, видео) — чужие: llmkit передаёт запрос и
+возвращает ответ типизированно (файл/URL, а не разбор форматов), свой список
+провайдеров и ключей не ведёт.
+
 ## Кэша ответов нет
 
 Кэширование ответов — не задача llmkit (пользователь, 2026-11-06): убираются
