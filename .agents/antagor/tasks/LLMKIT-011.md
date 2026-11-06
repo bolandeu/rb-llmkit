@@ -3,7 +3,7 @@ id: LLMKIT-011
 title: The rest of the gateway surface wrapped, documents rewritten and the specification
   and plan sorted
 status: in_review
-attempts: 1
+attempts: 2
 blocked: false
 blocked_reason: null
 phase: green
