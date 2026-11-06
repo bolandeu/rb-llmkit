@@ -1,10 +1,10 @@
 ---
 id: LLMKIT-009
 title: 'Gateway client: ask, generate and ask_many through 9router over httpx'
-status: in_progress
-attempts: 3
-blocked: true
-blocked_reason: attempts
+status: queue
+attempts: 0
+blocked: false
+blocked_reason: null
 phase: green
 tests_hash: 6b82e19ada9d10a3add888ab5e17b61d5e6897b83a2efdb4b11fe5d9f655e977
 publish_stage: null
@@ -193,3 +193,7 @@ Installed 1 package in 1ms
 ERROR: not found: /Users/bolandau/Work/tools/llmkit.worktrees/LLMKIT-009/tests/data/gateway_combo.sse
 (no match in any of [<Dir data>])
 ```
+
+### Blocked: attempts (max_attempts 3)
+
+Reason of the three rejections was not your work: [protocol] test_command ran the task's test_paths with the project's coverage gate (50% on a subset), so 'uv run pytest -q tests/...' exited 1 with every test green. Fixed in antagor.toml: the protocol command is now 'uv run pytest -q --no-cov'; the coverage gate stays in the project checks. Also fixed earlier by the Architect and committed on this branch (65bfa7e): the six defective cases in tests/test_gateway.py. Submit again.
