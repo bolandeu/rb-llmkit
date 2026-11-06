@@ -1,10 +1,10 @@
 ---
 id: LLMKIT-009
 title: 'Gateway client: ask, generate and ask_many through 9router over httpx'
-status: in_progress
+status: queue
 attempts: 1
-blocked: true
-blocked_reason: needs_scope
+blocked: false
+blocked_reason: null
 phase: green
 tests_hash: 6b82e19ada9d10a3add888ab5e17b61d5e6897b83a2efdb4b11fe5d9f655e977
 publish_stage: null
@@ -171,3 +171,5 @@ Option 1: thaw tests/test_gateway.py; its six cases are the task's own test defe
 > The check 'uv run pytest -q' cannot be green for LLMKIT-009: 6 modules fail at collection on files this task must not touch (test_cost.py, test_decide.py, test_health.py, test_render_cli.py, test_routing_default.py, test_subscriptions.py import llmkit.providers and llmkit.transports.decisions, both deleted by ADR-0001), and 13 more cases fail on reverted fixtures and snapshots (test_cache.py 2, test_chatgpt.py 1, test_contracts.py 6, test_describe.py 1, test_help.py 4). tests/ is LLMKIT-010's path; the green phase froze these files for LLMKIT-009. Remaining 6 red cases are the frozen-test defects of question #1.
 
 Check narrowed for this task: the state layer (providers, transports.decisions, cache, db tests, snapshots) is deleted by LLMKIT-010, which also restores a green full suite and ty. Here: only the modules of this task's acceptance, plus ruff/format.
+
+### Blocked: needs_scope (entries [{'n': 1, 'text': "Green phase froze tests/test_gateway.py, but six of its cases cannot pass against the frozen tests/conftest.py: test_model_name_goes_verbatim calls kit(fake, routing=...) while the file's kit() alread"}])
