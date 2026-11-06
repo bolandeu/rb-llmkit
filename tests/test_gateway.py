@@ -18,8 +18,8 @@ runner = CliRunner()
 DATA = Path(__file__).parent / "data"
 
 
-def kit(fake: FakeGateway, **kwargs) -> LlmKit:
-    return LlmKit(routing=GATEWAY_ROUTING, transport=fake.transport, **kwargs)
+def kit(fake: FakeGateway, *, routing: dict | None = None, **kwargs) -> LlmKit:
+    return LlmKit(routing=routing or GATEWAY_ROUTING, transport=fake.transport, **kwargs)
 
 
 def recorded(name: str, content_type: str) -> httpx.Response:
@@ -28,8 +28,11 @@ def recorded(name: str, content_type: str) -> httpx.Response:
 
 
 @pytest.fixture
-def cli(monkeypatch):
-    """`llm` с фейковым шлюзом вместо настоящего."""
+def cli(tmp_path, monkeypatch):
+    """`llm` с фейковым шлюзом вместо настоящего: routing CLI берёт из файла, как на Mac."""
+    path = tmp_path / "routing.json"
+    path.write_text(json.dumps(GATEWAY_ROUTING), encoding="utf-8")
+    monkeypatch.setenv("LLMKIT_ROUTING_FILE", str(path))
 
     def run(fake: FakeGateway, *args: str):
         monkeypatch.setattr(runtime, "build_kit", lambda **kwargs: LlmKit(transport=fake.transport, **kwargs))
@@ -124,7 +127,6 @@ async def test_ask_many_asks_the_gateway_once_per_task(gateway):
 
 
 def test_cli_ask_json_reads_the_gateway_answer(cli, gateway):
-    result = cli(gateway(recorded("gateway_combo.sse", "text/event-stream")), "ask", "Столица Франции?")
     result = cli(gateway(recorded("gateway_combo.sse", "text/event-stream")), "ask", "Столица Франции?")
     assert result.exit_code == 0, result.output
     body = json.loads(result.stdout)
