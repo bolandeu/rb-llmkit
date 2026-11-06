@@ -3,8 +3,8 @@ id: LLMKIT-012
 title: 'Key lookup as in cli-generator: env, then the OS keyring, then a clear error'
 status: queue
 attempts: 2
-blocked: true
-blocked_reason: aborted
+blocked: false
+blocked_reason: null
 phase: red
 tests_hash: null
 publish_stage: null
@@ -22,8 +22,8 @@ test_paths:
 - tests/test_keys.py
 - tests/test_health.py
 - tests/test_deps.py
-docs:
-- docs/architecture.md
+- tests/conftest.py
+docs: none
 tools: []
 worker_args: null
 class: standard
@@ -84,3 +84,7 @@ Reference implementation: cli-generator template/src/{{ package_name }}/credenti
 ### Attempt 2: out of the task's bounds (the changes were reverted)
 
 - `docs/architecture.md`
+
+### Blocked: aborted
+
+Red phase: test files only (tests/test_keys.py, tests/test_health.py, tests/test_deps.py, tests/conftest.py). docs/architecture.md is a green-phase file; the promise is off for now and comes back before your green submit. Reuse the kept patches instead of rewriting.
