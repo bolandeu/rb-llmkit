@@ -127,6 +127,31 @@ def gateway(monkeypatch):
 
 
 @pytest.fixture
+def gateway_cli(tmp_path, monkeypatch):
+    """`llm` с фейковым шлюзом для команд поверхности: image, audio, video и остальные.
+
+    Собирает клиент шлюза на фейковом транспорте и подменяет им единственную
+    точку, где CLI строит клиент (`runtime.build_gateway`).
+    """
+    from typer.testing import CliRunner
+
+    from llmkit.cli import runtime
+    from llmkit.cli.main import app
+    from llmkit.gateway import GatewayClient
+
+    path = tmp_path / "routing.json"
+    path.write_text(json.dumps(GATEWAY_ROUTING), encoding="utf-8")
+    monkeypatch.setenv("LLMKIT_ROUTING_FILE", str(path))
+
+    def run(fake: FakeGateway, *args: str):
+        client = GatewayClient(base_url="http://gateway.test/v1", api_key=GATEWAY_KEY, transport=fake.transport)
+        monkeypatch.setattr(runtime, "build_gateway", lambda *a, **kw: client, raising=False)
+        return CliRunner().invoke(app, [*args, "--json"])
+
+    return run
+
+
+@pytest.fixture
 def gateway_server():
     """Настоящий локальный HTTP-сервер вместо шлюза: отвечает 200 на любой запрос."""
 

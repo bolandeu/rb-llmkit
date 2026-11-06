@@ -60,6 +60,31 @@ def _registered(group: typer.Typer, prefix: tuple[str, ...] = ()) -> Iterator[tu
 
 COMMANDS = dict(_walk(DOCUMENT["command"]))
 
+# Семейство поверхности шлюза → его команды (эндпоинты из ADR-0001).
+GATEWAY_SURFACE: tuple[tuple[str, ...], ...] = (
+    ("image", "generate"),
+    ("audio", "speech"),
+    ("audio", "transcribe"),
+    ("audio", "voices"),
+    ("video", "generate"),
+    ("video", "edit"),
+    ("video", "extend"),
+    ("video", "get"),
+    ("embeddings", "create"),
+    ("web", "search"),
+    ("web", "fetch"),
+    ("model", "list"),
+    ("model", "info"),
+    ("model", "show"),
+    ("chat", "responses"),
+    ("chat", "responses-compact"),
+    ("chat", "messages"),
+    ("chat", "count-tokens"),
+    ("chat", "systemone"),
+    ("chat", "api"),
+    ("chat", "gemini-models"),
+)
+
 
 def _meta(entry: dict) -> dict:
     return {item["name"]: item.get("value") for item in entry.get("metadata", [])}
@@ -124,6 +149,23 @@ class DescribeSnapshot(SingleFileSnapshotExtension):
     @classmethod
     def get_snapshot_name(cls, *, test_location, index=0) -> str:
         return "describe"
+
+
+def test_the_document_lists_the_whole_gateway_surface() -> None:
+    """Каждая команда поверхности шлюза — в документе: дерево команд и есть контракт."""
+    missing = [" ".join(path) for path in GATEWAY_SURFACE if path not in COMMANDS]
+    assert not missing, f"describe is missing commands: {missing}"
+
+
+@pytest.mark.parametrize("name", sorted({path[0] for path in GATEWAY_SURFACE}))
+def test_every_surface_family_is_a_group_with_commands(name: str) -> None:
+    assert (name,) in COMMANDS, f"`{name}` is not a command group"
+    assert any(len(path) == 2 and path[0] == name for path in COMMANDS), f"`{name}` has no commands"
+
+
+def test_routing_view_stays_a_command() -> None:
+    """`llm models` показывает провайдеров routing — группа шлюза называется иначе."""
+    assert ("models",) in COMMANDS and ("models", "list") not in COMMANDS
 
 
 def test_describe_snapshot(snapshot) -> None:
