@@ -1,10 +1,10 @@
 ---
 id: LLMKIT-009
 title: 'Gateway client: ask, generate and ask_many through 9router over httpx'
-status: in_progress
+status: queue
 attempts: 0
-blocked: true
-blocked_reason: needs_scope
+blocked: false
+blocked_reason: null
 phase: green
 tests_hash: 6b82e19ada9d10a3add888ab5e17b61d5e6897b83a2efdb4b11fe5d9f655e977
 publish_stage: null
@@ -207,3 +207,7 @@ Reason of the three rejections was not your work: [protocol] test_command ran th
 > Recommended: Drop the two data files from the task's test_paths, tests/data/ stays owned and untouched: antagor -C /Users/bolandau/Work/tools/llmkit task-update LLMKIT-009 --tests tests/test_gateway.py tests/test_core.py tests/test_routing.py tests/test_chain.py tests/test_ci.py tests/test_doctor.py tests/conftest.py
 
 Option 1: the two recordings stay in owns (tests/data/), not in test_paths. Root cause is Antagor: _TEST_DATA in scope.py lacks .sse, so runnable_tests hands the recording to pytest (exit 4); .json was already filtered. Idea filed for Antagor.
+
+### Blocked: needs_scope (entries [{'n': 3, 'text': 'Green phase is done and the three narrowed checks are green, but the protocol runner cannot pass: Antagor hands tests/data/gateway_combo.sse to pytest (its _TEST_DATA has .json but not .sse) and pytes'}])
+
+test_paths no longer carry the recordings: tests/data/gateway_combo.sse and tests/data/gateway_opencode_go.json stay owned and untouched. The failure was Antagor's runnable_tests: its _TEST_DATA filter has .json but not .sse, so the recording went to pytest as an argument (exit 4). Nothing to change in the work: your green phase is accepted, submit again.
