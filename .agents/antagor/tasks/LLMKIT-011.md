@@ -4,8 +4,8 @@ title: The rest of the gateway surface wrapped, documents rewritten and the spec
   and plan sorted
 status: queue
 attempts: 0
-blocked: true
-blocked_reason: aborted
+blocked: false
+blocked_reason: null
 phase: red
 tests_hash: null
 publish_stage: null
@@ -128,3 +128,9 @@ Reuse the gateway client and the error kinds of the first task and the guard/emi
 
 - Moving other repositories to the new API or to the gateway journal.
 - Publishing a release of its own; the epic closes it.
+
+## Feedback
+
+### Blocked: aborted
+
+Parked on purpose while LLMKIT-010 fixes the cost period blocker (its help text and snapshots change). Back in queue: the overlap with LLMKIT-010 keeps you from starting until it finishes, and you will stack on its branch, which already carries that fix. The prd.md and backlog.md sorting stays yours, as the review of LLMKIT-010 said.
