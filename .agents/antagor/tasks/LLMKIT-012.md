@@ -3,8 +3,8 @@ id: LLMKIT-012
 title: 'Key lookup as in cli-generator: env, then the OS keyring, then a clear error'
 status: queue
 attempts: 2
-blocked: false
-blocked_reason: null
+blocked: true
+blocked_reason: aborted
 phase: red
 tests_hash: null
 publish_stage: null
