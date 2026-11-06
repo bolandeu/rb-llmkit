@@ -8,9 +8,9 @@ import re
 import tomllib
 from pathlib import Path
 
-import conftest as fakes_module
+import httpx
 import pytest
-from conftest import ROUTING, FakeCompletion, response
+from conftest import GATEWAY_ROUTING, FakeGateway, json_reply
 from typer.testing import CliRunner
 
 from llmkit import LlmKit
@@ -32,19 +32,25 @@ def no_keychain(monkeypatch):
 def routing_file(tmp_path, monkeypatch):
     """Routing из файла пользователя (LLMKIT_ROUTING_FILE), как у CLI на Mac."""
     path = tmp_path / "routing.json"
-    path.write_text(json.dumps(ROUTING), encoding="utf-8")
+    path.write_text(json.dumps(GATEWAY_ROUTING), encoding="utf-8")
     monkeypatch.setenv("LLMKIT_ROUTING_FILE", str(path))
     return path
 
 
 @pytest.fixture
 def fake_kit(monkeypatch):
-    """Подменяет фабрику ядра: вызовы модели не уходят в сеть."""
+    """Подменяет фабрику ядра: сеть — httpx-транспорт фейкового шлюза."""
 
-    def install(script=None):
-        completion = FakeCompletion(script if script is not None else [response("ответ модели")])
-        monkeypatch.setattr(runtime, "build_kit", lambda **kwargs: LlmKit(completion=completion, **kwargs))
-        return completion
+    def install(*replies):
+        fake = FakeGateway(*replies)
+
+        def build(**kwargs):
+            kwargs.setdefault("routing", GATEWAY_ROUTING)
+            return LlmKit(transport=fake.transport, **kwargs)
+
+        monkeypatch.setattr(runtime, "build_kit", build)
+        monkeypatch.setenv("NINEROUTER_API_KEY", "ключ-шлюза")
+        return fake
 
     return install
 
@@ -110,24 +116,25 @@ def test_config_init_is_removed():
     assert run("config", "init", "--json").exit_code == 2
 
 
-def test_models_json_lists_providers_and_chain():
+def test_models_json_lists_providers_and_chain(monkeypatch):
+    monkeypatch.setenv("NINEROUTER_API_KEY", "ключ-шлюза")
     body = payload(run("models", "--json"))
     # Только провайдеры routing: встроенных нет.
     providers = {row["provider"]: row for row in body["providers"]}
-    assert set(providers) == {"a", "b"}
-    assert providers["a"]["protocol"] == "openai_compatible"
-    assert providers["a"]["base_url"] == "http://localhost:11111/v1"
-    assert providers["a"]["has_key"] is True and providers["a"]["key_source"] == "env"
-    assert body["chain"] == ["a/m1", "b/m2"]
+    assert set(providers) == {"9router"}
+    assert providers["9router"]["protocol"] == "openai_compatible"
+    assert providers["9router"]["base_url"] == "http://gateway.test/v1"
+    assert providers["9router"]["has_key"] is True and providers["9router"]["key_source"] == "env"
+    assert body["chain"] == ["Deep Sec", "opencode-go"]
 
 
 def test_ask_json_envelope(fake_kit):
-    fake_kit()
+    fake_kit(json_reply("ответ модели", provider="deepseek", cost=0.0001))
     result = run("ask", "вопрос", "--tag", "tool=cli", "--json")
     assert result.exit_code == 0
     body = payload(result)
     assert body["ok"] is True and body["text"] == "ответ модели"
-    assert body["model"] == "a/m1" and body["cache_hit"] is False
+    assert body["model"] == "Deep Sec" and body["cache_hit"] is False
     assert body["tokens_in"] == 10 and body["cost_usd"] > 0
     # Вызов попал в журнал и виден в отчёте по метке.
     report = payload(run("cost", "--by", "tool", "--json"))
@@ -135,16 +142,16 @@ def test_ask_json_envelope(fake_kit):
 
 
 def test_ask_human_output_is_text_only(fake_kit):
-    fake_kit()
+    fake_kit(json_reply("ответ модели"))
     result = run("ask", "вопрос")
     assert result.exit_code == 0 and result.stdout.strip() == "ответ модели"
 
 
 def test_ask_reads_stdin(fake_kit):
-    completion = fake_kit()
+    fake = fake_kit()
     result = run("ask", "--json", input="вопрос из stdin\n")
     assert result.exit_code == 0
-    assert completion.calls[0]["messages"][-1]["content"] == "вопрос из stdin"
+    assert fake.bodies()[0]["messages"][-1]["content"] == "вопрос из stdin"
 
 
 def test_ask_without_text_and_without_stdin_is_invalid(fake_kit):
@@ -161,38 +168,31 @@ def test_ask_rejects_bad_tag(fake_kit):
 
 
 def test_ask_model_flag_sets_chain(fake_kit, routing_file):
-    routing_file.write_text(json.dumps({"providers": ROUTING["providers"]}), encoding="utf-8")
-    completion = fake_kit()
-    assert run("ask", "вопрос", "--model", "b/m2", "--no-cache").exit_code == 0
-    assert completion.calls[0]["model"] == "openai/m2"
-
-
-def test_ask_timeout_flag_overrides_default(fake_kit):
-    completion = fake_kit()
-    assert run("ask", "вопрос", "--timeout", "5", "--no-cache").exit_code == 0
-    assert completion.calls[0]["timeout"] == 5.0
+    routing_file.write_text(json.dumps({"providers": GATEWAY_ROUTING["providers"]}), encoding="utf-8")
+    fake = fake_kit()
+    assert run("ask", "вопрос", "--model", "opencode-go", "--no-cache").exit_code == 0
+    assert fake.models() == ["opencode-go"]
 
 
 def test_ask_no_retry_flag_disables_retries(fake_kit):
-    completion = fake_kit({"openai/m1": [fakes_module.RateLimitError("429")], "openai/m2": [response("вторая")]})
-    result = run("ask", "вопрос", "--no-retry", "--no-cache")
-    assert result.exit_code == 0
-    # Без --no-retry было бы три попытки a/m1 (retry.rate_limit=2) перед фолбэком.
-    assert completion.models() == ["openai/m1", "openai/m2"]
+    fake = fake_kit(json_reply("  "))
+    result = run("ask", "вопрос", "--no-retry", "--no-cache", "--json")
+    assert result.exit_code == 5
+    # Без --no-retry тот же пустой ответ повторяется retry.invalid_output раз.
+    assert len(fake.requests) == 1
 
 
 def test_ask_reports_missing_key(monkeypatch):
-    monkeypatch.delenv("TEST_A_KEY")
-    monkeypatch.delenv("TEST_B_KEY")
+    monkeypatch.delenv("NINEROUTER_API_KEY", raising=False)
     result = run("ask", "вопрос", "--json")
     assert result.exit_code == 3  # нет ключа — код 3 по conventions.md
     error = payload(result)["error"]
     assert error["code"] == "AUTH_MISSING" and "llm keys set" in error["action"]
-    assert error["variable"] == "TEST_A_KEY"
+    assert error["variable"] == "NINEROUTER_API_KEY"
 
 
 def test_json_command_prints_only_the_object(fake_kit, tmp_path):
-    fake_kit([response('{"x": 1}')])
+    fake_kit(json_reply('{"x": 1}'))
     schema = tmp_path / "schema.json"
     schema.write_text(json.dumps({"type": "object", "properties": {"x": {"type": "integer"}}}), encoding="utf-8")
     result = run("json", "вопрос", "--schema", str(schema))
@@ -211,14 +211,13 @@ def test_json_command_rejects_broken_schema(fake_kit, tmp_path):
 
 
 def test_keys_status_without_and_with_env(monkeypatch):
-    monkeypatch.delenv("TEST_A_KEY")
-    monkeypatch.delenv("TEST_B_KEY")
+    monkeypatch.delenv("NINEROUTER_API_KEY", raising=False)
     empty = {row["provider"]: row for row in payload(run("keys", "status", "--json"))["providers"]}
-    assert empty["a"]["source"] == "none" and empty["b"]["source"] == "none"
-    assert empty["a"]["env_var"] == "TEST_A_KEY"
-    monkeypatch.setenv("TEST_A_KEY", "ключ")
+    assert empty["9router"]["source"] == "none"
+    assert empty["9router"]["env_var"] == "NINEROUTER_API_KEY"
+    monkeypatch.setenv("NINEROUTER_API_KEY", "ключ")
     filled = payload(run("keys", "status", "--json"))
-    assert {row["provider"]: row["source"] for row in filled["providers"]}["a"] == "env"
+    assert {row["provider"]: row["source"] for row in filled["providers"]}["9router"] == "env"
     assert "ключ" not in json.dumps(filled, ensure_ascii=False)
 
 
@@ -226,10 +225,10 @@ def test_keys_set_and_rm(monkeypatch):
     stored = {}
     monkeypatch.setattr(keys_mod, "store", lambda provider, secret: stored.update({provider: secret}))
     monkeypatch.setattr(keys_mod, "delete", lambda provider: stored.pop(provider, None))
-    result = run("keys", "set", "a", "--stdin", "--json", input="секретный-ключ\n")
-    assert result.exit_code == 0 and stored == {"a": "секретный-ключ"}
+    result = run("keys", "set", "9router", "--stdin", "--json", input="секретный-ключ\n")
+    assert result.exit_code == 0 and stored == {"9router": "секретный-ключ"}
     assert "секретный-ключ" not in result.stdout
-    assert run("keys", "rm", "a", "--json").exit_code == 0 and stored == {}
+    assert run("keys", "rm", "9router", "--json").exit_code == 0 and stored == {}
 
 
 def test_keys_set_unknown_provider():
@@ -243,16 +242,8 @@ def test_serve_is_not_implemented_yet():
     assert payload(result)["error"]["code"] == "NOT_IMPLEMENTED"
 
 
-def test_models_explains_unknown_provider_in_chain(routing_file):
-    routing_file.write_text(json.dumps({**ROUTING, "chain": ["нет-такого/m1"]}), encoding="utf-8")
-    result = run("models", "--json")
-    assert result.exit_code == 2
-    error = payload(result)["error"]
-    assert error["code"] == "ROUTING_INVALID" and "нет-такого" in error["message"]
-
-
 def test_provider_failure_exit_code(fake_kit):
-    fake_kit([fakes_module.BadRequestError("нет")])
+    fake_kit(httpx.Response(503, json={"error": "нет аккаунта"}))
     result = run("ask", "вопрос", "--json")
     assert result.exit_code == 5  # PROVIDER_ERROR по conventions.md
     assert payload(result)["error"]["code"] == "PROVIDER_ERROR"

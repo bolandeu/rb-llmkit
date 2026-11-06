@@ -1,4 +1,4 @@
-"""Команды `llm ask`, `llm json` и `llm decide`: один вызов модели по routing."""
+"""Команды `llm ask` и `llm json`: один вызов модели через шлюз 9router."""
 
 import json
 import uuid
@@ -21,7 +21,7 @@ ModelsOption = typer.Option(
     None,
     "--model",
     "-m",
-    help="Модель 'провайдер/модель'; повторяется — цепочка с фолбэком по порядку (вместо routing.chain).",
+    help="Модель или комбо шлюза строкой как в его настройке; повторяется — цепочка (вместо routing.chain). Фолбэк исполняет шлюз.",
 )
 # Уровней больше нет: флаг оставлен скрытым, чтобы объяснить, чем его заменить.
 LevelOption = typer.Option(None, "--level", "-l", hidden=True, help="Удалён: передайте цепочку.")
@@ -31,7 +31,7 @@ def _reject_level(level: str | None) -> None:
     if level is not None:
         raise bad_arguments(
             "--level удалён: уровней в llmkit больше нет",
-            "передайте цепочку: -m провайдер/модель (можно несколько) или routing.chain",
+            "передайте цепочку: -m модель (можно несколько) или routing.chain",
         )
 
 
@@ -105,29 +105,29 @@ def ask(
     temperature: float = typer.Option(None, "--temperature", help="Температура; по умолчанию 0."),
     max_tokens: int = typer.Option(None, "--max-tokens", help="Лимит токенов ответа."),
     timeout: float = typer.Option(None, "--timeout", help="Таймаут вызова в секундах."),
-    no_retry: bool = typer.Option(False, "--no-retry", help="Не повторять на сбойной модели, сразу к следующей."),
+    no_retry: bool = typer.Option(False, "--no-retry", help="Не повторять вызов, если ответ не прошёл проверку схемы."),
     template: str = TemplateOption,
     variables: str = VarsOption,
     lenient: bool = LenientOption,
     json_output: bool = JsonOption,
 ) -> None:
-    """Задать вопрос модели и напечатать текстовый ответ.
+    """Задать вопрос шлюзу и напечатать текстовый ответ.
 
-    Провайдеры и цепочка — из routing v1 (`--routing` JSON или файл, иначе
-    LLMKIT_ROUTING_FILE, иначе routing.json в каталоге конфигурации — путь
-    в `llm config path`); встроенных нет. Упавшая модель уступает следующей.
-    Вместо текста — шаблон: `--template` с `--vars` (в учёт расходов — имя и
-    хэш шаблона, без значений). В `--json`: text, task_id (= task_id в учёте),
-    model, served_model, chain_position, attempts, tokens_in/out, cache_hit и
-    стоимость: cost (ответившей попытки), cost_currency "USD", cost_source —
-    provider (списано, из ответа OpenRouter), price_table (цена × токены:
-    routing.prices, затем справочник LiteLLM), subscription, cache (0) или
-    null (цена неизвестна: cost null, предупреждение); billable_requests —
-    платные вызовы провайдера (ответ получен, в т.ч. неразобранный; отказы
-    429/5xx/4xx не списываются); cost_total — по всем платным попыткам.
-    cost_usd = cost, устарело (уйдёт в 0.11).
+    Шлюз — из routing v1 (`--routing` JSON или файл, иначе LLMKIT_ROUTING_FILE,
+    иначе routing.json в каталоге конфигурации — путь в `llm config path`);
+    встроенных нет. Один вызов — один запрос к шлюзу: цепочку и фолбэк
+    исполняет он, llmkit просит первую модель `-m` или `routing.chain`.
+    Модель — строка как в настройке шлюза (комбо тоже). Вместо текста —
+    шаблон: `--template` с `--vars` (в учёт расходов — имя и хэш шаблона,
+    без значений). В `--json`: text, task_id (= task_id в учёте), model
+    (запрошенная строка), served_model (что назвал шлюз), provider, attempts,
+    tokens_in/out, cache_hit и стоимость: cost (usage.cost шлюза),
+    cost_currency "USD", cost_source — provider или null (цены в ответе нет;
+    provider и cost 0 у подписочного провайдера — норма, не ошибка),
+    billable_requests, cost_total. cost_usd = cost, устарело.
     Коды выхода: 0 — ответ получен, 2 — нет routing, routing не по схеме или
-    неверные аргументы, 3 — нет ключа провайдера, 5 — все модели упали.
+    неверные аргументы, 3 — нет ключа шлюза, 5 — шлюз недоступен, ответил
+    ошибкой или ответ невалиден.
 
     Example: llm ask "Столица Франции?" --routing routing.json
     """
@@ -154,7 +154,9 @@ def json_command(
     temperature: float = typer.Option(None, "--temperature", help="Температура; по умолчанию 0."),
     max_tokens: int = typer.Option(None, "--max-tokens", help="Лимит токенов ответа."),
     timeout: float = typer.Option(None, "--timeout", help="Таймаут вызова в секундах."),
-    no_retry: bool = typer.Option(False, "--no-retry", help="Не повторять на сбойной модели, сразу к следующей."),
+    no_retry: bool = typer.Option(
+        False, "--no-retry", help="Не повторять вызов, если ответ не разобрался как JSON по схеме."
+    ),
     template: str = TemplateOption,
     variables: str = VarsOption,
     lenient: bool = LenientOption,
@@ -162,13 +164,15 @@ def json_command(
 ) -> None:
     """Получить ответ модели как JSON по схеме.
 
+    Схема уходит в шлюз как `response_format` json_schema; невалидный или
+    неразобранный ответ повторяется с текстом ошибки проверки (retry.invalid_output).
     В обычном режиме в stdout попадает только сам объект ответа, в режиме
     `--json` — конверт с полем `data` и метаданными вызова, как у `llm ask`.
-    Routing, `-m` и `--template/--vars` — как у `llm ask`. Валидацию по
-    схеме выполняет потребитель. Неразобранный ответ платный: он в
+    Routing, `-m` и `--template/--vars` — как у `llm ask`. Валидацию значения
+    по схеме выполняет потребитель. Невалидный ответ шлюз списал: он в
     billable_requests и cost_total. Коды выхода: 0 — ответ получен,
-    2 — неверные аргументы или routing, 3 — нет ключа провайдера, 5 — все
-    модели упали или ответ не разобрался (в error — billable_requests, cost_total).
+    2 — неверные аргументы или routing, 3 — нет ключа шлюза, 5 — шлюз
+    недоступен или ответ не разобрался (в error — billable_requests, cost_total).
 
     Example: llm json "Разбери запрос" --schema schema.json --routing routing.json --json
     """
@@ -186,67 +190,6 @@ def json_command(
         resolved = runtime.call_routing(routing, model)
         prompt = prompt_text(text, template, variables, lenient)
         answer = _run(prompt, resolved, system, tag, no_cache, temperature, max_tokens, timeout, no_retry, loaded)
-        emit(
-            ctx,
-            _answer_payload(answer, "data"),
-            lambda: print(json.dumps(answer.data, ensure_ascii=False, indent=2)),
-        )
-
-
-@app.command("decide")
-def decide(
-    ctx: typer.Context,
-    text: str = typer.Argument(None, help="Состояние, о котором спрашиваем; без него читается stdin."),
-    questions: Path = typer.Option(
-        ..., "--questions", "-q", help="JSON-файл вопросов: имя → type/instructions/criteria."
-    ),
-    routing: str = RoutingOption,
-    model: list[str] = ModelsOption,
-    level: str = LevelOption,
-    tag: list[str] = typer.Option(None, "--tag", help="Метка k=v для учёта расходов; можно несколько."),
-    timeout: float = typer.Option(None, "--timeout", help="Таймаут вызова в секундах."),
-    no_retry: bool = typer.Option(False, "--no-retry", help="Не повторять на сбойной модели, сразу к следующей."),
-    template: str = TemplateOption,
-    variables: str = VarsOption,
-    lenient: bool = LenientOption,
-    json_output: bool = JsonOption,
-) -> None:
-    """Спросить модель решений OpenRouter: вероятности вместо текста.
-
-    Вопросы типов noul (да/нет), choice и score описываются в JSON-файле, как
-    в API `/api/alpha/decisions`. Цепочка — из routing или `-m`, только
-    провайдеры с protocol=openrouter. Состояние можно собрать шаблоном:
-    `--template` с `--vars`. В stdout — словарь answers; в режиме `--json` —
-    конверт с `data`, `task_id` (= task_id в учёте) и стоимостью, как у
-    `llm ask` (cost_source обычно provider). Коды выхода: 0 — ответ получен,
-    2 — неверные аргументы, routing или модель не OpenRouter, 3 — нет ключа,
-    5 — все модели упали.
-
-    Example: llm decide "Payouts failing for 3 days" --questions q.json --routing routing.json --json
-    """
-    enable_json(ctx, json_output)
-    with guard(ctx):
-        _reject_level(level)
-        try:
-            loaded = json.loads(questions.read_text(encoding="utf-8"))
-        except OSError as exc:
-            raise bad_arguments(f"вопросы не читаются: {exc}") from exc
-        except ValueError as exc:
-            raise bad_arguments(f"вопросы не разбираются как JSON: {exc}") from exc
-        if not isinstance(loaded, dict) or not loaded:
-            raise bad_arguments("вопросы должны быть непустым JSON-объектом")
-        resolved = runtime.call_routing(routing, model)
-        state_text, template_tags = prompt_text(text, template, variables, lenient)
-        kit = runtime.build_kit(routing=resolved)
-        answer = kit.decide_sync(
-            runtime.read_text(state_text),
-            loaded,
-            tags={**runtime.parse_tags(tag), **template_tags},
-            timeout=timeout,
-            retry=not no_retry,
-            id=_task_id(),
-        )
-        _echo_warnings(answer)
         emit(
             ctx,
             _answer_payload(answer, "data"),

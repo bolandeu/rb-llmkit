@@ -1,0 +1,5 @@
+data: {"id": "gen-1750000000-deep-sec", "object": "chat.completion.chunk", "created": 1750000000, "model": "deepseek/deepseek-v4.1-flash-1017", "provider": "deepseek", "choices": [{"index": 0, "delta": {"role": "assistant", "content": "Столица Франции — "}, "finish_reason": null}]}
+
+data: {"id": "gen-1750000000-deep-sec", "object": "chat.completion.chunk", "created": 1750000000, "model": "deepseek/deepseek-v4.1-flash-1017", "provider": "deepseek", "choices": [{"index": 0, "delta": {"content": "Париж."}, "finish_reason": "stop"}], "usage": {"prompt_tokens": 18, "completion_tokens": 6, "total_tokens": 24, "cost": 0.000042, "cost_details": {"upstream_inference_cost": 0.000042}}}
+
+data: [DONE]

@@ -23,6 +23,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 
 from llmkit import LlmKit, Task
+from llmkit.cli.runtime import load_routing
 
 DEFAULT_MODELS = [
     "ccode/gpt-5.5",
@@ -173,31 +174,49 @@ def main() -> None:
     parser.add_argument("--judge", default="claude/opus", help="Модель-судья (по умолчанию claude/opus).")
     parser.add_argument("--runs", type=int, default=1, help="Прогонов каждого задания на модель.")
     parser.add_argument("--concurrency", type=int, default=6)
+    parser.add_argument("--routing", help="Файл routing или JSON; по умолчанию — как у CLI.")
     parser.add_argument("--out", type=Path, default=Path("quality-report.md"))
     args = parser.parse_args()
     models = args.model or DEFAULT_MODELS
+    routing = load_routing(args.routing, require_chain=False)
 
-    kit = LlmKit(cache=False, timeout=300, concurrency=args.concurrency, tags={"tool": "quality_bench"})
     jobs = [(model, task, run) for model in models for task in TASKS for run in range(args.runs)]
-    answers = kit.ask_many_sync(
-        [
-            Task(
-                user=TASKS[task],
-                schema=ProofReport if task == "proofread" else None,
-                chain=[model],
-                default=None,
-                max_tokens=4000,
-                id=f"{model}|{task}|{run}",
-            )
-            for model, task, run in jobs
-        ]
-    )
+    answers = [
+        answer
+        for model in models
+        for answer in LlmKit(
+            routing=routing.with_chain([model]),
+            cache=False,
+            timeout=300,
+            concurrency=args.concurrency,
+            tags={"tool": "quality_bench"},
+        ).ask_many_sync(
+            [
+                Task(
+                    user=TASKS[task],
+                    schema=ProofReport if task == "proofread" else None,
+                    default=None,
+                    max_tokens=4000,
+                    id=f"{model}|{task}|{run}",
+                )
+                for model in [model]
+                for task in TASKS
+                for run in range(args.runs)
+            ]
+        )
+    ]
 
-    judge_kit = LlmKit(cache=False, timeout=300, concurrency=4, tags={"tool": "quality_bench_judge"})
+    judge_kit = LlmKit(
+        routing=routing.with_chain([args.judge]),
+        cache=False,
+        timeout=300,
+        concurrency=4,
+        tags={"tool": "quality_bench_judge"},
+    )
     done = [(job, answer) for job, answer in zip(jobs, answers, strict=True) if answer.ok]
     verdicts = judge_kit.ask_many_sync(
         [
-            Task(system=JUDGE_SYSTEM, user=judge_prompt(task, answer.data), schema=Verdict, chain=[args.judge],
+            Task(system=JUDGE_SYSTEM, user=judge_prompt(task, answer.data), schema=Verdict,
                  default=None, id=f"judge|{model}|{task}|{run}")
             for (model, task, run), answer in done
         ]

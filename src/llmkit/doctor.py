@@ -1,12 +1,12 @@
-"""Отчёт `llm doctor` о готовности к работе (Standard, Health): локальные проверки, без сети и без вызовов моделей."""
+"""Отчёт `llm doctor` о готовности к работе (Standard, Health): версия, конфиг, routing и шлюз."""
 
 from __future__ import annotations
 
-import shutil
+import os
 from typing import Any
 
 from . import config as config_mod
-from . import opencli
+from .gateway import probe
 from .version import installed_version
 
 
@@ -27,58 +27,39 @@ def _config() -> tuple[dict[str, Any], config_mod.Config | None]:
     return _check("config", True), loaded
 
 
-def _routing() -> dict[str, Any]:
+def _routing() -> tuple[dict[str, Any], Any]:
+    """Routing до вызова модели: файл, который прочитает `llm ask`."""
     from .cli import runtime
 
     try:
         spec = runtime.routing_spec(None)
         if spec is None:
             hint = f"нет routing: передайте --routing, задайте LLMKIT_ROUTING_FILE или положите {runtime.default_routing_path()}"
-            return _check("routing", False, hint)
-        runtime.load_routing(spec, require_chain=False)
+            return _check("routing", False, hint), None
+        routing = runtime.load_routing(spec, require_chain=False)
     except Exception as exc:
-        return _check("routing", False, f"{type(exc).__name__}: {exc}")
-    return _check("routing", True, spec if not spec.lstrip().startswith("{") else "inline")
+        return _check("routing", False, f"{type(exc).__name__}: {exc}"), None
+    return _check("routing", True, spec if not spec.lstrip().startswith("{") else "inline"), routing
 
 
-def _database(name: str, loaded: config_mod.Config | None) -> dict[str, Any]:
-    """База журнала и кэша: открывается, схема на месте; при ошибке — её текст, не путь файла."""
-    from . import db
-
-    if loaded is None:
-        return _check(name, False, "конфиг не загрузился")
-    try:
-        engine = db.open_db(loaded.usage_path())
-    except Exception as exc:
-        return _check(name, False, f"{type(exc).__name__}: {exc}")
-    try:
-        return _check(name, True, db.describe(engine))
-    finally:
-        engine.dispose()
-
-
-def _external() -> list[dict[str, Any]]:
-    """Внешние программы из `[[tool.rb.external]]`; `claude` ищется так же, как его запускает транспорт."""
-    from .transports import claude_cli
-
-    checks = []
-    for program in opencli.external():
-        name = program["name"]
-        present = claude_cli.command() is not None if name == "claude" else shutil.which(name) is not None
-        required = program["required"]
-        detail = "найден" if present else ("не найден" if required else "не найден (необязателен)")
-        checks.append(_check(f"external:{name}", present or not required, detail))
-    return checks
+def _gateway(routing: Any, transport: Any) -> dict[str, Any]:
+    """Доступность шлюза: без него llmkit не работает, поэтому проверка главная."""
+    if routing is None:
+        return _check("gateway", False, "routing не загрузился: проверять нечего")
+    problems = []
+    for cfg in routing.providers.values():
+        key = os.environ.get(cfg.key_env or "")
+        error = probe(cfg.base_url or "", api_key=key, transport=transport)
+        if error:
+            problems.append(f"шлюз {cfg.base_url} не отвечает: {error}")
+    if problems:
+        return _check("gateway", False, "; ".join(problems))
+    return _check("gateway", True, ", ".join(cfg.base_url or "" for cfg in routing.providers.values()))
 
 
-def report() -> dict[str, Any]:
-    config_check, loaded = _config()
-    checks = [
-        _version(),
-        config_check,
-        _routing(),
-        _database("usage-db", loaded),
-        _database("cache", loaded),
-        *_external(),
-    ]
+def report(transport: Any = None) -> dict[str, Any]:
+    """Отчёт: `healthy` и `checks[]`; `transport` подменяет сеть в тестах."""
+    config_check, _ = _config()
+    routing_check, routing = _routing()
+    checks = [_version(), config_check, routing_check, _gateway(routing, transport)]
     return {"healthy": all(check["ok"] for check in checks), "checks": checks}

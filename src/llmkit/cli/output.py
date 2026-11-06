@@ -24,6 +24,7 @@ from ..errors import (
     AllModelsFailed,
     ConfigError,
     DatabaseError,
+    GatewayUnavailable,
     KeyMissing,
     LoginMissing,
     RoutingInvalid,
@@ -142,37 +143,25 @@ def _classify(exc: Exception) -> CliError:
         return CliError("INVALID_ARGUMENTS", str(exc), "проверьте шаблон", exit_code=2)
     if isinstance(exc, ConfigError):
         return CliError("INVALID_ARGUMENTS", str(exc), "проверьте конфиг: `llm config show`", exit_code=2)
+    if isinstance(exc, GatewayUnavailable):
+        return CliError(
+            "PROVIDER_ERROR",
+            str(exc),
+            f"проверьте шлюз {exc.url}: `llm doctor --json` показывает его доступность и routing",
+            exit_code=5,
+            details={"url": exc.url, "kind": exc.kind},
+        )
     if isinstance(exc, AllModelsFailed):
         attempts = [{"model": a.model, "error_code": a.error_type} for a in exc.attempts]
-        # Ядро ловит KeyMissing внутри цепочки; если все попытки упали
-        # по ключам, это не сбой провайдера, а отсутствующая авторизация.
-        if exc.error_type == "auth" and exc.missing_keys:
-            return CliError(
-                "AUTH_MISSING",
-                "нет ключей для моделей цепочки: " + ", ".join(exc.missing_keys),
-                f"`export {exc.missing_keys[0]}=...` или `llm keys set <провайдер>`",
-                exit_code=3,
-                details={"variable": exc.missing_keys[0], "variables": exc.missing_keys, "attempts": attempts},
-            )
-        if exc.error_type == "auth":
-            providers = sorted({attempt.provider for attempt in exc.attempts})
-            return CliError(
-                "AUTH_REQUIRED",
-                "нет ключей для моделей цепочки: " + ", ".join(providers),
-                "выполните `llm keys set " + providers[0] + "` или задайте переменную окружения"
-                "; для провайдера по подписке — `llm auth login " + providers[0] + "`",
-                exit_code=3,
-                details={"attempts": attempts},
-            )
         spent = exc.answer
         return CliError(
             "PROVIDER_ERROR",
             str(exc),
-            "попробуйте другую цепочку: -m провайдер/модель … или routing.chain",
+            "посмотрите ответ шлюза: `llm doctor --json` и `llm models --json`",
             exit_code=5,
             details={
                 "attempts": attempts,
-                # Упавшая цепочка тоже стоит денег: неразобранные ответы провайдер списал.
+                # Невалидный ответ шлюз тоже списал: токены и цена есть в его ответе.
                 "billable_requests": spent.billable_requests if spent else 0,
                 "cost_total": spent.cost_total if spent else 0.0,
                 "cost_currency": "USD",

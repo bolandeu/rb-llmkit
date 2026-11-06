@@ -1,0 +1,14 @@
+{
+  "id": "chatcmpl-9router-opencode-go",
+  "object": "chat.completion",
+  "created": 1750000000,
+  "model": "opencode-go/qwen3-coder",
+  "choices": [
+    {
+      "index": 0,
+      "message": {"role": "assistant", "content": "Готово: файл собран."},
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {"prompt_tokens": 21, "completion_tokens": 9, "total_tokens": 30, "cost": 0}
+}

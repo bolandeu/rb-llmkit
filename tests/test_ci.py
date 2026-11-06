@@ -1,8 +1,11 @@
-"""Воркфлоу Gitea Actions: гейт стандарта запускается в CI (Standard, CI)."""
+"""Воркфлоу Gitea Actions: гейт стандарта запускается в CI (Standard, CI), и импорт пакета остаётся лёгким."""
 
 from __future__ import annotations
 
+import json
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 import yaml
@@ -55,3 +58,24 @@ def test_scanners_are_cached_per_pinned_version() -> None:
         download = next(line for line in lines if line.startswith(f"[ -x ${var} ] ||"))
         assert f"/download/v{version}/" in download
         assert f"ln -sf ${var} /usr/local/bin/{tool}" in lines
+
+
+def test_import_stays_light_and_free_of_the_old_clients() -> None:
+    """Импорт пакета не тянет LiteLLM и Instructor и остаётся под 300 мс (AGENTS.md)."""
+    script = (
+        "import json, sys, time\n"
+        "started = time.perf_counter()\n"
+        "import llmkit\n"
+        "print(json.dumps({\n"
+        "    'seconds': time.perf_counter() - started,\n"
+        "    'heavy': sorted(\n"
+        "        name for name in sys.modules\n"
+        "        if name.split('.')[0] in ('litellm', 'instructor')\n"
+        "    ),\n"
+        "}))\n"
+    )
+    result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, check=False)  # noqa: S603
+    assert result.returncode == 0, result.stderr
+    report = json.loads(result.stdout)
+    assert report["heavy"] == []
+    assert report["seconds"] < 0.3

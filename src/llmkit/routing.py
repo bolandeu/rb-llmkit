@@ -1,9 +1,10 @@
-"""Routing v1: провайдеры, цепочка моделей и цены — данными, а не конфигом llmkit.
+"""Routing v1: провайдер шлюза 9router и модели шлюза — данными, а не конфигом llmkit.
 
 Контракт — `contracts/routing-v1.schema.json` и векторы `routing-v1.vectors.json`
-(публичные). Здесь та же проверка плюс то, что JSON Schema не выражает: модели
-цепочки и цен ссылаются на описанных провайдеров. Ошибка — `RoutingInvalid` с
-JSON Pointer поля. Секретов в routing нет: только имена переменных с ключами.
+(публичные). Здесь та же проверка плюс правило ADR-0001: routing v1 называет один
+протокол — `openai_compatible` (шлюз), а имена моделей идут строками как есть.
+Ошибка — `RoutingInvalid` с JSON Pointer поля. Секретов в routing нет: только имя
+переменной с ключом шлюза.
 """
 
 from __future__ import annotations
@@ -17,25 +18,17 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from .errors import RoutingInvalid
 
-PROTOCOLS = ("openrouter", "openai", "anthropic", "gemini", "ollama", "openai_compatible", "chatgpt", "claude_cli")
-# Подписки: свой транспорт, вход `llm auth login`, ключ не нужен.
+# Протоколы прежних релизов: routing v1 принимает только шлюз, остальные — ошибка с его путём.
+PROTOCOLS = ("openai_compatible", "openrouter", "openai", "anthropic", "gemini", "ollama", "chatgpt", "claude_cli")
+PROTOCOL: Literal["openai_compatible"] = "openai_compatible"
 SUBSCRIPTION_PROTOCOLS = frozenset({"chatgpt", "claude_cli"})
-NEEDS_BASE_URL = frozenset({"ollama", "openai_compatible"})
 
 _PROVIDER_NAME = re.compile(r"^[A-Za-z0-9_.-]+$")
-_REF = re.compile(r"^[A-Za-z0-9_.-]+/.+$")
-
-
-class Price(BaseModel):
-    """Цена модели в $ за 1M токенов — главнее справочника LiteLLM."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    input: float = Field(ge=0)
-    output: float = Field(ge=0)
 
 
 class Provider(BaseModel):
+    """Провайдер routing: адрес шлюза и имя переменной окружения с его ключом."""
+
     model_config = ConfigDict(extra="forbid")
 
     protocol: Literal[
@@ -43,7 +36,6 @@ class Provider(BaseModel):
     ]
     base_url: str | None = Field(default=None, min_length=1)
     key_env: str | None = Field(default=None, pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
-    mode: Literal["TOOLS", "JSON", "JSON_SCHEMA", "MD_JSON"] | None = None
 
     @property
     def subscription(self) -> bool:
@@ -55,8 +47,9 @@ class Routing(BaseModel):
 
     version: Literal[1] = 1
     providers: dict[str, Provider] = Field(min_length=1)
+    # Модели шлюза строками как в его настройке (комбо — одна строка). Порядок и
+    # фолбэк исполняет шлюз: llmkit просит первую.
     chain: list[str] | None = Field(default=None, min_length=1)
-    prices: dict[str, Price] = Field(default_factory=dict)
 
     def provider(self, name: str) -> Provider:
         try:
@@ -82,21 +75,10 @@ def _from_pydantic(exc: ValidationError) -> RoutingInvalid:
     message = error["msg"]
     if error["type"] == "extra_forbidden":
         name = loc[-1] if loc else ""
-        hint = " (уровней больше нет: передайте chain)" if loc == ("levels",) else ""
-        hint = hint or (" (в routing — только имя переменной: key_env)" if name == "api_key" else "")
-        message = f"неизвестное поле {name!r}{hint}"
+        message = f"неизвестное поле {name!r} (в routing v1 его нет)"
     elif error["type"] == "literal_error" and loc and loc[-1] == "protocol":
         message = f"неизвестный protocol {error.get('input')!r}; известные: {', '.join(PROTOCOLS)}"
     return RoutingInvalid(_pointer(loc), message)
-
-
-def _check_ref(ref: Any, path: str, providers: dict[str, Provider]) -> None:
-    if not isinstance(ref, str) or not _REF.match(ref):
-        raise RoutingInvalid(path, f"модель должна быть вида 'провайдер/модель', получено {ref!r}")
-    name = ref.partition("/")[0]
-    if name not in providers:
-        known = ", ".join(sorted(providers))
-        raise RoutingInvalid(path, f"провайдер {name!r} ({ref}) не описан в providers; описаны: {known}")
 
 
 def parse(data: Any, *, require_chain: bool = True) -> Routing:
@@ -105,12 +87,6 @@ def parse(data: Any, *, require_chain: bool = True) -> Routing:
         data = data.model_dump(exclude_none=True)
     if not isinstance(data, dict):
         raise RoutingInvalid("", "routing должен быть JSON-объектом")
-    # Ссылки цепочки проверяем до pydantic: у «gpt-4o» без провайдера путь точнее.
-    chain = data.get("chain")
-    if isinstance(chain, list):
-        for index, ref in enumerate(chain):
-            if not isinstance(ref, str) or not _REF.match(ref):
-                raise RoutingInvalid(f"/chain/{index}", f"модель должна быть вида 'провайдер/модель', получено {ref!r}")
     try:
         routing = Routing.model_validate(data)
     except ValidationError as exc:
@@ -118,18 +94,20 @@ def parse(data: Any, *, require_chain: bool = True) -> Routing:
     for name, provider in routing.providers.items():
         if not _PROVIDER_NAME.match(name):
             raise RoutingInvalid(_pointer(("providers", name)), "имя провайдера: латиница, цифры, _ . -")
-        if provider.protocol in NEEDS_BASE_URL and not provider.base_url:
+        if provider.protocol != PROTOCOL:
             raise RoutingInvalid(
-                _pointer(("providers", name, "base_url")), f"протоколу {provider.protocol} нужен base_url"
+                _pointer(("providers", name, "protocol")),
+                f"routing v1 называет только {PROTOCOL} с адресом шлюза, получено {provider.protocol!r}"
+                " (провайдеров в llmkit больше нет: ими владеет шлюз)",
             )
+        for field in ("base_url", "key_env"):
+            if not getattr(provider, field):
+                raise RoutingInvalid(_pointer(("providers", name, field)), f"провайдеру шлюза нужен {field}")
     if routing.chain is None:
         if require_chain:
             raise RoutingInvalid("/chain", "нет цепочки моделей: передайте chain в routing или -m в CLI")
-    else:
-        for index, ref in enumerate(routing.chain):
-            _check_ref(ref, f"/chain/{index}", routing.providers)
-    for ref in routing.prices:
-        _check_ref(ref, _pointer(("prices", ref)), routing.providers)
+    elif any(not model.strip() for model in routing.chain):
+        raise RoutingInvalid("/chain", "имя модели в цепочке пустое")
     return routing
 
 
