@@ -3,8 +3,8 @@ id: LLMKIT-009
 title: 'Gateway client: ask, generate and ask_many through 9router over httpx'
 status: queue
 attempts: 2
-blocked: true
-blocked_reason: aborted
+blocked: false
+blocked_reason: null
 phase: green
 tests_hash: 6b82e19ada9d10a3add888ab5e17b61d5e6897b83a2efdb4b11fe5d9f655e977
 publish_stage: null
@@ -177,3 +177,7 @@ Check narrowed for this task: the state layer (providers, transports.decisions, 
 ### Attempt 2: out of the task's bounds (the changes were reverted)
 
 - `tests/test_gateway.py`
+
+### Blocked: aborted
+
+The six defective cases of tests/test_gateway.py were fixed by the Architect and committed on this branch (65bfa7e): kit() takes routing as a keyword, the cli fixture writes routing.json and sets LLMKIT_ROUTING_FILE, the duplicated call line is gone. Nothing else of yours was reverted. Finish the green phase: the narrowed checks must be green, then submit.
