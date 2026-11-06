@@ -44,3 +44,9 @@ enabled = true
 [workers.pi-glm]  # the reviewer: kind pi, model from [model_policy.pi-glm]
 kind = "pi"
 args = []
+
+[architect]
+floor = [{ client = "pi", min = "9router/deepseek-4.1-flash", min_effort = "max" }]
+
+[architect.order]
+pi = ["deepseek-4.1-flash", "deepseek-v4.1-flash"]  # matched inside the declared name
