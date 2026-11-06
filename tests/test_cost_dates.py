@@ -55,8 +55,8 @@ def test_until_takes_a_whole_date():
 
 
 @pytest.mark.usefixtures("dated_gateway")
-def test_timestamp_is_not_a_period():
-    """Контракт обещает дату без времени: метка времени — неверный период, код 2."""
-    result, body = cost("--since", "2026-11-05T00:00:00Z")
-    assert result.exit_code == 2
-    assert body["ok"] is False
+def test_until_takes_a_timestamp():
+    """Метка ISO 8601 — тоже период: её конец дня даёт те же строки, что `--until 2026-11-05`."""
+    result, body = cost("--until", "2026-11-05T23:59:59.999Z")
+    assert result.exit_code == 0, result.output
+    assert {row["key"]: row["calls"] for row in body["rows"]} == {KEY_A: 1, KEY_B: 1}
