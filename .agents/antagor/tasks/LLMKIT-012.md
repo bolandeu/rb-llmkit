@@ -2,7 +2,7 @@
 id: LLMKIT-012
 title: 'Key lookup as in cli-generator: env, then the OS keyring, then a clear error'
 status: queue
-attempts: 1
+attempts: 2
 blocked: false
 blocked_reason: null
 phase: red
@@ -80,3 +80,7 @@ Reference implementation: cli-generator template/src/{{ package_name }}/credenti
 
 - `docs/architecture.md`
 - `tests/conftest.py`
+
+### Attempt 2: out of the task's bounds (the changes were reverted)
+
+- `docs/architecture.md`
