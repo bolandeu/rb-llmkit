@@ -16,6 +16,9 @@ heavy = ["rb-release check"]
 parallel = 4
 
 # fast mode: a worker holds a whole block in its context; the fuses are not targets
+notify_remind_min = 15  # a release waits for the Human for hours; the 3-minute nag drowned the work
+setup = ["uv sync"]  # before a full gate run: a merged tree drops dependencies (litellm, sqlalchemy), the venv keeps them, tests/test_deps.py pins their absence
+
 [limits]
 max_files = 150
 max_lines = 4000
