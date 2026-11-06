@@ -2,11 +2,11 @@
 id: LLMKIT-009
 title: 'Gateway client: ask, generate and ask_many through 9router over httpx'
 status: queue
-attempts: 0
+attempts: 1
 blocked: false
 blocked_reason: null
-phase: null
-tests_hash: null
+phase: green
+tests_hash: 6b82e19ada9d10a3add888ab5e17b61d5e6897b83a2efdb4b11fe5d9f655e977
 publish_stage: null
 created_by: architect
 approved_by: human
@@ -43,6 +43,11 @@ owns_paths:
 - tests/test_ci.py
 - tests/data/
 - tests/contracts/fixtures.yaml
+- scripts/quality_bench.py
+- src/llmkit/cli/runtime.py
+- src/llmkit/db/normalize.py
+- src/llmkit/doctor.py
+- src/llmkit/transports/decisions.py
 test_paths:
 - tests/test_gateway.py
 - tests/test_core.py
@@ -50,6 +55,9 @@ test_paths:
 - tests/test_chain.py
 - tests/test_ci.py
 - tests/test_doctor.py
+- tests/conftest.py
+- tests/data/gateway_combo.sse
+- tests/data/gateway_opencode_go.json
 docs: none
 tools: []
 worker_args: null
@@ -123,3 +131,26 @@ Reuse the error kinds and EXIT_CODES as they are, the guard/emit CLI pattern, an
 
 - Media and non-chat endpoints; removing the database, journal, cache, transports and serve; documents.
 - Moving other repositories to the new API.
+
+## Feedback
+
+### Attempt 1: out of the task's bounds (the changes were reverted)
+
+- `tests/contracts/data/routing.json`
+- `tests/contracts/data/routing_all_broken.json`
+- `tests/contracts/data/routing_first_broken.json`
+- `tests/snapshots/describe.json`
+- `tests/snapshots/help/ask.txt`
+- `tests/snapshots/help/decide.txt`
+- `tests/snapshots/help/json.txt`
+- `tests/test_cache.py`
+- `tests/test_chatgpt.py`
+- `tests/test_cost.py`
+- `tests/test_decide.py`
+- `tests/test_flows.py`
+- `tests/test_health.py`
+- `tests/test_render_cli.py`
+- `tests/test_routing_default.py`
+- `tests/test_subscriptions.py`
+- `tests/conftest.py`
+- `tests/test_gateway.py`
