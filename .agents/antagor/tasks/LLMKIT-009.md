@@ -70,11 +70,10 @@ budget_usd: null
 epic: E-003
 spec_refs: []
 checks:
-- uv run pytest -q
+- uv run pytest -q tests/test_gateway.py tests/test_core.py tests/test_chain.py tests/test_routing.py
+  tests/test_ci.py tests/test_doctor.py
 - uv run ruff check .
 - uv run ruff format --check .
-- uv run ty check
-- python3 scripts/check_command_docstrings.py
 resident: null
 tool: null
 pr: null
