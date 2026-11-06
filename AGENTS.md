@@ -1,22 +1,25 @@
 # llmkit — инструкция для агента
 
-Библиотека-слой над LLM-провайдерами: цепочки моделей, кэш, учёт расходов.
+Библиотека-слой над LLM-провайдерами: цепочки моделей, кэш ответов, учёт расходов.
 Пакетный менеджер — `uv` (не pip/poetry). Дистрибутив — `rb-llmkit`
 (`[project] name`, по нему `importlib.metadata.version` — `health.DIST_NAME`),
 импорт-пакет — `llmkit`, команда — `llm`.
 
-- Спецификация — `docs/prd.md`, она главнее этого файла.
-- Стандарт CLI — [standard.md](https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator/src/branch/main/skills/cli-builder/reference/standard.md); пакет приведён к шаблону v1.27.3.
-- Планы — `docs/backlog.md`, сделанное — `CHANGELOG.md` (пишет `antagor publish`, руками не правится).
+- Термины — `CONTEXT.md`; устройство модулей, слой БД, публичный контракт CLI —
+  `docs/architecture.md`; правила, которые судит ревьюер, — `CODING_STANDARDS.md`.
+- Спецификация v1 — `docs/prd.md` (разбирается по видам документов; пока главнее
+  этого файла). Сделанное — `CHANGELOG.md` (пишет `antagor publish`, руками не правится).
+- Стандарт CLI — [standard.md](https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator/src/branch/main/skills/cli-builder/reference/standard.md);
+  пакет приведён к шаблону cli-generator v1.27.3.
 
 ## Команды
 
 ```bash
 uv sync                              # после переименования в rb-llmkit один раз: uv sync --reinstall-package rb-llmkit
-# Гейт стандарта — шаг `rb-release check` в .gitea/workflows/ci.yml (команда записана только там); её же запускать перед релизом.
+uv run pytest -q                    # тесты, покрытие (порог 85% — в pyproject.toml)
 uv run ruff check . && uv run ruff format --check . && uv run ty check   # быстрая проверка перед коммитом
-uv run pytest -q                    # только тесты
 uv run python -X importtime -c "import llmkit" 2>&1 | tail -1   # должно быть < 300 мс
+# Гейт стандарта — `rb-release check` (в CI — шаг .gitea/workflows/ci.yml); его же гоняет публикация.
 ```
 
 **Команда, которая может идти дольше пары минут, запускается отвязанно —
@@ -26,10 +29,10 @@ uv run python -X importtime -c "import llmkit" 2>&1 | tail -1   # должно �
 она умирает вместе с ходом: прерывание (входящее сообщение herdr — тоже)
 убивает её, и работа делается заново. У отвязанного запуска своя сессия; pid,
 вывод (`<метка>.log`), ошибки (`<метка>.stderr`) и код выхода (`<метка>.exit`) —
-в каталоге состояния инструмента (`runs/`); остановить —
-`python3 scripts/detach.py stop <метка>`.
+в каталоге состояния инструмента (`~/Library/Application Support/llm/runs/`);
+остановить — `python3 scripts/detach.py stop <метка>`.
 
-**TDD обязателен и проверяется** (пользователь, 2026-10-02; `~/Work/dev/docs/testing.md`):
+**TDD обязателен и проверяется** (пользователь, 2026-10-02):
 
 1. **Сначала красный.** Тест коммитится раньше кода, который его проходит, —
    порядок виден в git. Вывод падающего прогона сохранить: он идёт в отчёт о готовности.
@@ -47,12 +50,9 @@ uv run python -X importtime -c "import llmkit" 2>&1 | tail -1   # должно �
 
 ## Версии, changelog, справка
 
-Стандарт — `~/Work/tools/docs/standard-release.md`.
-
 - Версия только из git-тега `vX.Y.Z`, строки `version =` в `pyproject.toml` нет.
   Релиз — `antagor publish --main --bump patch|minor|major` (его deploy с push
-  выпускает Архитектор проекта); о релизе — отчёт корневому агенту (см.
-  «Инструмент в системе»); в отчёте — красный прогон новых тестов и каждая
+  выпускает Архитектор проекта); в отчёте — красный прогон новых тестов и каждая
   строка `existing tests` гейта с причиной (TDD выше). SemVer на `0.x`: исправление или
   совместимая функция — patch, ломающее (Python API, команды, флаги, форма
   `--json`, коды выхода и ошибок) — minor.
@@ -62,120 +62,55 @@ uv run python -X importtime -c "import llmkit" 2>&1 | tail -1   # должно �
   параметра `help=`), затем `uv run pytest --snapshot-update` и просмотри
   `tests/snapshots/help/`. Это проверяют `scripts/check_command_docstrings.py`
   (строка `checks` Antagor) и тесты.
-- `llm doctor --json` — отчёт о готовности (Standard, Health): `healthy`, `checks[]`; реализация — `src/llmkit/doctor.py`,
-  тесты — `tests/test_doctor.py`.
+- `llm doctor --json` — отчёт о готовности (Standard, Health): `healthy`, `checks[]`;
+  реализация — `src/llmkit/doctor.py`, тесты — `tests/test_doctor.py`.
 - `llm auth status [--check] --json` — общий контракт инструментов (§8),
   форму фиксирует `tests/test_health.py`; реализация — `src/llmkit/health.py`.
-- `llm describe --json` — контракт CLI документом OpenCLI для каталога tools и
-  Windmill, перенесён вручную из шаблона cli-generator **v1.5.6**
-  (`core/opencli.py` → `opencli.py`, `core/data_files.py` → `data_files.py`,
-  `commands/describe.py` → `cli/describe.py`, `EXIT_CODES` — в `errors.py`,
-  `tests/test_describe.py`, `tests/data/opencli.schema.json`); версия шаблона —
-  `_distribution.TEMPLATE_VERSION`. Отличия: в `x-rb-data` есть
-  `user_cache_dir` (кэш ответов) и `user_config_dir` (routing по умолчанию), `DataFile.dir`; `x-rb-env` — ключи встроенных
-  провайдеров, `LLMKIT_*` конфига, база, `CLAUDE_COMMAND`; в `EXIT_CODES` нет 4.
-  Локальная SQLite (`usage.sqlite`) записана в `DATA_FILES` как путь по
-  умолчанию — без `_sqlite_file()` шаблона v1.5.5 (у llmkit нет `<TOOL>_DB_PATH`).
-  После правки команд — `uv run pytest --snapshot-update` и просмотр
-  `tests/snapshots/describe.json`.
-- Контракты потребителей — `tests/contracts/<потребитель>/llmkit.yaml` (копии из
-  репо потребителя, не править), механика перенесена из шаблона cli-generator
-  **v1.8.1**: `tests/test_contracts.py`, `tests/test_contract_runner.py`,
-  `tests/contracts/schema.json`, шаг гейта `contracts`. Офлайн-данные для `run` —
-  `tests/contracts/fixtures.yaml` (плейсхолдеры → `tests/contracts/data/`) и фикстура
-  `contract_offline` в `tests/conftest.py` (фейковый провайдер `contract`). Кейс не
-  проходит из-за поведения CLI — не подгонять контракт, сообщить tools.
-- Единственное местное отличие шаблонных скриптов — поиск команд в
-  `scripts/check_command_docstrings.py` (`src/*/cli/*.py`, `with guard(ctx):`).
 
 ## Конвенции
 
 - Комментарии и докстринги — по-русски, короткие.
-- [docs/architecture.md](docs/architecture.md) — структура модулей, ленивые
-  импорты, классификация ошибок, ключи, зависимости.
-- [docs/testing.md](docs/testing.md) — как писать тесты (без сети).
-- [docs/cli-conventions.md](docs/cli-conventions.md) — паттерн CLI-команд,
-  коды выхода.
-- Routing в CLI — только `runtime.routing_spec`/`load_routing`: `--routing` →
-  `LLMKIT_ROUTING_FILE` → `user_config_dir("llmkit")/routing.json` (права шире 600 —
-  предупреждение) → `ROUTING_MISSING` с путём по умолчанию. Тесты не видят
-  настоящий файл: `conftest.isolated` подменяет `platformdirs.user_config_dir`.
+- `docs/architecture.md` — модули, ленивые импорты, классификация ошибок, ключи,
+  слой БД, контракт `llm describe`, контракты потребителей, routing.
+- `docs/testing.md` — как писать тесты (без сети).
+- `docs/cli-conventions.md` — паттерн CLI-команд, коды выхода.
+- Routing в CLI — только `runtime.routing_spec`/`load_routing` (порядок поиска —
+  `docs/architecture.md`). Тесты не видят настоящий файл: `conftest.isolated`
+  подменяет `platformdirs.user_config_dir`.
 
 ## База (журнал расходов)
 
-- Слой БД — `src/llmkit/db/`, перенесён вручную из шаблона cli-generator
-  **v1.4.6** (`core/db.py`, `core/tables.py`, `core/normalize.py`, `migrations/`,
-  `commands/db.py`, `tests/test_db.py`, `scripts/pg_test.sh`; architecture.md §12). При обновлении
-  шаблона сверять с ним эти файлы. Отличия от шаблона:
-  - пакет `llmkit/db/` вместо `core/` (`core.py` здесь — модуль `LlmKit`);
-    ошибки — в `errors.py` (`DatabaseError` и потомки, библиотечные);
-  - локальная SQLite — файл журнала из конфига (`usage.path`, по умолчанию
-    `usage.sqlite`), а не `<TOOL>_DB_PATH`; `open_db(path)` принимает его от `Usage`;
-  - SQLite мигрируется под `BEGIN IMMEDIATE`: файл одновременно открывают
-    несколько процессов (wp-bulk, antagor, `llm`);
-  - нет `db push` (расходы с Mac в прод не отправляются) и `doctor`.
-- `LLMKIT_DATABASE_URL` → общая PostgreSQL (на homeserver), иначе SQLite. На Mac
-  переменной нет — учёт в SQLite. Postgres мигрирует только `llm db upgrade`
-  выпущенной версией; каждая миграция совместима с предыдущим релизом
-  (expand/contract).
-- Таблицы и представления — только `llmkit_*` (`db/tables.py` + миграция руками);
-  другие инструменты читают только `llmkit_v1_calls`. У каждой таблицы
-  `info={"kind": "data" | "cache"}`; каждое представление объявлено в
-  `tables.views` (колонки с типами и `comment=`) — тест сверяет с базой.
-  Колонки представления не меняются и не удаляются; новая — только в конец
-  (миграция пересоздаёт представление), иначе — `_v2_` рядом.
-- Кэш ответов (`cache.py`, `cache.sqlite`) — вне слоя БД, локальный `sqlite3`:
-  ответы можно получить заново, делить их между машинами незачем (решение пользователя).
-- У каждой таблицы — PRIMARY KEY из одной колонки (суррогатный `id`; другого Directus
-  не поддерживает), естественный ключ — UNIQUE; проверяет tests/test_db.py.
-- Тесты на PostgreSQL — только через `scripts/pg_test.sh -q tests/test_db.py` (свой
-  контейнер, порт от Docker, удаляется после) — никогда не фиксированный порт и
-  не чужой сервер.
+Подробности — `docs/architecture.md` §База. Что нельзя нарушать в задаче:
+
+- Таблицы и представления — только `llmkit_*` (`src/llmkit/db/tables.py` + миграция
+  руками); другие инструменты читают только `llmkit_v1_calls`. Колонки
+  представления не меняются и не удаляются; новая — только в конец, иначе `_v2_` рядом.
+- У каждой таблицы — PRIMARY KEY из одной колонки (суррогатный `id`; другого
+  Directus не поддерживает), естественный ключ — UNIQUE; проверяет tests/test_db.py.
+- Миграция совместима с предыдущим релизом (expand/contract).
+- Тесты на PostgreSQL — только `scripts/pg_test.sh -q tests/test_db.py`.
 
 ## Каждое заметное изменение выходит релизом
 
 Серверы, другие инструменты и Mac ставят только по тегам, не из `main`:
 влитое без релиза изменение для них не существует. Заметное изменение
 закончено только после релиза: влить в `main` →
-`antagor publish --main --bump patch|minor|major` → отчитать релиз корневому
-агенту (ниже) → назвать новый тег в отчёте. Служебные коммиты
+`antagor publish --main --bump patch|minor|major` → назвать новый тег в отчёте. Служебные коммиты
 ждут следующего релиза. Не оставлять заметное изменение на `main` без
-релиза, не назвав причину (`~/Work/tools/docs/standard-release.md` §3).
+релиза, не назвав причину.
 
-## Инструмент в системе
+## В системе
 
-Инструмент — один из сервисов `~/Work/tools/`: корневой агент его
-деплоит, хранит ключи (Doppler) и бэкапит данные (S3). Полные правила —
-`~/Work/tools/docs/standard-release.md` §13.
-
-- **Здесь никто не пушит; релизы и вопросы — через корневого агента**, не
-  пользователю в этом окне. Релиз или ветка готовы →
-  `~/Work/tools/scripts/agent_say.sh tools "<репо, ветка, теги, что внутри,
-  результат шага `rb-release check`, красный прогон, изменённые существующие тесты
-  с причинами>"`, одно сообщение на тег. Корневой агент
-  проверяет и ставит в очередь dev; dev показывает пользователю и после его
-  «да» пушит; затем корневой агент ставит релиз на Mac и homeserver. Самому
-  не пушить; force-push и `commit --amend` — никогда. Вопрос или решение для пользователя —
-  тем же каналом, коротко: вопрос, варианты, рекомендация; пока ждёте — делать
-  то, что от ответа не зависит.
-- **В прод ходит только корневой агент.** Против прода ничего не запускать:
-  ни `db push` (даже `--dry-run`), ни чтение через `*_PROD_DATABASE_URL`, ни ssh
-  на сервер. Нужна проверка на проде → прислать корневому агенту точную команду;
-  он выполнит и вернёт вывод. Локальная одноразовая база (`scripts/pg_test.sh`) — ваша.
-- **Ничего в обход корневого агента.** Задачи ставит он. Не давать указаний
-  другим агентам (другим инструментам, sysadmin, dev, windmill…) и ничего не
-  менять вне этого репозитория. Баг или просьба к другому инструменту или к
-  инфраструктуре — сообщением корневому агенту
-  (`~/Work/tools/scripts/agent_say.sh tools "..."`); он решает и передаёт.
-- **Сообщать корневому агенту** (в отчёте пользователю, рядом с тегом
-  релиза): новая или переименованная переменная окружения / ключ, новая
-  локальная база или новый путь к данным, новая или убранная зависимость от
-  другого инструмента, обновлённый токен сохраняется локально, ломающий релиз.
-- **Потребители**: перед ломающим изменением проверить, кто пользуется
-  инструментом (корневой `AGENTS.md` → Service map), и назвать их в отчёте.
+- **Против прода ничего не запускать**: ни `db push` (даже `--dry-run`), ни
+  чтение через `*_PROD_DATABASE_URL`, ни ssh на сервер. Локальная одноразовая
+  база (`scripts/pg_test.sh`) — своя.
+- **Ничего не менять вне этого репозитория.** Баг или просьба к другому
+  инструменту или к инфраструктуре — сказать пользователю, он решает.
+- **В отчёте рядом с тегом** назвать: новую или переименованную переменную
+  окружения / ключ, новую локальную базу или новый путь к данным, новую или
+  убранную зависимость от другого инструмента, ломающий релиз и его потребителей.
 - **Серверы Linux без экрана**: сначала переменные окружения, keychain
   необязателен (его отсутствие при заданной переменной — не ошибка); имена
   переменных — уже существующие; без TTY никаких вопросов; без путей только для Mac.
 - **Данные** — в общей PostgreSQL (`LLMKIT_DATABASE_URL`) или в локальной SQLite
-  в `platformdirs.user_data_dir("llmkit")`, не в репозитории; между ними —
-  только через `llm db import-sqlite` (cli-generator `architecture.md` §12).
+  в `platformdirs.user_data_dir("llmkit")`, не в репозитории.

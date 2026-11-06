@@ -3,11 +3,23 @@ mode = "fast"
 prefix = "LLMKIT"
 name = "llmkit"
 worker = "pi"
-checks = ["python3 scripts/check_command_docstrings.py"]
+checks = [
+  "uv run pytest -q",  # 19 s, 680 tests, coverage gate 85% inside
+  "uv run ruff check .",
+  "uv run ruff format --check .",
+  "uv run ty check",
+  "python3 scripts/check_command_docstrings.py",
+]
 heavy = ["rb-release check"]
 
 # the workserver, 48 cores (the Human 28.10: at least four tasks at once); heavy checks queue on the machine
 parallel = 4
+
+[protocol]
+test_command = "uv run pytest -q"  # red -> green, the TDD rule in AGENTS.md
+
+[docs]
+living = ["docs/architecture.md", "docs/cli-conventions.md", "docs/testing.md"]
 
 [review]
 worker = "pi-glm"  # another model than the author (the Human, 6.11)
@@ -20,6 +32,7 @@ deploy_command = "git push origin main --follow-tags"
 gate = "local"
 gate_command = 'uvx --from "git+https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator.git@v1.27.3#subdirectory=gate" rb-release check'
 env = { UV_PYTHON = "3.11" }
+regenerate = { "uv.lock" = "uv lock" }
 
 [connector]
 webhook_secret = "PLANE_WEBHOOK_SECRET_TOOLS"
