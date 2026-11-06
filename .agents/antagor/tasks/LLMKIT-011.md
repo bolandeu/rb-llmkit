@@ -2,10 +2,10 @@
 id: LLMKIT-011
 title: The rest of the gateway surface wrapped, documents rewritten and the specification
   and plan sorted
-status: in_progress
+status: queue
 attempts: 2
-blocked: true
-blocked_reason: needs_scope
+blocked: false
+blocked_reason: null
 phase: green
 tests_hash: 859586cd55093a6731dccf70edae010f17573bc4f0a5daf547de87b83d6d424b
 publish_stage: null
@@ -161,3 +161,7 @@ Minor remarks of the review: optional, if they do not widen the task:
 ### Blocked: aborted
 
 src/llmkit/usage.py is in your owns now. The blocker: the merge with LLMKIT-010 took 010's date-only parser and dropped your ISO-timestamp support, so tests/test_cost.py::test_iso_timestamp_bounds_cut_inside_a_day fails at HEAD (--since 2026-11-01T06:00:00Z exits 2). Re-apply _moment/_bound on top of 010's version: date-only and full ISO with Z both parse, the day range stays correct. The rest of the round stands — do not redo the documents.
+
+### Blocked: needs_scope (paths ['tests/test_cost_dates.py'])
+
+tests/test_cost_dates.py is in your owns now — that is your own test file from the red round; keep it, do not rename it. The round's job is unchanged: ISO timestamps in src/llmkit/usage.py.
