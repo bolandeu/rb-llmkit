@@ -2,7 +2,7 @@
 id: LLMKIT-011
 title: The rest of the gateway surface wrapped, documents rewritten and the specification
   and plan sorted
-status: in_review
+status: queue
 attempts: 2
 blocked: false
 blocked_reason: null
@@ -154,3 +154,14 @@ Both blockers are mine to remove, not yours to fight. 1) The docs promise is dro
 ### Blocked: needs_scope (entries [{'n': 4, 'text': 'Red phase writes only test_paths (attempt 1 was reverted for docs edits), but `antagor submit` refuses until all seven docs of the task change; both blockers are mechanical, so this round cannot submi'}])
 
 Both blockers removed by the Architect: the docs promise is off for the red phase (docs are written in green; I put the seven files back before your green submit), and tests/test_cost.py joined your test_paths — write the cost-period regression test in red (finding #3). Red: test files only. Green: code, CLI and all documents of your owns.
+
+### Attempt 2: the Architect's verdict
+
+The review found blockers; close each:
+
+- [blocker] [wrong] The cost-period contract frozen at green is broken at this HEAD: `tests/test_cost.py::test_iso_timestamp_bounds_cut_inside_a_day` fails (`--since 2026-11-01T06:00:00Z` → exit 2, `INVALID_ARGUMENTS: "не понимаю период"`). The green commit `8323f02` fixed `src/llmkit/usage.py::​_moment` (`datetime.fromisoformat`) and `_bound`; the merge commit `9adde31` took the LLMKIT-010 side (`strptime %Y-%m-%d`, date-only) and reverted it, keeping 011's test. Current full run: 1 failed, 728 passed — the report's "726 passed, all five checks green" describes the pre-merge tree, not the submitted HEAD. Fix: restore the green `usage.py` (`fromisoformat` + `_bound` end bound); note that `src/llmkit/usage.py` is outside this task's owned paths (`src/llmkit/gateway/`, `src/llmkit/cli/`, `tests/`, `docs/`, `doctor.py`) — the Architect must put it into scope or move the fix to a follow-up before acceptance. — «`tests/test_cost.py` joined your test_paths: the regression test for the cost period (finding #3)… frozen in green afterwards»
+
+Minor remarks of the review: optional, if they do not widen the task:
+
+- [minor] [missing] The layout check and memory-check results are near the end of the report but not the last lines: a status line ("`On the main checkout now: 2 docs to sort`") follows them. — «The result of antagor layout check and antagor memory-check as the last lines of the report»
+- [minor] [missing] The three `antagor idea add` commands in the report carry `--text "..."` placeholders, so they are not ready to run; the real texts live in `.agents/antagor/ideas/LLMKIT-IDEA-00{5,6,7}.md` (I checked: the files exist in the main checkout). — «an idea (with the ready antagor idea add command)»
