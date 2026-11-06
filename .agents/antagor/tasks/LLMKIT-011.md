@@ -2,10 +2,10 @@
 id: LLMKIT-011
 title: The rest of the gateway surface wrapped, documents rewritten and the specification
   and plan sorted
-status: in_review
+status: queue
 attempts: 3
-blocked: true
-blocked_reason: attempts
+blocked: false
+blocked_reason: null
 phase: green
 tests_hash: 859586cd55093a6731dccf70edae010f17573bc4f0a5daf547de87b83d6d424b
 publish_stage: null
@@ -175,3 +175,7 @@ The review found blockers; close each:
 Minor remarks of the review: optional, if they do not widen the task:
 
 - [minor] T5 tests/test_cost_dates.py: `test_until_takes_a_timestamp` lands in the green commit after the code (3861840 fixes `usage.py`, 12be88f retargets the test). The red commit 512a1d9 carries `test_iso_timestamp_bounds_cut_inside_a_day`, which goes red on the symptom, so the principal order holds; the retargeted test itself satisfies red-on-symptom but arrives without its own red commit.
+
+### Blocked: attempts (max_attempts 3)
+
+One narrow job, nothing else: src/llmkit/cli/cost.py — the --since and --until help strings and PERIOD_HINT must name the ISO 8601 form next to '7d, 12h, 2w или ГГГГ-ММ-ДД', so the promise matches src/llmkit/usage.py::_moment. Then refresh the help snapshots (uv run pytest --snapshot-update tests/test_help.py) and check that no other place repeats the period list (grep for PERIOD_HINT). Documents, commands and tests are done — do not touch them.
