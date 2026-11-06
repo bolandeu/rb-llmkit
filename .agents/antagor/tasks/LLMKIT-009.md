@@ -1,7 +1,7 @@
 ---
 id: LLMKIT-009
 title: 'Gateway client: ask, generate and ask_many through 9router over httpx'
-status: queue
+status: in_review
 attempts: 1
 blocked: false
 blocked_reason: null
