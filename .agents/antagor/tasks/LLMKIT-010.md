@@ -2,7 +2,7 @@
 id: LLMKIT-010
 title: 'Nothing of its own left: state, transports and their commands out, dependencies
   pruned'
-status: publish
+status: done
 attempts: 2
 blocked: false
 blocked_reason: null

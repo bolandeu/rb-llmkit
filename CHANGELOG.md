@@ -5,6 +5,17 @@ All notable changes to this project are documented here. Versions follow
 
 The changelog is written by `antagor publish`; don't edit it by hand.
 
+## v0.14.0 — 2026-11-06
+
+### E-003 — Overlay over 9router: gateway client, no own state, CLI for agents
+
+llm and the Python API reach models only through the 9router gateway: a typed API, media wrappers and a CLI every agent can drive by --help and --json. llmkit keeps code only — no database, journal, response cache, price table, subscription transports or proxy of its own. antagor layout check is clean: the specification and the plan are gone, their content lives in living docs, ADRs and ideas.
+Time: 6.9h since the epic was approved
+
+- Gateway client: ask, generate and ask_many through 9router over httpx (LLMKIT-009)
+- Nothing of its own left: state, transports and their commands out, dependencies pruned (LLMKIT-010)
+- The rest of the gateway surface wrapped, documents rewritten and the specification and plan sorted (LLMKIT-011)
+
 ## v0.13.0 — 2026-11-06
 
 ### Main
