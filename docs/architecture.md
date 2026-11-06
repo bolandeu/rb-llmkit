@@ -1,5 +1,10 @@
 # Архитектура llmkit
 
+ADR-0001 заменяет слой состояния: своей базы, журнала, кэша ответов, прайса,
+цепочки ретраев и транспортов подписок у llmkit не будет — всё это у шлюза 9router.
+Разделы ниже описывают код до переписывания; строки с пометкой «уходит» — тот код,
+который эпик «надстройка над шлюзом» убирает.
+
 ## Структура модулей
 
 ```text
@@ -11,9 +16,9 @@ src/llmkit/
   keys.py       ключи: key_env/LLM_<P>_API_KEY → старое имя (warning) → связка ключей ОС
   providers.py  провайдер routing + модель → аргументы LiteLLM
   chain.py      цепочки, классификация ошибок, ретраи и backoff
-  cache.py      кэш ответов: таблица llmkit_cache в базе журнала, первая запись побеждает
-  usage.py      журнал вызовов, отчёты, бюджеты — таблица llmkit_calls
-  db/           слой БД: PostgreSQL из LLMKIT_DATABASE_URL или SQLite, миграции Alembic
+  cache.py      кэш ответов: таблица llmkit_cache в базе журнала — уходит (ADR-0001)
+  usage.py      журнал вызовов, отчёты, бюджеты — таблица llmkit_calls — уходит (ADR-0001)
+  db/           слой БД: PostgreSQL или SQLite, миграции Alembic — уходит (ADR-0001)
   core.py       LlmKit: ask / generate / ask_many и sync-обёртки
   models.py     Task, Attempt, Answer, Stats, Outcome — данные задачи и ответа (реэкспорт из core)
   callutil.py   помощники вызова модели: разбор ответа, цена провайдера, ленивые LiteLLM и Instructor
@@ -22,7 +27,7 @@ src/llmkit/
   opencli.py    `llm describe --json`: документ OpenCLI (из шаблона cli-generator v1.5.6)
   data_files.py файлы в каталогах данных и кэша — для describe
   _sync.py      запуск корутины из синхронного кода
-  transports/   провайдеры по подписке: свой acompletion вместо LiteLLM
+  transports/   провайдеры по подписке: свой acompletion вместо LiteLLM — уходит (ADR-0001)
     _common.py      ошибки Subscription* и сборка litellm.ModelResponse
     chatgpt_auth.py вход OAuth Codex, файл токенов, обновление под замком
     chatgpt.py      Responses API chatgpt.com/backend-api/codex, SSE
@@ -38,7 +43,7 @@ scripts/smoke.py  реальные вызовы провайдеров (фаза
 пути вызова: `import llmkit` обязан оставаться быстрым (порог — 300 мс,
 проверка — команда в корневом AGENTS.md).
 
-## Провайдеры по подписке
+## Провайдеры по подписке — уходит (ADR-0001)
 
 `providers.build` для `protocol` из `SUBSCRIPTION_PROTOCOLS` проверяет вход (файл
 токенов / наличие CLI) и кладёт в `ModelCall.completion` функцию транспорта;
@@ -51,7 +56,9 @@ scripts/smoke.py  реальные вызовы провайдеров (фаза
 litellm на импорте. `classify()` возвращает `None` для чужих исключений —
 их ядро пробрасывает, а не маскирует под ошибку провайдера.
 
-## База (cli-generator architecture.md §12)
+## База (cli-generator architecture.md §12) — уходит (ADR-0001)
+
+Своей базы данных у llmkit не остаётся: этот раздел — история кода до переписывания.
 
 - `LLMKIT_DATABASE_URL` задан → только PostgreSQL; недоступна → `DatabaseUnavailable`
   (выход 5), никогда не подмена на SQLite. Не задан → SQLite из `usage.path`

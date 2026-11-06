@@ -19,7 +19,7 @@ parallel = 4
 test_command = "uv run pytest -q"  # red -> green, the TDD rule in AGENTS.md
 
 [docs]
-living = ["docs/architecture.md", "docs/cli-conventions.md", "docs/testing.md"]
+living = ["docs/architecture.md", "docs/cli-conventions.md", "docs/testing.md", "docs/decisions.md"]
 
 [review]
 worker = "pi-glm"  # another model than the author (the Human, 6.11)
