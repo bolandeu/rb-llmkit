@@ -22,6 +22,7 @@ owns_paths:
 - AGENTS.md
 - CODING_STANDARDS.md
 - docs/
+- src/llmkit/doctor.py
 test_paths:
 - tests/test_media.py
 - tests/test_api_surface.py
