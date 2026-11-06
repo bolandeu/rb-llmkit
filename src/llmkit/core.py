@@ -15,7 +15,7 @@ from . import keys as keys_mod
 from . import routing as routing_mod
 from .callutil import messages_of, parse_json
 from .config import Config
-from .errors import AllModelsFailed, GatewayUnavailable, LlmKitError, RoutingInvalid, RoutingMissing
+from .errors import AllModelsFailed, LlmKitError, RoutingInvalid, RoutingMissing
 from .models import Answer, Attempt, Outcome, Stats, Task, totals
 from .routing import Routing
 
@@ -96,10 +96,7 @@ class LlmKit:
             cfg.base_url or "", api_key=secret, transport=self._transport, timeout=settings["timeout"]
         )
         begun = time.perf_counter()
-        try:
-            outcome, spent = await self._call(client, task, messages, model, settings)
-        except GatewayUnavailable:
-            raise
+        outcome, spent = await self._call(client, task, messages, model, settings)
         latency = int((time.perf_counter() - begun) * 1000)
         if outcome.cost_usd is None:
             # Цены в ответе шлюза нет — одно предупреждение на вызов.

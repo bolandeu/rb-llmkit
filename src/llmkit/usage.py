@@ -47,17 +47,36 @@ def journal_path(path: Path | str | None = None) -> Path:
     return Path(os.environ.get(ENV_VAR) or DEFAULT_PATH).expanduser()
 
 
-def _since(value: str | datetime) -> str:
-    """Начало периода строкой того же вида, что `timestamp` шлюза (ISO 8601 UTC)."""
-    if isinstance(value, datetime):
-        moment = value
-    else:
-        text = value.strip().lower()
-        amount, unit = text[:-1], text[-1:]
-        if not amount.isdigit() or unit not in ("h", "d", "w"):
-            raise ValueError(f"не понимаю период {value!r}: ожидается '7d', '12h', '2w' или дата")
-        moment = datetime.now(UTC) - timedelta(hours={"h": 1, "d": 24, "w": 168}[unit] * int(amount))
+_HOURS = {"h": 1, "d": 24, "w": 168}
+
+
+def _stamp(moment: datetime) -> str:
+    """Момент строкой того же вида, что `timestamp` шлюза (ISO 8601 UTC)."""
     return moment.astimezone(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+def _moment(value: str | datetime) -> datetime:
+    """Момент из смещения назад (`7d`, `12h`, `2w`) или даты ISO 8601 (`2026-11-01`)."""
+    if isinstance(value, datetime):
+        return value
+    text = value.strip()
+    unit = text[-1:].lower()
+    if text[:-1].isdigit() and unit in _HOURS:
+        return datetime.now(UTC) - timedelta(hours=_HOURS[unit] * int(text[:-1]))
+    try:
+        return datetime.fromisoformat(text.upper()).replace(tzinfo=UTC)
+    except ValueError:
+        raise ValueError(f"не понимаю период {value!r}: ожидается '7d', '12h', '2w' или дата") from None
+
+
+def _bound(value: str | datetime | None, *, end: bool) -> str:
+    """Граница периода; пустая строка — без границы. Дата без времени закрывает весь день."""
+    if value is None:
+        return "9999" if end else ""
+    moment = _moment(value)
+    if end and not isinstance(value, datetime) and len(value.strip()) == 10:
+        moment += timedelta(days=1)
+    return _stamp(moment)
 
 
 def _open(path: Path) -> sqlite3.Connection:
@@ -78,33 +97,21 @@ def report(
     *, since: str | datetime | None = None, until: str | datetime | None = None, path: Path | str | None = None
 ) -> list[Row]:
     """Расходы за период по ключам шлюза, от большего к меньшему; без периода — за всё время."""
-    start = _since(since) if since is not None else ""
-    end = _since(until) if until is not None else "9999"
     target = journal_path(path)
     try:
-        with _open(target) as connection:
+        connection = _open(target)
+        try:
             raw = connection.execute(
                 "SELECT apiKey, COUNT(*), COALESCE(SUM(promptTokens), 0), COALESCE(SUM(completionTokens), 0),"
                 " COALESCE(SUM(cost), 0) FROM usageHistory WHERE timestamp >= ? AND timestamp <= ?"
                 " GROUP BY apiKey ORDER BY 5 DESC",
-                (start, end),
+                (_bound(since, end=False), _bound(until, end=True)),
             ).fetchall()
+        finally:
+            connection.close()
     except sqlite3.Error as exc:
         raise JournalUnavailable(target, str(exc)) from exc
     return [
         Row(key=key, calls=calls, prompt_tokens=into, completion_tokens=out, cost_usd=float(cost))
         for key, calls, into, out, cost in raw
     ]
-
-
-def total(
-    *, since: str | datetime | None = None, until: str | datetime | None = None, path: Path | str | None = None
-) -> Row:
-    """Сумма по всем ключам за период."""
-    rows = report(since=since, until=until, path=path)
-    return Row(
-        calls=sum(row.calls for row in rows),
-        prompt_tokens=sum(row.prompt_tokens for row in rows),
-        completion_tokens=sum(row.completion_tokens for row in rows),
-        cost_usd=sum(row.cost_usd for row in rows),
-    )
