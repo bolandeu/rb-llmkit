@@ -57,8 +57,6 @@ test_paths:
 - tests/test_ci.py
 - tests/test_doctor.py
 - tests/conftest.py
-- tests/data/gateway_combo.sse
-- tests/data/gateway_opencode_go.json
 docs: none
 tools: []
 worker_args: null
