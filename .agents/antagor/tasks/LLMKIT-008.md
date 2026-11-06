@@ -36,7 +36,6 @@ class: standard
 decision: false
 visual: null
 depends_on:
-- LLMKIT-006
 - LLMKIT-007
 budget_usd: null
 epic: E-002
