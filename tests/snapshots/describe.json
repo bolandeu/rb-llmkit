@@ -693,7 +693,7 @@
                 "required": true
               }
             ],
-            "description": "Начало периода: 7d, 12h, 2w или ГГГГ-ММ-ДД.",
+            "description": "Начало периода: 7d, 12h, 2w, ГГГГ-ММ-ДД или метка ISO 8601.",
             "metadata": [
               {
                 "name": "x-rb-type",
@@ -709,7 +709,7 @@
                 "required": true
               }
             ],
-            "description": "Конец периода в том же формате.",
+            "description": "Конец периода: 7d, 12h, 2w, ГГГГ-ММ-ДД или метка ISO 8601.",
             "metadata": [
               {
                 "name": "x-rb-type",

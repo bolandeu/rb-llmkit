@@ -47,6 +47,9 @@ def journal_path(path: Path | str | None = None) -> Path:
     return Path(os.environ.get(ENV_VAR) or DEFAULT_PATH).expanduser()
 
 
+# Формы периода — одно место: из него берут текст `--help` и подсказку ошибки.
+PERIOD_FORMS = "7d, 12h, 2w, ГГГГ-ММ-ДД или метка ISO 8601"
+
 _HOURS = {"h": 1, "d": 24, "w": 168}
 
 
@@ -69,9 +72,7 @@ def _moment(value: str | datetime) -> datetime:
         try:
             moment = datetime.fromisoformat(text.upper())
         except ValueError:
-            raise ValueError(
-                f"не понимаю период {value!r}: ожидается '7d', '12h', '2w', 'ГГГГ-ММ-ДД' или метка ISO 8601"
-            ) from None
+            raise ValueError(f"не понимаю период {value!r}: ожидается {PERIOD_FORMS}") from None
     return moment.astimezone(UTC) if moment.tzinfo else moment.replace(tzinfo=UTC)
 
 
