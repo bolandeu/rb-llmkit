@@ -2,7 +2,7 @@
 id: LLMKIT-009
 title: 'Gateway client: ask, generate and ask_many through 9router over httpx'
 status: queue
-attempts: 1
+attempts: 2
 blocked: false
 blocked_reason: null
 phase: green
@@ -173,3 +173,7 @@ Option 1: thaw tests/test_gateway.py; its six cases are the task's own test defe
 Check narrowed for this task: the state layer (providers, transports.decisions, cache, db tests, snapshots) is deleted by LLMKIT-010, which also restores a green full suite and ty. Here: only the modules of this task's acceptance, plus ruff/format.
 
 ### Blocked: needs_scope (entries [{'n': 1, 'text': "Green phase froze tests/test_gateway.py, but six of its cases cannot pass against the frozen tests/conftest.py: test_model_name_goes_verbatim calls kit(fake, routing=...) while the file's kit() alread"}])
+
+### Attempt 2: out of the task's bounds (the changes were reverted)
+
+- `tests/test_gateway.py`
