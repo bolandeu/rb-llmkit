@@ -166,3 +166,9 @@ Reuse the error kinds and EXIT_CODES as they are, the guard/emit CLI pattern, an
 > Recommended: Thaw tests/test_gateway.py for these six cases and fix them here
 
 Option 1: thaw tests/test_gateway.py; its six cases are the task's own test defects (kit() already passes routing=, and the CLI cases patch runtime.build_kit with a kit that has no routing) — fix them here, keep the intended behaviour of the acceptance items
+
+### Answer to finding #2
+
+> The check 'uv run pytest -q' cannot be green for LLMKIT-009: 6 modules fail at collection on files this task must not touch (test_cost.py, test_decide.py, test_health.py, test_render_cli.py, test_routing_default.py, test_subscriptions.py import llmkit.providers and llmkit.transports.decisions, both deleted by ADR-0001), and 13 more cases fail on reverted fixtures and snapshots (test_cache.py 2, test_chatgpt.py 1, test_contracts.py 6, test_describe.py 1, test_help.py 4). tests/ is LLMKIT-010's path; the green phase froze these files for LLMKIT-009. Remaining 6 red cases are the frozen-test defects of question #1.
+
+Check narrowed for this task: the state layer (providers, transports.decisions, cache, db tests, snapshots) is deleted by LLMKIT-010, which also restores a green full suite and ty. Here: only the modules of this task's acceptance, plus ruff/format.
