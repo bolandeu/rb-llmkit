@@ -2,12 +2,12 @@
 id: LLMKIT-011
 title: The rest of the gateway surface wrapped, documents rewritten and the specification
   and plan sorted
-status: queue
+status: in_review
 attempts: 1
 blocked: false
 blocked_reason: null
-phase: red
-tests_hash: null
+phase: green
+tests_hash: 859586cd55093a6731dccf70edae010f17573bc4f0a5daf547de87b83d6d424b
 publish_stage: null
 created_by: architect
 approved_by: human
