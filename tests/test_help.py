@@ -95,6 +95,40 @@ def test_no_orphan_help_snapshots() -> None:
     assert stored <= expected, f"snapshots for commands that no longer exist: {sorted(stored - expected)}"
 
 
+def test_db_group_is_gone() -> None:
+    """Своего журнала и базы у llmkit нет — и команд для них тоже."""
+    assert ("db",) not in GROUPS
+    assert [path for path in COMMANDS if path[0] == "db"] == []
+
+
+@pytest.mark.parametrize("path", [("serve",), ("auth", "login"), ("auth", "logout"), ("config", "path")], ids=_slug)
+def test_subscription_and_state_commands_are_gone(path: tuple[str, ...]) -> None:
+    """Подписки и свой доступ ушли в шлюз: `serve`, вход в подписку, старая команда про базу."""
+    assert path not in COMMANDS
+
+
+@pytest.mark.parametrize("path", HELP_PAGES, ids=_slug)
+def test_no_help_page_names_own_state(path: tuple[str, ...]) -> None:
+    """Справка не обещает ни базы, ни кэша, ни меток: их у llmkit больше нет."""
+    text = _render_help(path)
+    for gone in (
+        "LLMKIT_DATABASE_URL",
+        "LLMKIT_CACHE",
+        "llmkit_calls",
+        "llmkit_cache",
+        "usage.sqlite",
+        "cache.sqlite",
+        "--no-cache",
+        "cache_hit",
+    ):
+        assert gone not in text, f"`{_slug(path)}` still mentions {gone}"
+
+
+@pytest.mark.parametrize("path", sorted(COMMANDS), ids=_slug)
+def test_every_command_takes_json(path: tuple[str, ...]) -> None:
+    assert "--json" in _render_help(path)
+
+
 @pytest.mark.parametrize("path", sorted(COMMANDS), ids=_slug)
 def test_command_docstring_has_summary_and_example(path: tuple[str, ...]) -> None:
     doc = inspect.getdoc(COMMANDS[path]) or ""

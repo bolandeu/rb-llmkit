@@ -182,9 +182,20 @@ def test_parameter_shapes() -> None:
     assert path["required"] is False and path["arity"] == {"minimum": 0, "maximum": 1}
 
 
-def test_cache_is_a_table_not_a_file() -> None:
+def test_data_files_are_the_ones_that_still_exist() -> None:
+    """Своего состояния нет: в каталогах пользователя llmkit держит только routing."""
     data = _meta(DOCUMENT["command"])["x-rb-data"]
-    kinds = {table["name"]: table["kind"] for table in data["tables"]}
-    assert kinds["llmkit_cache"] == "cache"  # таблицу создаёт LLMKIT-003
-    listed = [entry["path"] for directory in ("user_cache_dir", "user_data_dir") for entry in data[directory]["files"]]
-    assert "cache.sqlite" not in listed
+    listed = [
+        entry["path"]
+        for directory in ("user_data_dir", "user_cache_dir", "user_config_dir")
+        for entry in data[directory]["files"]
+    ]
+    assert listed == ["routing.json"]
+    assert not data.get("tables") and not data.get("views")  # ни базы, ни представления
+
+
+def test_env_names_do_not_include_removed_state() -> None:
+    names = [entry["name"] for entry in _meta(DOCUMENT["command"])["x-rb-env"]]
+    assert "LLMKIT_DATABASE_URL" not in names and "LLMKIT_CACHE" not in names
+    assert "CLAUDE_COMMAND" not in names  # подписок нет: внешний CLI claude не нужен
+    assert "LLMKIT_GATEWAY_DB" in names  # путь к журналу шлюза — настройка llmkit
