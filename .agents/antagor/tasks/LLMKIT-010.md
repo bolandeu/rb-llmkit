@@ -2,7 +2,7 @@
 id: LLMKIT-010
 title: 'Nothing of its own left: state, transports and their commands out, dependencies
   pruned'
-status: ideas
+status: queue
 attempts: 0
 blocked: false
 blocked_reason: null
@@ -10,7 +10,8 @@ phase: null
 tests_hash: null
 publish_stage: null
 created_by: architect
-approved_by: null
+approved_by: human
+approved_words: Tvrdí
 worker: pi
 type: feature
 owns_paths:
