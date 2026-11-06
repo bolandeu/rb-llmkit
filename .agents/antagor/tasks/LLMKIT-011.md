@@ -15,7 +15,17 @@ approved_words: Tvrdí
 worker: pi
 type: feature
 owns_paths:
+- src/llmkit/gateway/
+- src/llmkit/cli/
+- src/llmkit/usage.py
+- src/llmkit/doctor.py
+- tests/
 - tests/test_cost_dates.py
+- README.md
+- CONTEXT.md
+- AGENTS.md
+- CODING_STANDARDS.md
+- docs/
 test_paths:
 - tests/test_media.py
 - tests/test_api_surface.py
