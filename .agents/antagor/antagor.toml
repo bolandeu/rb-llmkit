@@ -10,7 +10,7 @@ checks = [
   "uv run ty check",
   "python3 scripts/check_command_docstrings.py",
 ]
-heavy = ["rb-release check"]
+heavy = ["gate check"]
 
 # the workserver, 48 cores (the Human 28.10: at least four tasks at once); heavy checks queue on the machine
 parallel = 4
@@ -39,7 +39,7 @@ versioning = "semver"
 changelog = "CHANGELOG.md"
 deploy_command = "git push origin main --follow-tags"
 gate = "local"
-gate_command = 'uvx --from "git+https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator.git@v1.27.3#subdirectory=gate" rb-release check'
+gate_command = 'gate check'
 env = { UV_PYTHON = "3.11" }
 regenerate = { "uv.lock" = "uv lock" }
 

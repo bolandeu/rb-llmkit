@@ -159,7 +159,8 @@ asyncio.run(main())
 
 ## Разработка
 
-Команды разработки (`uv sync`, гейт `rb-release check` в `.gitea/workflows/ci.yml`)
+Команды разработки (`uv sync`, гейт `gate check` на этой машине — команда
+`[publish] gate_command` в `.agents/antagor/antagor.toml`)
 и порядок релиза — в [AGENTS.md](AGENTS.md).
 
 ```bash

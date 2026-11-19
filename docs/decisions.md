@@ -63,7 +63,7 @@
 | Форма для агентов: у каждой команды и параметра `--help` со строкой `Example:`, `--json` у всех команд, `llm doctor --json` | Архитектор | ADR-0001, `tests/snapshots/help/` |
 | Режим проекта, что Архитектору можно без пароля | Человек | `mode` в `.agents/antagor/antagor.toml` |
 | Проверки задачи (pytest, ruff, ty, докстринги), протокол red → green, параллельность | Архитектор | `.agents/antagor/antagor.toml`: `checks`, `[protocol]`, `parallel` |
-| Гейт выпуска и деплой (`rb-release check`, `git push --follow-tags`) | Архитектор | `.agents/antagor/antagor.toml`: `[publish]`; `.gitea/workflows/ci.yml` |
+| Гейт выпуска и деплой (`gate check`, `git push --follow-tags`) | Архитектор | `.agents/antagor/antagor.toml`: `[publish]`; гейт локальный, workflow его не запускает |
 | Версия и changelog — только из тега и `antagor publish` | Код | `antagor publish`, `CHANGELOG.md` |
 | TDD: тест раньше кода; чужой тест меняется только при смене требования | Человек, Исполнитель, Ревьюер | `AGENTS.md`, отчёт гейта `existing tests` |
 | Границы задачи, нарезка, приёмка | Архитектор | `.agents/antagor/`, скилл `antagor-slice` |

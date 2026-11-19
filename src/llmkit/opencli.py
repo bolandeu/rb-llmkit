@@ -113,13 +113,13 @@ def _argument(param: Any) -> dict:
 
 
 def _param_meta(param: Any, *, multiple: bool) -> list[dict]:
-    meta: dict[str, Any] = {"x-rb-type": param.type.name}
     default = param.default
-    if default is not None and not callable(default) and default != ():
-        meta["x-rb-default"] = _jsonable(default)
+    # x-rb-default есть всегда: значение, либо null, когда его нет или оно считается на ходу.
+    no_default = default is None or callable(default) or default == ()
+    meta: dict[str, Any] = {"x-rb-type": param.type.name, "x-rb-default": None if no_default else _jsonable(default)}
     if multiple:
         meta["x-rb-multiple"] = True
-    return _meta(meta)
+    return _meta(meta, keep_null=("x-rb-default",))
 
 
 def _choices(param_type: Any) -> list[str] | None:
@@ -146,8 +146,9 @@ def _text(text: str | None) -> str:
     return inspect.cleandoc(text or "").replace("\\[", "[").strip()
 
 
-def _meta(values: dict[str, Any]) -> list[dict]:
-    return [{"name": name, "value": value} for name, value in values.items() if value is not None]
+def _meta(values: dict[str, Any], keep_null: tuple[str, ...] = ()) -> list[dict]:
+    """Записи metadata; null выпадает, если его имя не в `keep_null`."""
+    return [{"name": name, "value": value} for name, value in values.items() if value is not None or name in keep_null]
 
 
 def _summary() -> str:
