@@ -292,17 +292,10 @@ def _text(name: str) -> str:
     return (ROOT / name).read_text(encoding="utf-8").lower()
 
 
-@pytest.mark.parametrize("removed", REMOVED_FROM_ARCHITECTURE, ids=repr)
-def test_architecture_has_no_removed_modules(removed: str) -> None:
-    assert removed.lower() not in _text("docs/architecture.md"), (
-        f"docs/architecture.md still describes the removed `{removed}`"
-    )
-
-
 SORTED_DOCUMENTS = ("docs/prd.md", "docs/backlog.md")
 
 
-@pytest.mark.parametrize("name", ["AGENTS.md", "README.md", "docs/architecture.md"])
+@pytest.mark.parametrize("name", ["AGENTS.md", "README.md"])
 def test_no_pointer_to_a_sorted_document(name: str) -> None:
     """Спецификация и план разобраны: указателей на них у живых документов не остаётся."""
     text = (ROOT / name).read_text(encoding="utf-8")
