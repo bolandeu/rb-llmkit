@@ -15,3 +15,5 @@ mutants/
 .venv/
 .DS_Store
 Thumbs.db
+.pdm-build/
+.cache/
