@@ -41,9 +41,9 @@ from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from packaging.version import Version
 from typer.testing import CliRunner
 
-from llmkit import opencli
-from llmkit.cli.main import app as cli_app
-from llmkit.version import installed_version
+from rb_llmkit import opencli
+from rb_llmkit.cli.main import app as cli_app
+from rb_llmkit.version import installed_version
 
 # llmkit: перенесено вручную из шаблона cli-generator v1.8.1 (tests/test_contracts.py.jinja).
 PROVIDER = "llmkit"

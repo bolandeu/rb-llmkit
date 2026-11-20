@@ -9,8 +9,8 @@ import json
 
 import pytest
 
-from llmkit import config as config_mod
-from llmkit.errors import ConfigError
+from rb_llmkit import config as config_mod
+from rb_llmkit.errors import ConfigError
 
 
 def test_env_overrides_defaults():
@@ -83,7 +83,7 @@ def test_model_defaults_match_code_defaults():
 def test_config_show_reports_the_settings():
     from typer.testing import CliRunner
 
-    from llmkit.cli.main import app
+    from rb_llmkit.cli.main import app
 
     result = CliRunner().invoke(app, ["config", "show", "--json"])
     assert result.exit_code == 0, result.output

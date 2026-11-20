@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from llmkit.gateway.client import GatewayClient, probe
-from llmkit.gateway.parse import Reply
+from rb_llmkit.gateway.client import GatewayClient, probe
+from rb_llmkit.gateway.parse import Reply
 
 __all__ = ["GatewayClient", "Reply", "probe"]

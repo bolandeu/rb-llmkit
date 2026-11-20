@@ -7,9 +7,9 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from llmkit import legacy
-from llmkit import routing as routing_mod
-from llmkit.cli.main import app
+from rb_llmkit import legacy
+from rb_llmkit import routing as routing_mod
+from rb_llmkit.cli.main import app
 
 CONFIG = Path(__file__).parent / "data" / "legacy_config.toml"
 

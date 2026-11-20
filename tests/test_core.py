@@ -9,7 +9,7 @@ import pytest
 from conftest import GATEWAY_ROUTING, FakeGateway, json_reply
 from pydantic import BaseModel
 
-from llmkit import AllModelsFailed, LlmKit, Task
+from rb_llmkit import AllModelsFailed, LlmKit, Task
 
 
 class Shape(BaseModel):

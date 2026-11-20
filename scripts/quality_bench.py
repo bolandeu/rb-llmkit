@@ -22,8 +22,8 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from llmkit import LlmKit, Task
-from llmkit.cli.runtime import load_routing
+from rb_llmkit import LlmKit, Task
+from rb_llmkit.cli.runtime import load_routing
 
 DEFAULT_MODELS = [
     "ccode/gpt-5.5",

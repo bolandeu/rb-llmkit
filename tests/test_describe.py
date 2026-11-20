@@ -23,8 +23,8 @@ import typer
 from syrupy.extensions.single_file import SingleFileSnapshotExtension, WriteMode
 from typer.testing import CliRunner
 
-from llmkit import errors, opencli
-from llmkit.cli.main import app
+from rb_llmkit import errors, opencli
+from rb_llmkit.cli.main import app
 
 CLI = "llm"
 SCHEMA = json.loads((Path(__file__).parent / "data" / "opencli.schema.json").read_text())
@@ -115,7 +115,7 @@ def test_options_are_the_real_ones(path: tuple[str, ...]) -> None:
 
 
 def test_every_exit_code_is_documented() -> None:
-    """Every `exit_code=N` / `typer.Exit(N)` in src/llmkit is in EXIT_CODES, hence in the document."""
+    """Every `exit_code=N` / `typer.Exit(N)` in src/rb_llmkit is in EXIT_CODES, hence in the document."""
     package = Path(errors.__file__).parent
     used = {
         int(code)

@@ -6,7 +6,7 @@ import httpx
 import pytest
 from conftest import GATEWAY_ROUTING, FakeGateway, json_reply
 
-from llmkit import LlmKit, Task
+from rb_llmkit import LlmKit, Task
 
 
 def kit(fake: FakeGateway) -> LlmKit:
@@ -22,7 +22,7 @@ async def test_one_completed_call_sends_exactly_one_request(gateway):
 
 
 async def test_no_second_model_of_the_chain_is_tried(gateway):
-    from llmkit import GatewayUnavailable
+    from rb_llmkit import GatewayUnavailable
 
     fake = gateway(httpx.Response(503, json={"error": "нет аккаунта"}))
     with pytest.raises(GatewayUnavailable):
@@ -32,7 +32,7 @@ async def test_no_second_model_of_the_chain_is_tried(gateway):
 
 
 async def test_a_server_error_is_not_retried_by_llmkit(gateway):
-    from llmkit import GatewayUnavailable
+    from rb_llmkit import GatewayUnavailable
 
     fake = gateway(httpx.Response(500, json={"error": "сбой шлюза"}))
     with pytest.raises(GatewayUnavailable):
@@ -49,7 +49,7 @@ async def test_a_server_error_is_not_retried_by_llmkit(gateway):
     ],
 )
 async def test_gateway_failures_keep_the_existing_error_kinds(gateway, failure, kind):
-    from llmkit import GatewayUnavailable
+    from rb_llmkit import GatewayUnavailable
 
     with pytest.raises(GatewayUnavailable) as caught:
         await kit(gateway(failure)).ask(Task(user="вопрос"))

@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from llmkit.cli.main import app
+from rb_llmkit.cli.main import app
 
 runner = CliRunner()
 

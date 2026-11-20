@@ -135,9 +135,9 @@ def gateway_cli(tmp_path, monkeypatch):
     """
     from typer.testing import CliRunner
 
-    from llmkit.cli import runtime
-    from llmkit.cli.main import app
-    from llmkit.gateway import GatewayClient
+    from rb_llmkit.cli import runtime
+    from rb_llmkit.cli.main import app
+    from rb_llmkit.gateway import GatewayClient
 
     path = tmp_path / "routing.json"
     path.write_text(json.dumps(GATEWAY_ROUTING), encoding="utf-8")
@@ -184,7 +184,7 @@ def _plain_terminal(monkeypatch):
     """Справка без цвета и с фиксированной шириной, как бы ни был настроен CI: Typer форсирует терминал при импорте."""
     import typer.rich_utils
 
-    from llmkit.cli import output
+    from rb_llmkit.cli import output
 
     monkeypatch.setattr(typer.rich_utils, "FORCE_TERMINAL", False)
     # Консоли llmkit создаются при импорте и тоже читают FORCE_COLOR.
@@ -219,8 +219,8 @@ def contract_offline(monkeypatch):
     contract/broken* падают с 503, на запрос по схеме шлюз отвечает
     JSON {verdict, remarks}, иначе — текстом. Ключ — фейковый.
     """
-    from llmkit import LlmKit
-    from llmkit.cli import runtime
+    from rb_llmkit import LlmKit
+    from rb_llmkit.cli import runtime
 
     def reply(request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content)

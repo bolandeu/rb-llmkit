@@ -8,9 +8,9 @@ import pytest
 from conftest import GATEWAY_ROUTING, FakeGateway, json_reply
 from typer.testing import CliRunner
 
-from llmkit import LlmKit
-from llmkit.cli import runtime
-from llmkit.cli.main import app
+from rb_llmkit import LlmKit
+from rb_llmkit.cli import runtime
+from rb_llmkit.cli.main import app
 
 runner = CliRunner()
 

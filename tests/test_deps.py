@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from llmkit._distribution import DIST_NAME
+from rb_llmkit._distribution import DIST_NAME
 
 ROOT = Path(__file__).resolve().parents[1]
 

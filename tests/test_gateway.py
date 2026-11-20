@@ -10,9 +10,9 @@ import pytest
 from conftest import GATEWAY_KEY, GATEWAY_MODEL, GATEWAY_ROUTING, FakeGateway, gateway_body, json_reply
 from typer.testing import CliRunner
 
-from llmkit import AllModelsFailed, LlmKit, Task
-from llmkit.cli import runtime
-from llmkit.cli.main import app
+from rb_llmkit import AllModelsFailed, LlmKit, Task
+from rb_llmkit.cli import runtime
+from rb_llmkit.cli.main import app
 
 runner = CliRunner()
 DATA = Path(__file__).parent / "data"
@@ -149,7 +149,7 @@ def test_cli_ask_json_shows_a_missing_provider_and_zero_cost_as_they_are(cli, ga
 
 
 async def test_unreachable_gateway_is_gateway_unavailable(gateway):
-    from llmkit import GatewayUnavailable
+    from rb_llmkit import GatewayUnavailable
 
     fake = gateway(httpx.ConnectError("connection refused"))
     with pytest.raises(GatewayUnavailable) as caught:
@@ -158,7 +158,7 @@ async def test_unreachable_gateway_is_gateway_unavailable(gateway):
 
 
 async def test_timeout_is_gateway_unavailable(gateway):
-    from llmkit import GatewayUnavailable
+    from rb_llmkit import GatewayUnavailable
 
     fake = gateway(httpx.ReadTimeout("timed out"))
     with pytest.raises(GatewayUnavailable):

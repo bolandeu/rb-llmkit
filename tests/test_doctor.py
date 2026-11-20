@@ -8,8 +8,8 @@ import httpx
 from conftest import GATEWAY_ROUTING
 from typer.testing import CliRunner
 
-from llmkit import doctor as doctor_mod
-from llmkit.cli.main import app
+from rb_llmkit import doctor as doctor_mod
+from rb_llmkit.cli.main import app
 
 runner = CliRunner()
 

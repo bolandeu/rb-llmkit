@@ -13,8 +13,8 @@ import pytest
 from conftest import GATEWAY_ROUTING
 from typer.testing import CliRunner
 
-from llmkit import keys
-from llmkit.cli.main import app
+from rb_llmkit import keys
+from rb_llmkit.cli.main import app
 
 runner = CliRunner()
 VARIABLE = "NINEROUTER_API_KEY"

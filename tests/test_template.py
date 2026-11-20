@@ -1,4 +1,4 @@
-"""Рендер шаблона промпта `llmkit.render`: mustache/spec, строгий режим, без экранирования HTML."""
+"""Рендер шаблона промпта `rb_llmkit.render`: mustache/spec, строгий режим, без экранирования HTML."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from llmkit import TemplateError, TemplateVariableMissing, render
+from rb_llmkit import TemplateError, TemplateVariableMissing, render
 
 SPEC_DIR = Path(__file__).parent / "data" / "mustache_spec"
 SPEC_FILES = ["interpolation", "sections", "inverted", "comments", "delimiters", "partials"]
@@ -96,7 +96,7 @@ def test_broken_template_is_template_error():
 
 def test_missing_variable_is_template_error_too():
     # Потребителю достаточно ловить TemplateError (и LlmKitError).
-    from llmkit import LlmKitError
+    from rb_llmkit import LlmKitError
 
     assert issubclass(TemplateVariableMissing, TemplateError)
     assert issubclass(TemplateError, LlmKitError)

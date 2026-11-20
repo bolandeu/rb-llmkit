@@ -1,5 +1,5 @@
 # Копия config.toml пользователя с Mac (2026-10-02, ключей в нём нет) — вход для `llm routing import` (R10).
-# Конфиг llmkit. Слои: дефолты в коде → этот файл →
+# Конфиг rb_llmkit. Слои: дефолты в коде → этот файл →
 # .llmkit/config.toml проекта → LLMKIT_* → аргументы LlmKit(...).
 
 [providers.openrouter]

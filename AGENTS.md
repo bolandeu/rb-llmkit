@@ -63,9 +63,9 @@ uv run python -X importtime -c "import llmkit" 2>&1 | tail -1   # должно �
   `tests/snapshots/help/`. Это проверяют `scripts/check_command_docstrings.py`
   (строка `checks` Antagor) и тесты.
 - `llm doctor --json` — отчёт о готовности (Standard, Health): `healthy`, `checks[]`;
-  реализация — `src/llmkit/doctor.py`, тесты — `tests/test_doctor.py`.
+  реализация — `src/rb_llmkit/doctor.py`, тесты — `tests/test_doctor.py`.
 - `llm auth status [--check] --json` — общий контракт инструментов (§8),
-  форму фиксирует `tests/test_health.py`; реализация — `src/llmkit/health.py`.
+  форму фиксирует `tests/test_health.py`; реализация — `src/rb_llmkit/health.py`.
 
 ## Конвенции
 
@@ -75,7 +75,7 @@ uv run python -X importtime -c "import llmkit" 2>&1 | tail -1   # должно �
 - Routing в CLI — только `runtime.routing_spec`/`load_routing` (порядок поиска —
   подменяет `platformdirs.user_config_dir`.
 - Клиент шлюза для команд его поверхности — только `runtime.build_gateway`
-  (тесты подменяют его); один метод на семейство — `src/llmkit/gateway/client.py`.
+  (тесты подменяют его); один метод на семейство — `src/rb_llmkit/gateway/client.py`.
 
 ## Журнал расходов — у шлюза, только чтение
 

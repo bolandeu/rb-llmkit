@@ -14,10 +14,10 @@ import pytest
 from conftest import GATEWAY_ROUTING, FakeGateway, json_reply
 from typer.testing import CliRunner
 
-from llmkit import LlmKit
-from llmkit._distribution import DIST_NAME
-from llmkit.cli import runtime
-from llmkit.cli.main import app
+from rb_llmkit import LlmKit
+from rb_llmkit._distribution import DIST_NAME
+from rb_llmkit.cli import runtime
+from rb_llmkit.cli.main import app
 
 runner = CliRunner()
 
@@ -219,7 +219,7 @@ def test_provider_failure_exit_code(fake_kit):
 
 def test_distribution_name_declared_once():
     """DIST_NAME задаёт только _distribution.py; повторное объявление при мерже молча победило бы."""
-    src = Path(__file__).resolve().parents[1] / "src" / "llmkit"
+    src = Path(__file__).resolve().parents[1] / "src" / "rb_llmkit"
     declaring = sorted(
         str(path.relative_to(src))
         for path in src.rglob("*.py")
@@ -234,7 +234,7 @@ def test_distribution_name_matches_pyproject():
 
 
 def test_version_falls_back_to_legacy_distribution_name(monkeypatch):
-    from llmkit import version
+    from rb_llmkit import version
 
     installed = version.installed_version()
     monkeypatch.setattr(version, "DIST_NAME", "no-such-distribution-xyz")

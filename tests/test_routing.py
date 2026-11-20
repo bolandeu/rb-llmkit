@@ -8,9 +8,9 @@ import pytest
 from conftest import GATEWAY_ROUTING
 from typer.testing import CliRunner
 
-from llmkit import RoutingInvalid
-from llmkit import routing as routing_mod
-from llmkit.cli.main import app
+from rb_llmkit import RoutingInvalid
+from rb_llmkit import routing as routing_mod
+from rb_llmkit.cli.main import app
 
 runner = CliRunner()
 
@@ -93,6 +93,6 @@ def test_gateway_routing_from_a_file_is_loaded(tmp_path, monkeypatch):
     spec = tmp_path / "routing.json"
     spec.write_text(json.dumps(GATEWAY_ROUTING), encoding="utf-8")
     monkeypatch.setenv("LLMKIT_ROUTING_FILE", str(spec))
-    from llmkit.cli import runtime
+    from rb_llmkit.cli import runtime
 
     assert runtime.load_routing(None).chain == ["Deep Sec", "opencode-go"]

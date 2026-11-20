@@ -29,7 +29,7 @@ from syrupy.extensions.single_file import SingleFileSnapshotExtension, WriteMode
 from typer.models import ParameterInfo
 from typer.testing import CliRunner
 
-from llmkit.cli.main import app
+from rb_llmkit.cli.main import app
 
 CLI = "llm"
 ROOT = Path(__file__).parent.parent
@@ -267,7 +267,7 @@ REMOVED_FROM_ARCHITECTURE = (
     "transports/",
     "cli/serve.py",
     "cli/db.py",
-    "src/llmkit/db/",
+    "src/rb_llmkit/db/",
     "миграц",
     "мигрир",
     "кэш",

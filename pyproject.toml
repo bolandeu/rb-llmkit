@@ -21,7 +21,7 @@ dependencies = [
 ]
 
 [project.scripts]
-llm = "llmkit.cli.main:main"
+llm = "rb_llmkit.cli.main:main"
 
 [project.urls]
 Repository = "https://homeserver.tailee01ab.ts.net:3000/bolandeu/llmkit"
@@ -74,7 +74,7 @@ exclude = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/llmkit"]
+packages = ["src/rb_llmkit"]
 
 [tool.hatch.build.targets.wheel.force-include]
 # Установленный CLI читает отсюда [[tool.rb.external]] для `llm describe --json` (opencli.py).
@@ -104,7 +104,7 @@ asyncio_mode = "auto"
 addopts = "--cov --cov-report=term-missing:skip-covered"
 
 [tool.mutmut]
-source_paths = ["src/llmkit"]
+source_paths = ["src/rb_llmkit"]
 also_copy = ["scripts/", "pyproject.toml"]  # их читают тесты (проверки дистрибутива)
 pytest_add_cli_args = ["--no-cov"]  # fail_under убил бы каждого мутанта
 # only_mutate = ["*/db/normalize.py"]  # по модулю за раз
@@ -132,7 +132,7 @@ select = ["E4", "E7", "E9", "F", "I", "UP", "B", "SIM", "RUF", "S"]
 ignore = ["RUF001", "RUF002", "RUF003"]
 
 [tool.ruff.lint.isort]
-# `llmkit.*` — свой пакет, даже когда модуль удалён (иначе isort считает его чужим).
+# `rb_llmkit.*` — свой пакет, даже когда модуль удалён (иначе isort считает его чужим).
 known-first-party = ["llmkit"]
 
 [tool.ruff.lint.per-file-ignores]

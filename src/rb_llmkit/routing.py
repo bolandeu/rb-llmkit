@@ -1,4 +1,4 @@
-"""Routing v1: провайдер шлюза 9router и модели шлюза — данными, а не конфигом llmkit.
+"""Routing v1: провайдер шлюза 9router и модели шлюза — данными, а не конфигом rb_llmkit.
 
 Контракт — `contracts/routing-v1.schema.json` и векторы `routing-v1.vectors.json`
 (публичные). Здесь та же проверка плюс правило ADR-0001: routing v1 называет один

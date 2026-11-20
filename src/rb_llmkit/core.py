@@ -23,7 +23,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from .gateway import GatewayClient
     from .gateway.parse import Reply
 
-log = logging.getLogger("llmkit.core")
+log = logging.getLogger("rb_llmkit.core")
 
 # Повтор невалидного ответа несёт текст ошибки проверки: иначе модель повторит тот же ответ.
 RETRY_PROMPT = "Ответ не прошёл проверку схемы: {error}. Верни JSON по схеме."

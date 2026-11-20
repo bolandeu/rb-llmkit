@@ -43,7 +43,7 @@ export NINEROUTER_API_KEY=sk-...
 ```
 
 Провайдер шлюза и цепочка моделей приходят данными — routing v1 (схема
-`src/llmkit/contracts/routing-v1.schema.json`). Секретов в routing нет.
+`src/rb_llmkit/contracts/routing-v1.schema.json`). Секретов в routing нет.
 
 ```json
 {
@@ -134,7 +134,7 @@ llm chat messages "Столица Франции?" -m anthropic/claude-x --json
 
 ```python
 import asyncio
-from llmkit import LlmKit, Task
+from rb_llmkit import LlmKit, Task
 
 kit = LlmKit(routing=routing)  # routing — dict по схеме v1
 
