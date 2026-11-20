@@ -12,7 +12,7 @@
 - Решения с датой — `docs/adr/`, проверенное исследование — `docs/research/`,
   отложенное — идея (`antagor idea add`). Сделанное — `CHANGELOG.md` (пишет
   `antagor publish`, руками не правится).
-- Стандарт CLI — [standard.md](https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator/src/branch/main/skills/cli-builder/reference/standard.md);
+- Стандарт CLI — [standard.md](https://github.com/bolandeu/python-package-gate/blob/main/skills/cli-builder/reference/standard.md);
   пакет приведён к шаблону cli-generator v1.27.3.
 
 ## Команды

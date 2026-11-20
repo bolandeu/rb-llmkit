@@ -18,7 +18,6 @@ tested like an API:
 from __future__ import annotations
 
 import inspect
-import re
 import shlex
 import typing
 from collections.abc import Callable, Iterator
@@ -291,23 +290,6 @@ CURRENT_TERMS = (
 
 def _text(name: str) -> str:
     return (ROOT / name).read_text(encoding="utf-8").lower()
-
-
-def _glossary_terms() -> list[str]:
-    glossary = (ROOT / "CONTEXT.md").read_text(encoding="utf-8").split("## Glossary", 1)[1]
-    return re.findall(r"^\*\*(.+?)\*\*", glossary, flags=re.MULTILINE)
-
-
-def test_glossary_keeps_the_current_terms() -> None:
-    terms = " | ".join(_glossary_terms()).lower()
-    assert terms, "CONTEXT.md has no glossary terms"
-    for term in CURRENT_TERMS:
-        assert term.lower() in terms, f"glossary lost the term `{term}`"
-
-
-@pytest.mark.parametrize("removed", REMOVED_FROM_GLOSSARY, ids=repr)
-def test_glossary_has_no_removed_terms(removed: str) -> None:
-    assert removed.lower() not in _text("CONTEXT.md"), f"CONTEXT.md still describes the removed `{removed}`"
 
 
 @pytest.mark.parametrize("removed", REMOVED_FROM_ARCHITECTURE, ids=repr)

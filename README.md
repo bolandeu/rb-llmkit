@@ -138,10 +138,8 @@ from llmkit import LlmKit, Task
 
 kit = LlmKit(routing=routing)  # routing — dict по схеме v1
 
-
 async def main():
     print(await kit.generate("Одним словом: столица Франции?", system="Отвечай кратко"))
-
 
 asyncio.run(main())
 ```
