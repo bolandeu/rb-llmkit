@@ -7,9 +7,6 @@
 импорт-пакет — `llmkit`, команда — `llm`.
 
 - Термины — `CONTEXT.md`; устройство модулей и публичный контракт CLI —
-  `docs/architecture.md`; правила, которые судит ревьюер, — `CODING_STANDARDS.md`;
-  кто что решает и где это задано — `docs/decisions.md`.
-- Решения с датой — `docs/adr/`, проверенное исследование — `docs/research/`,
   отложенное — идея (`antagor idea add`). Сделанное — `CHANGELOG.md` (пишет
   `antagor publish`, руками не правится).
 - Стандарт CLI — [standard.md](https://github.com/bolandeu/python-package-gate/blob/main/skills/cli-builder/reference/standard.md);
@@ -73,20 +70,14 @@ uv run python -X importtime -c "import llmkit" 2>&1 | tail -1   # должно �
 ## Конвенции
 
 - Комментарии и докстринги — по-русски, короткие.
-- `docs/architecture.md` — модули, поверхность шлюза, публичный API, ленивые
   импорты, классификация ошибок, ключи, контракт `llm describe`, контракты
   потребителей, routing.
-- `docs/testing.md` — как писать тесты (без сети).
-- `docs/cli-conventions.md` — паттерн CLI-команд, коды выхода.
 - Routing в CLI — только `runtime.routing_spec`/`load_routing` (порядок поиска —
-  `docs/architecture.md`). Тесты не видят настоящий файл: `conftest.isolated`
   подменяет `platformdirs.user_config_dir`.
 - Клиент шлюза для команд его поверхности — только `runtime.build_gateway`
   (тесты подменяют его); один метод на семейство — `src/llmkit/gateway/client.py`.
 
 ## Журнал расходов — у шлюза, только чтение
-
-Подробности — `docs/architecture.md` §Журнал. Что нельзя нарушать в задаче:
 
 - Своего журнала, кэша и базы у llmkit нет: `llm cost` читает SQLite шлюза
   (`usageHistory`) в режиме `ro` и никогда её не пишет и не мигрирует.
