@@ -1,7 +1,7 @@
 ---
 id: LLMKIT-013
 title: 'AGENTS.md: the ladder for a plan defect found mid-run'
-status: queue
+status: cancelled
 attempts: 0
 blocked: false
 blocked_reason: null

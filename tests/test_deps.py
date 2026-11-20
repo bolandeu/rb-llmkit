@@ -1,7 +1,7 @@
 """Зависимости вычищены: LLM-клиент, JSON-слой, база и прокси ушли из пакета и из lock.
 
 Сеть не нужна: `pyproject.toml` и `uv.lock` читаются разбором. Свежесть lock
-(`uv lock --check`) проверяет гейт стандарта — `rb-release check` в CI.
+(`uv lock --check`) проверяет гейт стандарта — `gate check` на этой машине.
 """
 
 from __future__ import annotations

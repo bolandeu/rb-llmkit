@@ -22,7 +22,7 @@ uv sync                              # после переименования �
 uv run pytest -q                    # тесты, покрытие (порог 85% — в pyproject.toml)
 uv run ruff check . && uv run ruff format --check . && uv run ty check   # быстрая проверка перед коммитом
 uv run python -X importtime -c "import llmkit" 2>&1 | tail -1   # должно быть < 300 мс
-# Гейт стандарта — `rb-release check` (в CI — шаг .gitea/workflows/ci.yml); его же гоняет публикация.
+# Гейт стандарта — `gate check` на этой машине (команда — `[publish] gate_command` в `.agents/antagor/antagor.toml`); его же гоняет публикация. Workflow его не запускает.
 ```
 
 **Команда, которая может идти дольше пары минут, запускается отвязанно —
