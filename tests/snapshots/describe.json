@@ -3,7 +3,7 @@
   "info": {
     "title": "llm",
     "version": "<version>",
-    "summary": "Общий LLM-слой: вызовы моделей через шлюз 9router"
+    "summary": "Shared LLM layer: model calls through a gateway with typed answers and spend accounting."
   },
   "command": {
     "name": "llm",
