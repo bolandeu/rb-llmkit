@@ -143,3 +143,8 @@ known-first-party = ["llmkit"]
 [tool.ruff.lint.flake8-bugbear]
 # Стиль Typer `param: T = typer.Option(...)` — вызов в значении по умолчанию намеренно.
 extend-immutable-calls = ["typer.Option", "typer.Argument"]
+
+[tool.rb.gate]
+addresses_allow = [
+    { pattern = "http://localhost:20128", reason = "an example of the local 9router in --help" },
+]
