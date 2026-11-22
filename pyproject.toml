@@ -24,7 +24,7 @@ dependencies = [
 llm = "rb_llmkit.cli.main:main"
 
 [project.urls]
-Repository = "https://homeserver.tailee01ab.ts.net:3000/bolandeu/llmkit"
+Repository = "https://github.com/bolandeu/rb-llmkit"
 
 [build-system]
 requires = ["hatchling", "uv-dynamic-versioning"]
